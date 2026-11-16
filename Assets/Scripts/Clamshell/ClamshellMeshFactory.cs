@@ -348,7 +348,7 @@ namespace IronFauna.Clamshell
         /// The outline pass extrudes along these averaged normals (stored in tangent.xyz with w = 0) so the
         /// ink outline stays closed around the hard flat-shaded edges.
         /// </summary>
-        private static List<Vector4> SmoothedNormalsAsTangents(List<Vector3> verts, List<Vector3> normals)
+        public static List<Vector4> SmoothedNormalsAsTangents(List<Vector3> verts, List<Vector3> normals)
         {
             var sums = new Dictionary<Vector3Int, Vector3>();
             for (int i = 0; i < verts.Count; i++)

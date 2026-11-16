@@ -47,5 +47,11 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
 ## 5. Leg Clearance Rules (verified numerically)
 - Shell ends stop `jointRadius + 0.06` from each hub and bevel 45° (depth shrinks by `0.15`).
 - Thigh details live on the hip-side band (`0.02..0.38` of shell length), calf details on the ankle-side band (`-0.38..-0.02`), so a deep reverse fold cannot close details together.
-- `Pose5_ReverseCriticalFold` is 56% extension; going deeper makes the thigh and calf front details meet.
+- `Pose5_ReverseCriticalFold` is 70% extension and `Pose2_ChickenBendForward` 80%; deeper makes thigh/calf front details or calf/toe meet.
+- Calf details sit in the `-0.22..0.10` band; thigh details in `0.02..0.38`.
+
+## 6. Hand-Modeled Parts
+- `Assets/Resources/ClamshellMeshes/<Slot>_<Set>.fbx` (e.g. `ThighFront_Set01_Ironclad.fbx`) replaces the procedural half for that slot/set; `ClamshellMeshLibrary` re-orients and fits it into the slot envelope. Material names pick the colour role: Shell, Panel, Hazard, Dark, Frame, Glow.
+- Authoring: bone along Blender Z, plate on the -Y side with its inner face at Y = 0, total depth about 1.6x the envelope depth. Source script: `Tools/Blender/ironclad.py` (run with Blender or the `bpy` module); `Tools/Blender/fold_check.py` verifies the 5 stances against the real models.
+- Feet and quadruped body/head still use procedural parts.
 - `Assets/Editor/ProjectBootstrap/IronFaunaBaselineAndSceneSetup.cs` — Editor setup for URP Global Volume (`Assets/Settings/IronFaunaGlobalVolumeProfile.asset`), lighting, and the `SampleScene.unity` Clamshell Arena.

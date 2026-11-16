@@ -206,7 +206,7 @@ namespace IronFauna.Clamshell
         /// <summary>
         /// Each pose is a knee direction plus how far the leg is extended (hip-to-ankle distance as a
         /// fraction of thigh + calf). Verified with a side-view collision check: the critical fold stops at
-        /// 66% and the forward chicken bend at 80%; deeper than that, plates meet at the knee or the toe.
+        /// 70% (checked against the hand-modeled Ironclad parts too) and the forward chicken bend at 80%; deeper than that, plates meet at the knee or the toe.
         /// </summary>
         public static void GetPoseShape(LegPosePreset pose, out bool kneeForward, out float extension)
         {
@@ -215,7 +215,7 @@ namespace IronFauna.Clamshell
                 case LegPosePreset.Pose2_ChickenBendForward: kneeForward = true; extension = 0.80f; break;
                 case LegPosePreset.Pose3_ReverseExtended: kneeForward = false; extension = 0.93f; break;
                 case LegPosePreset.Pose4_ChickenBendBackward: kneeForward = false; extension = 0.74f; break;
-                case LegPosePreset.Pose5_ReverseCriticalFold: kneeForward = false; extension = 0.66f; break;
+                case LegPosePreset.Pose5_ReverseCriticalFold: kneeForward = false; extension = 0.70f; break;
                 default: kneeForward = true; extension = 0.94f; break;
             }
         }
@@ -482,8 +482,29 @@ namespace IronFauna.Clamshell
         {
             float sign = front ? 1f : -1f;
             Color color = front ? _front : _rear;
-            var mesh = ClamshellMeshFactory.ShellHalf(shellLength, dims.width, dims.depth, dims.inner, dims.bevel, sign);
             string halfName = front ? $"{label}_FrontHalf_{set}" : $"{label}_BackHalf_{set}";
+
+            // Hand-modeled part? It already carries its own details, fitted into this slot's envelope.
+            if (TrySlotFor(label, front, out ClamshellSlot slot))
+            {
+                float outer = (dims.inner + dims.depth * 1.6f) * sign;
+                var target = new Bounds(
+                    new Vector3(0f, 0f, (dims.inner * sign + outer) * 0.5f),
+                    new Vector3(dims.width, shellLength, dims.depth * 1.6f));
+                if (ClamshellMeshLibrary.TryGet(slot, set, target, out Mesh custom, out var roles))
+                {
+                    var go = ClamshellParts.Spawn(mount, halfName + "_Custom", custom, Vector3.zero, Quaternion.identity, color);
+                    if (roles != null && roles.Length > 1)
+                    {
+                        var mats = new Material[roles.Length];
+                        for (int i = 0; i < roles.Length; i++) mats[i] = RoleMaterial(roles[i], color);
+                        go.GetComponent<MeshRenderer>().sharedMaterials = mats;
+                    }
+                    return;
+                }
+            }
+
+            var mesh = ClamshellMeshFactory.ShellHalf(shellLength, dims.width, dims.depth, dims.inner, dims.bevel, sign);
             var half = ClamshellParts.Spawn(mount, halfName, mesh, Vector3.zero, Quaternion.identity, color);
             ClamshellFeatureKit.Build(half.transform, set, front, new ClamshellFeatureKit.Frame
             {
@@ -496,6 +517,35 @@ namespace IronFauna.Clamshell
                 bandHi = bandHi,
                 shellColor = color,
             });
+        }
+
+        private static Material RoleMaterial(ClamshellMeshLibrary.PartRole role, Color shell)
+        {
+            switch (role)
+            {
+                case ClamshellMeshLibrary.PartRole.Panel: return IronFaunaMaterials.Get(IronFaunaPalette.OffWhitePanel, false);
+                case ClamshellMeshLibrary.PartRole.Hazard: return IronFaunaMaterials.Get(IronFaunaPalette.HazardYellow, false);
+                case ClamshellMeshLibrary.PartRole.Dark: return IronFaunaMaterials.Get(IronFaunaPalette.DarkIron, false);
+                case ClamshellMeshLibrary.PartRole.Frame: return IronFaunaMaterials.Get(IronFaunaPalette.GunmetalFrame, false);
+                case ClamshellMeshLibrary.PartRole.Glow: return IronFaunaMaterials.Get(IronFaunaPalette.CyanEnergy, true);
+                case ClamshellMeshLibrary.PartRole.Core: return IronFaunaMaterials.Get(IronFaunaPalette.OrangeJointCore, true);
+                default: return IronFaunaMaterials.Get(shell, false);
+            }
+        }
+
+        private static bool TrySlotFor(string label, bool front, out ClamshellSlot slot)
+        {
+            slot = ClamshellSlot.ThighFront;
+            if (label.StartsWith("Thigh")) slot = front ? ClamshellSlot.ThighFront : ClamshellSlot.ThighBack;
+            else if (label.StartsWith("Calf")) slot = front ? ClamshellSlot.CalfFront : ClamshellSlot.CalfBack;
+            else if (label.StartsWith("Torso")) slot = front ? ClamshellSlot.BodyFront : ClamshellSlot.BodyBack;
+            else if (label.StartsWith("Head")) slot = front ? ClamshellSlot.HeadFront : ClamshellSlot.HeadBack;
+            else if (label.StartsWith("Shoulder")) slot = front ? ClamshellSlot.ShoulderFront : ClamshellSlot.ShoulderBack;
+            else if (label.StartsWith("UpperArm")) slot = front ? ClamshellSlot.UpperArmFront : ClamshellSlot.UpperArmBack;
+            else if (label.StartsWith("LowerArm")) slot = front ? ClamshellSlot.LowerArmFront : ClamshellSlot.LowerArmBack;
+            else if (label.StartsWith("Hand")) slot = front ? ClamshellSlot.HandFront : ClamshellSlot.HandBack;
+            else return false;
+            return true;
         }
 
         private static void Strut(Transform parent, string name, Vector3 from, Vector3 to, float thickness)
