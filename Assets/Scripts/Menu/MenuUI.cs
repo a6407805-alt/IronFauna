@@ -125,6 +125,9 @@ namespace IronFauna.Menu
             if (le == null) le = c.gameObject.AddComponent<LayoutElement>();
             le.preferredHeight = preferredHeight;
             le.minHeight = preferredHeight;
+            // Rows are HorizontalLayoutGroups with childForceExpandHeight, which report flexibleHeight = 1;
+            // pin it to 0 so vertical stacks don't stretch rows into the spare space.
+            le.flexibleHeight = 0f;
             if (preferredWidth >= 0f)
             {
                 le.preferredWidth = preferredWidth;

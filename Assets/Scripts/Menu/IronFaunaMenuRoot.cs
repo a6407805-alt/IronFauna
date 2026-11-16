@@ -156,6 +156,7 @@ namespace IronFauna.Menu
             MenuUI.Place(stripe.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-8f, 0f), Vector2.zero);
 
             var title = MenuUI.Label(column.transform, "IRONFAUNA", 124, IronFaunaPalette.OffWhitePanel, TextAnchor.LowerLeft, FontStyle.Bold);
+            title.horizontalOverflow = HorizontalWrapMode.Overflow;
             MenuUI.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(80f, -360f), new Vector2(-40f, -170f));
 
             var bar = MenuUI.Panel(column.transform, "TitleBar", IronFaunaPalette.CrimsonFront);
