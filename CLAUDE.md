@@ -53,5 +53,8 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
 ## 6. Hand-Modeled Parts
 - `Assets/Resources/ClamshellMeshes/<Slot>_<Set>.fbx` (e.g. `ThighFront_Set01_Ironclad.fbx`) replaces the procedural half for that slot/set; `ClamshellMeshLibrary` re-orients and fits it into the slot envelope. Material names pick the colour role: Shell, Panel, Hazard, Dark, Frame, Glow.
 - Authoring: bone along Blender Z, plate on the -Y side with its inner face at Y = 0, total depth about 1.6x the envelope depth. Source script: `Tools/Blender/ironclad.py` (run with Blender or the `bpy` module); `Tools/Blender/fold_check.py` verifies the 5 stances against the real models.
-- Feet and quadruped body/head still use procedural parts.
+- All 10 sets are modeled (220 parts): `Tools/Blender/clamshell_sets.py` builds sets 02-10 plus feet, quadruped body and animal heads for every set (Set01 limbs/body/head stay in `ironclad.py`). Each set is a `SetStyle` subclass with its signature features (`front_sig`, `back_sig`, `eyes`, `toe_tip`, `animal_body`, `animal_head_detail`).
+- Lengthwise parts (`FootFront/FootBack`, `QuadBodyFront/QuadBodyBack`, `AnimalHeadFront/AnimalHeadBack` + `_<Set>.fbx`) are modeled at true size: X width, Z length (+Z = free tip), height toward -Y from Y = 0. `ClamshellMeshLibrary.TryGetLengthwise` scales them uniformly by length and seats them on the bottom; keep details inside the shell's length.
+- Material role `Copper` maps to `IronFaunaPalette.CopperCoil`.
+- `Tools/Blender/fold_check_all.py <blend>` checks thigh/calf/foot of every set in all 5 stances (toe details stay under ~0.30 m height: the calf passes over the toe in Pose2).
 - `Assets/Editor/ProjectBootstrap/IronFaunaBaselineAndSceneSetup.cs` — Editor setup for URP Global Volume (`Assets/Settings/IronFaunaGlobalVolumeProfile.asset`), lighting, and the `SampleScene.unity` Clamshell Arena.

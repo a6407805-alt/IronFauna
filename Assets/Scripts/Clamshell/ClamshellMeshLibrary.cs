@@ -20,8 +20,8 @@ namespace IronFauna.Clamshell
         private static readonly Dictionary<string, Mesh> Sources = new Dictionary<string, Mesh>();
         private static readonly Dictionary<string, PartRole[]> Roles = new Dictionary<string, PartRole[]>();
 
-        /// <summary>Colour role per sub-mesh, taken from the Blender material name (Shell, Panel, Hazard, Dark, Frame, Glow, Core).</summary>
-        public enum PartRole { Shell, Panel, Hazard, Dark, Frame, Glow, Core }
+        /// <summary>Colour role per sub-mesh, taken from the Blender material name (Shell, Panel, Hazard, Dark, Frame, Glow, Core, Copper).</summary>
+        public enum PartRole { Shell, Panel, Hazard, Dark, Frame, Glow, Core, Copper }
         private static readonly HashSet<string> Missing = new HashSet<string>();
 
         public static string ResourceName(ClamshellSlot slot, ClamshellSetArchetype set)
@@ -53,6 +53,44 @@ namespace IronFauna.Clamshell
 
             mesh = FitToEnvelope(source, target, target.center.z >= 0f ? 1f : -1f);
             mesh.name = "IF_Custom_" + name;
+            Fitted[key] = mesh;
+            return true;
+        }
+
+        /// <summary>
+        /// Lengthwise parts (feet, quadruped body, animal head) are modeled at true size: X width, Z length with
+        /// +Z the free tip, height toward -Y from Y = 0. Loaded by name (e.g. "FootFront_Set02_Bastion") and scaled
+        /// uniformly so the model's length matches <paramref name="target"/> (local Y), centred on X and seated on
+        /// the target's bottom (min Z). Details may stick out sideways or upward.
+        /// </summary>
+        public static bool TryGetLengthwise(string name, Bounds target, out Mesh mesh, out PartRole[] roles)
+        {
+            mesh = null;
+            roles = null;
+            Mesh source = LoadSource(name);
+            if (source == null) return false;
+            Roles.TryGetValue(name, out roles);
+
+            string key = $"LW|{name}|{target.center.x:F3},{target.center.y:F3},{target.center.z:F3}|{target.size.x:F3},{target.size.y:F3},{target.size.z:F3}";
+            if (Fitted.TryGetValue(key, out mesh) && mesh != null) return true;
+
+            // Re-orient like a plate (bone = Y, offset axis = Z) with outward = +Z (up), then scale uniformly.
+            Mesh oriented = FitToEnvelope(source, new Bounds(Vector3.zero, Vector3.one), 1f, true);
+            Vector3[] v = oriented.vertices;
+            Bounds ob = oriented.bounds;
+            float s = target.size.y / Mathf.Max(ob.size.y, 1e-5f);
+            for (int i = 0; i < v.Length; i++)
+            {
+                v[i] = new Vector3(target.center.x + (v[i].x - ob.center.x) * s,
+                    target.min.y + (v[i].y - ob.min.y) * s,
+                    target.min.z + (v[i].z - ob.min.z) * s);
+            }
+            oriented.vertices = v;
+            oriented.RecalculateNormals();
+            oriented.RecalculateBounds();
+            oriented.SetTangents(ClamshellMeshFactory.SmoothedNormalsAsTangents(new List<Vector3>(v), new List<Vector3>(oriented.normals)));
+            oriented.name = "IF_Custom_" + name;
+            mesh = oriented;
             Fitted[key] = mesh;
             return true;
         }
@@ -110,10 +148,11 @@ namespace IronFauna.Clamshell
             if (n.Contains("frame") || n.Contains("gunmetal")) return PartRole.Frame;
             if (n.Contains("glow") || n.Contains("cyan")) return PartRole.Glow;
             if (n.Contains("core") || n.Contains("orange")) return PartRole.Core;
+            if (n.Contains("copper")) return PartRole.Copper;
             return PartRole.Shell;
         }
 
-        private static Mesh FitToEnvelope(Mesh source, Bounds target, float outwardSign)
+        private static Mesh FitToEnvelope(Mesh source, Bounds target, float outwardSign, bool keepProportions = false)
         {
             Vector3[] verts = source.vertices;
             Bounds b = source.bounds;
@@ -157,6 +196,7 @@ namespace IronFauna.Clamshell
             float sx = tSize.x / Mathf.Max(srcSize.x, 1e-5f);
             float sy = tSize.y / Mathf.Max(srcSize.y, 1e-5f);
             float sz = Mathf.Min((sx + sy) * 0.5f, tSize.z / Mathf.Max(srcSize.z, 1e-5f));
+            if (keepProportions) sx = sy = sz = 1f; // caller rescales uniformly
             for (int i = 0; i < remapped.Length; i++)
             {
                 Vector3 p = remapped[i];

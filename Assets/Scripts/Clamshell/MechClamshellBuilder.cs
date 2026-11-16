@@ -316,16 +316,25 @@ namespace IronFauna.Clamshell
             var bodyMesh = ClamshellMeshFactory.LengthwiseHalf(bodyHalfLen, bodyW, bodyH, 0.22f, 0.55f);
             Quaternion facingFwd = Quaternion.LookRotation(Vector3.up, Vector3.forward); // local Y forward, local Z up
             Quaternion facingBack = Quaternion.LookRotation(Vector3.up, Vector3.back);
-            var thorax = ClamshellParts.Spawn(_visualRoot, $"ThoraxFrontHalf_{bodyFrontSet}", bodyMesh, new Vector3(0f, spineY, bodyHalfLen * 0.5f), facingFwd, _front);
-            var haunch = ClamshellParts.Spawn(_visualRoot, $"HaunchBackHalf_{bodyBackSet}", bodyMesh, new Vector3(0f, spineY, -bodyHalfLen * 0.5f), facingBack, _rear);
+            var bodySize = new Vector3(bodyW, bodyHalfLen, bodyH);
+            Vector3 thoraxPos = new Vector3(0f, spineY, bodyHalfLen * 0.5f);
+            Vector3 haunchPos = new Vector3(0f, spineY, -bodyHalfLen * 0.5f);
             var bodyFrame = new ClamshellFeatureKit.Frame
             {
                 width = bodyW, length = bodyHalfLen, depth = 0.17f, outer = bodyH * 0.5f, sign = 1f,
                 bandLo = -0.30f, bandHi = 0.32f, shellColor = _front,
             };
-            ClamshellFeatureKit.Build(thorax.transform, bodyFrontSet, true, bodyFrame);
-            bodyFrame.shellColor = _rear;
-            ClamshellFeatureKit.Build(haunch.transform, bodyBackSet, false, bodyFrame);
+            if (TrySpawnLengthwise(_visualRoot, $"ThoraxFrontHalf_{bodyFrontSet}", $"QuadBodyFront_{bodyFrontSet}", bodySize, thoraxPos, facingFwd, _front) == null)
+            {
+                var thorax = ClamshellParts.Spawn(_visualRoot, $"ThoraxFrontHalf_{bodyFrontSet}", bodyMesh, thoraxPos, facingFwd, _front);
+                ClamshellFeatureKit.Build(thorax.transform, bodyFrontSet, true, bodyFrame);
+            }
+            if (TrySpawnLengthwise(_visualRoot, $"HaunchBackHalf_{bodyBackSet}", $"QuadBodyBack_{bodyBackSet}", bodySize, haunchPos, facingBack, _rear) == null)
+            {
+                var haunch = ClamshellParts.Spawn(_visualRoot, $"HaunchBackHalf_{bodyBackSet}", bodyMesh, haunchPos, facingBack, _rear);
+                bodyFrame.shellColor = _rear;
+                ClamshellFeatureKit.Build(haunch.transform, bodyBackSet, false, bodyFrame);
+            }
 
             Hub(_visualRoot, "DorsalWeaponHub", new Vector3(0f, spineY + bodyH * 0.5f + 0.04f, 0f), jointRadius, true);
 
@@ -336,12 +345,24 @@ namespace IronFauna.Clamshell
 
             var skullMesh = ClamshellMeshFactory.LengthwiseHalf(0.24f, 0.42f, 0.34f, 0.08f, 0.6f);
             var snoutMesh = ClamshellMeshFactory.LengthwiseHalf(0.24f, 0.36f, 0.28f, 0.10f, 0.45f);
-            var skull = ClamshellParts.Spawn(_visualRoot, $"AnimalHead_BackHalf_{headBackSet}", skullMesh, neck + new Vector3(0f, 0.04f, 0.32f), facingBack, _rear);
-            var snout = ClamshellParts.Spawn(_visualRoot, $"AnimalHead_FrontHalf_{headFrontSet}", snoutMesh, neck + new Vector3(0f, 0.02f, 0.56f), facingFwd, _front);
-            ClamshellFeatureKit.Build(skull.transform, headBackSet, false, new ClamshellFeatureKit.Frame
+            Vector3 skullPos = neck + new Vector3(0f, 0.04f, 0.32f);
+            Vector3 snoutPos = neck + new Vector3(0f, 0.02f, 0.56f);
+            if (TrySpawnLengthwise(_visualRoot, $"AnimalHead_BackHalf_{headBackSet}", $"AnimalHeadBack_{headBackSet}",
+                    new Vector3(0.42f, 0.24f, 0.34f), skullPos, facingBack, _rear) == null)
             {
-                width = 0.42f, length = 0.24f, depth = 0.12f, outer = 0.17f, sign = 1f, bandLo = -0.35f, bandHi = 0.25f, shellColor = _rear,
-            });
+                var skull = ClamshellParts.Spawn(_visualRoot, $"AnimalHead_BackHalf_{headBackSet}", skullMesh, skullPos, facingBack, _rear);
+                ClamshellFeatureKit.Build(skull.transform, headBackSet, false, new ClamshellFeatureKit.Frame
+                {
+                    width = 0.42f, length = 0.24f, depth = 0.12f, outer = 0.17f, sign = 1f, bandLo = -0.35f, bandHi = 0.25f, shellColor = _rear,
+                });
+            }
+            // Hand-modeled snouts carry their own eyes.
+            if (TrySpawnLengthwise(_visualRoot, $"AnimalHead_FrontHalf_{headFrontSet}", $"AnimalHeadFront_{headFrontSet}",
+                    new Vector3(0.36f, 0.24f, 0.28f), snoutPos, facingFwd, _front) != null)
+            {
+                return;
+            }
+            var snout = ClamshellParts.Spawn(_visualRoot, $"AnimalHead_FrontHalf_{headFrontSet}", snoutMesh, snoutPos, facingFwd, _front);
             ClamshellFeatureKit.Build(snout.transform, headFrontSet, true, new ClamshellFeatureKit.Frame
             {
                 width = 0.36f, length = 0.24f, depth = 0.10f, outer = 0.14f, sign = 1f, bandLo = -0.15f, bandHi = 0.35f, shellColor = _front,
@@ -394,22 +415,30 @@ namespace IronFauna.Clamshell
             const float baseY = 0.06f;
 
             const float toeLen = 0.48f, toeH = 0.22f, footW = 0.50f;
-            var toe = ClamshellParts.Spawn(foot, $"Foot_FrontHalf_{footFrontSet}",
-                ClamshellMeshFactory.LengthwiseHalf(toeLen, footW, toeH, 0.16f, 0.45f, 0.12f, 0.55f),
-                new Vector3(0f, baseY + toeH * 0.5f, 0.20f + toeLen * 0.5f), facingFwd, _front);
-            ClamshellFeatureKit.Build(toe.transform, footFrontSet, true, new ClamshellFeatureKit.Frame
+            Vector3 toePos = new Vector3(0f, baseY + toeH * 0.5f, 0.20f + toeLen * 0.5f);
+            if (TrySpawnLengthwise(foot, $"Foot_FrontHalf_{footFrontSet}", $"FootFront_{footFrontSet}",
+                    new Vector3(footW, toeLen, toeH), toePos, facingFwd, _front) == null)
             {
-                width = footW, length = toeLen, depth = 0.05f, outer = toeH * 0.5f, sign = 1f, bandLo = -0.15f, bandHi = 0.18f, shellColor = _front,
-            });
+                var toe = ClamshellParts.Spawn(foot, $"Foot_FrontHalf_{footFrontSet}",
+                    ClamshellMeshFactory.LengthwiseHalf(toeLen, footW, toeH, 0.16f, 0.45f, 0.12f, 0.55f), toePos, facingFwd, _front);
+                ClamshellFeatureKit.Build(toe.transform, footFrontSet, true, new ClamshellFeatureKit.Frame
+                {
+                    width = footW, length = toeLen, depth = 0.05f, outer = toeH * 0.5f, sign = 1f, bandLo = -0.15f, bandHi = 0.18f, shellColor = _front,
+                });
+            }
 
             const float heelLen = 0.28f, heelH = 0.16f;
-            var heel = ClamshellParts.Spawn(foot, $"Foot_BackHalf_{footBackSet}",
-                ClamshellMeshFactory.LengthwiseHalf(heelLen, footW * 0.92f, heelH, 0.10f, 0.6f, 0.06f, 0.8f),
-                new Vector3(0f, baseY + heelH * 0.5f, -0.16f - heelLen * 0.5f), facingBack, _rear);
-            ClamshellFeatureKit.Build(heel.transform, footBackSet, false, new ClamshellFeatureKit.Frame
+            Vector3 heelPos = new Vector3(0f, baseY + heelH * 0.5f, -0.16f - heelLen * 0.5f);
+            if (TrySpawnLengthwise(foot, $"Foot_BackHalf_{footBackSet}", $"FootBack_{footBackSet}",
+                    new Vector3(footW * 0.92f, heelLen, heelH), heelPos, facingBack, _rear) == null)
             {
-                width = footW * 0.92f, length = heelLen, depth = 0.04f, outer = heelH * 0.5f, sign = 1f, bandLo = -0.3f, bandHi = 0.2f, shellColor = _rear,
-            });
+                var heel = ClamshellParts.Spawn(foot, $"Foot_BackHalf_{footBackSet}",
+                    ClamshellMeshFactory.LengthwiseHalf(heelLen, footW * 0.92f, heelH, 0.10f, 0.6f, 0.06f, 0.8f), heelPos, facingBack, _rear);
+                ClamshellFeatureKit.Build(heel.transform, footBackSet, false, new ClamshellFeatureKit.Frame
+                {
+                    width = footW * 0.92f, length = heelLen, depth = 0.04f, outer = heelH * 0.5f, sign = 1f, bandLo = -0.3f, bandHi = 0.2f, shellColor = _rear,
+                });
+            }
 
             var latch = ClamshellMeshFactory.BeveledBox(new Vector3(0.05f, 0.07f, 0.14f), 0.012f);
             ClamshellParts.Spawn(foot, "ToggleLatch_L", latch, new Vector3(-0.26f, 0.09f, 0.02f), Quaternion.identity, IronFaunaPalette.DarkIron);
@@ -519,6 +548,24 @@ namespace IronFauna.Clamshell
             });
         }
 
+        /// <summary>
+        /// Spawns the hand-modeled lengthwise part <paramref name="resource"/> (feet, quadruped body, animal head) in a
+        /// box of <paramref name="size"/> (X width, Y length toward the tip, Z height) centred at the spawn point.
+        /// Returns null when there is no model, so the caller builds the procedural half instead.
+        /// </summary>
+        private GameObject TrySpawnLengthwise(Transform parent, string objName, string resource, Vector3 size, Vector3 pos, Quaternion rot, Color color)
+        {
+            if (!ClamshellMeshLibrary.TryGetLengthwise(resource, new Bounds(Vector3.zero, size), out Mesh custom, out var roles)) return null;
+            var go = ClamshellParts.Spawn(parent, objName + "_Custom", custom, pos, rot, color);
+            if (roles != null && roles.Length > 1)
+            {
+                var mats = new Material[roles.Length];
+                for (int i = 0; i < roles.Length; i++) mats[i] = RoleMaterial(roles[i], color);
+                go.GetComponent<MeshRenderer>().sharedMaterials = mats;
+            }
+            return go;
+        }
+
         private static Material RoleMaterial(ClamshellMeshLibrary.PartRole role, Color shell)
         {
             switch (role)
@@ -529,6 +576,7 @@ namespace IronFauna.Clamshell
                 case ClamshellMeshLibrary.PartRole.Frame: return IronFaunaMaterials.Get(IronFaunaPalette.GunmetalFrame, false);
                 case ClamshellMeshLibrary.PartRole.Glow: return IronFaunaMaterials.Get(IronFaunaPalette.CyanEnergy, true);
                 case ClamshellMeshLibrary.PartRole.Core: return IronFaunaMaterials.Get(IronFaunaPalette.OrangeJointCore, true);
+                case ClamshellMeshLibrary.PartRole.Copper: return IronFaunaMaterials.Get(IronFaunaPalette.CopperCoil, false);
                 default: return IronFaunaMaterials.Get(shell, false);
             }
         }
