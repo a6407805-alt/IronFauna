@@ -32,5 +32,66 @@ namespace IronFauna.Core
         public static readonly Color AmbientSkyCool    = new Color32(0x5A, 0x68, 0x7E, 0xFF); // #5A687E Cool slate sky bounce
         public static readonly Color AmbientEquatorMid = new Color32(0x7E, 0x76, 0x6B, 0xFF); // #7E766B Neutral warm-gray equator
         public static readonly Color AmbientGroundDark = new Color32(0x3B, 0x34, 0x2C, 0xFF); // #3B342C Warm ground bounce
+
+        // Blueprint grid lines (title / garage floor)
+        public static readonly Color GridLineLight     = new Color32(0xDA, 0xCC, 0xB0, 0xFF); // #DACCB0 Minor grid line
+        public static readonly Color GridLineDark      = new Color32(0xA8, 0x96, 0x74, 0xFF); // #A89674 Major grid line
+
+        // UI neutrals (multiplier white for uGUI tints)
+        public static readonly Color UiNeutral         = new Color32(0xFF, 0xFF, 0xFF, 0xFF); // #FFFFFF Untinted UI graphic
+
+        // Garage paint schemes (front / rear halves). Index 0 is the art-bible default.
+        public static readonly Color DesertFront       = new Color32(0xC9, 0xA1, 0x5B, 0xFF); // #C9A15B Desert Raider front
+        public static readonly Color DesertRear        = new Color32(0x7A, 0x5A, 0x2E, 0xFF); // #7A5A2E Desert Raider rear
+        public static readonly Color ArcticFront       = new Color32(0xDD, 0xE3, 0xE8, 0xFF); // #DDE3E8 Arctic Hunter front
+        public static readonly Color ArcticRear        = new Color32(0x6F, 0x7F, 0x8C, 0xFF); // #6F7F8C Arctic Hunter rear
+        public static readonly Color NightFront        = new Color32(0x4A, 0x52, 0x60, 0xFF); // #4A5260 Night Ops front
+        public static readonly Color NightRear         = new Color32(0x2A, 0x2F, 0x38, 0xFF); // #2A2F38 Night Ops rear
+        public static readonly Color JungleFront       = new Color32(0x5E, 0x7A, 0x3E, 0xFF); // #5E7A3E Jungle Stalker front
+        public static readonly Color JungleRear        = new Color32(0x2F, 0x44, 0x26, 0xFF); // #2F4426 Jungle Stalker rear
+        public static readonly Color CobaltFront       = new Color32(0x2F, 0x6F, 0xC8, 0xFF); // #2F6FC8 Cobalt Lancer front
+        public static readonly Color CobaltRear        = new Color32(0x1B, 0x35, 0x66, 0xFF); // #1B3566 Cobalt Lancer rear
+
+        public struct PaintScheme
+        {
+            public readonly string name;
+            public readonly Color front;
+            public readonly Color rear;
+
+            public PaintScheme(string name, Color front, Color rear)
+            {
+                this.name = name;
+                this.front = front;
+                this.rear = rear;
+            }
+        }
+
+        public static readonly PaintScheme[] PaintSchemes =
+        {
+            new PaintScheme("Crimson Standard", CrimsonFront, MaroonRear),
+            new PaintScheme("Desert Raider", DesertFront, DesertRear),
+            new PaintScheme("Arctic Hunter", ArcticFront, ArcticRear),
+            new PaintScheme("Night Ops", NightFront, NightRear),
+            new PaintScheme("Jungle Stalker", JungleFront, JungleRear),
+            new PaintScheme("Cobalt Lancer", CobaltFront, CobaltRear),
+            new PaintScheme("Hazard Works", HazardYellow, GunmetalFrame),
+        };
+
+        public static PaintScheme GetPaint(int index)
+        {
+            int count = PaintSchemes.Length;
+            return PaintSchemes[((index % count) + count) % count];
+        }
+
+        public static Color WithAlpha(Color color, float alpha)
+        {
+            color.a = alpha;
+            return color;
+        }
+
+        public static Color Lerp(Color a, Color b, float t)
+        {
+            return Color.Lerp(a, b, t);
+        }
     }
 }

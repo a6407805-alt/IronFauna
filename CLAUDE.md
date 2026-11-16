@@ -34,6 +34,18 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
 ## 4. Key Codebase Files
 - `Assets/Scripts/Core/IronFaunaPalette.cs` — Master hex color palette.
 - `Assets/Scripts/Clamshell/ClamshellPartData.cs` — `ScriptableObject` & enums for all 18 Clamshell Slots, 10 Set Archetypes (`Ironclad` through `Aegis`), and 5 Leg Poses.
-- `Assets/Scripts/Clamshell/MechClamshellBuilder.cs` — Procedural 3D assembler for both Humanoid and Quadruped Clamshell Mechs with balanced 2-bone leg pose solver.
-- `Assets/Scripts/Gameplay/IronFaunaM1Loop.cs` — M1-A / M1-B gameplay loop (`ObjectiveCore`, `EnemyWalker` with `NavMeshAgent`, `AutoTurret`, and `GridDefenseManager` with dynamic `NavMeshObstacle` carving).
+- `Assets/Scripts/Clamshell/MechClamshellBuilder.cs` — Procedural 3D assembler for both Humanoid and Quadruped Clamshell Mechs with a real 2-bone IK leg solver (hip always above the ankle). Exposes `GetSlot/SetSlot`, `ApplyLoadout/CaptureLoadout`.
+- `Assets/Scripts/Clamshell/ClamshellMeshFactory.cs` — Procedural hard-surface meshes (beveled clamshell halves, chamfered boxes, prisms, ridges, facets), flat-shaded and cached by parameters.
+- `Assets/Scripts/Clamshell/ClamshellFeatureKit.cs` — Set-specific details for all 10 archetypes × front/back. Details stay inside a band on the plate and below 70% of plate depth so the joint-clearance rules hold.
+- `Assets/Scripts/Clamshell/ClamshellCatalog.cs` — Set names (humanoid + animal), perks and per-half stat deltas.
+- `Assets/Scripts/Clamshell/MechLoadout.cs` — Serializable loadout (chassis, stance, paint, 18 slots) + `MechLoadoutStore` (PlayerPrefs JSON).
+- `Assets/Scripts/Core/IronFaunaMaterials.cs` — Shared material cache (one material per palette colour) + blueprint grid floor material.
+- `Assets/Scripts/Gameplay/` — `ObjectiveCore`, `EnemyWalker`, `AutoTurret`, `GridDefenseManager` (one MonoBehaviour per file so they can be added in the Inspector).
+- `Assets/Scripts/Menu/` — `IronFaunaMenuRoot` (title screen + garage), `MechShowcaseStage` (turntable, lights, orbit camera), `MenuUI` (code-built uGUI kit), `IronFaunaGameFlow` (MainMenu → Deploy → arena → Esc back to garage).
+- `Assets/Editor/IronFaunaMenuSceneSetup.cs` — Creates `Assets/Scenes/MainMenu.unity`, puts it first in Build Settings, and rebuilds procedural mechs when scenes open (`IronFauna` menu).
+
+## 5. Leg Clearance Rules (verified numerically)
+- Shell ends stop `jointRadius + 0.06` from each hub and bevel 45° (depth shrinks by `0.15`).
+- Thigh details live on the hip-side band (`0.02..0.38` of shell length), calf details on the ankle-side band (`-0.38..-0.02`), so a deep reverse fold cannot close details together.
+- `Pose5_ReverseCriticalFold` is 56% extension; going deeper makes the thigh and calf front details meet.
 - `Assets/Editor/ProjectBootstrap/IronFaunaBaselineAndSceneSetup.cs` — Editor setup for URP Global Volume (`Assets/Settings/IronFaunaGlobalVolumeProfile.asset`), lighting, and the `SampleScene.unity` Clamshell Arena.
