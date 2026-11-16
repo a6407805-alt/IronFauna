@@ -294,10 +294,12 @@ namespace IronFauna.Clamshell
         {
             const float legX = 0.62f;
             const float legZ = 0.85f;
-            BuildLegAssembly("FrontLeg_L", new Vector3(-legX, 0f, legZ), kneeForward, hipHeight);
-            BuildLegAssembly("FrontLeg_R", new Vector3(legX, 0f, legZ), kneeForward, hipHeight);
-            BuildLegAssembly("RearLeg_L", new Vector3(-legX, 0f, -legZ), !kneeForward, hipHeight);
-            BuildLegAssembly("RearLeg_R", new Vector3(legX, 0f, -legZ), !kneeForward, hipHeight);
+            // Quadruped knees always point away from the body: knees pointing inward cross under the
+            // spine in the deeper stances and the front and rear leg armor collide. The stance still sets the height.
+            BuildLegAssembly("FrontLeg_L", new Vector3(-legX, 0f, legZ), true, hipHeight);
+            BuildLegAssembly("FrontLeg_R", new Vector3(legX, 0f, legZ), true, hipHeight);
+            BuildLegAssembly("RearLeg_L", new Vector3(-legX, 0f, -legZ), false, hipHeight);
+            BuildLegAssembly("RearLeg_R", new Vector3(legX, 0f, -legZ), false, hipHeight);
 
             // Hip cross-bars + horizontal spine
             Strut(_visualRoot, "FrontHipBar", new Vector3(-legX, hipHeight, legZ), new Vector3(legX, hipHeight, legZ), 0.16f);

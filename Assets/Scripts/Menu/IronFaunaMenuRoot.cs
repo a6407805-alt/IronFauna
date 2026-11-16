@@ -136,6 +136,7 @@ namespace IronFauna.Menu
             _garageCanvas.SetActive(true);
             _stage.autoSpin = false;
             _stage.allowUserOrbit = true;
+            _stage.ResetTurntable();
             SelectTab(_tab);
             RefreshAll();
         }

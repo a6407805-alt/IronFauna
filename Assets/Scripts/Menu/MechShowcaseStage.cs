@@ -68,6 +68,12 @@ namespace IronFauna.Menu
             _targetOffset = offset;
         }
 
+        /// <summary>Turns the turntable back so the mech faces the camera.</summary>
+        public void ResetTurntable()
+        {
+            if (_turntable != null) _turntable.localRotation = Quaternion.Euler(0f, yaw + 180f, 0f);
+        }
+
         public void SnapCamera()
         {
             _targetYaw = yaw;
