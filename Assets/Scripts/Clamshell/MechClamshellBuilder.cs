@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
 using IronFauna.Core;
@@ -51,6 +52,26 @@ namespace IronFauna.Clamshell
         public float thighLength = 1.15f;
         public float calfLength = 1.15f;
         public float jointRadius = 0.15f;
+        [Tooltip("Half-width where the clavicle struts leave the spine (humanoid).")]
+        public float collarWidth = 0.36f;
+
+        // ---- Animation pivots, refreshed on every rebuild (driven by MechRobotOperator) ----
+        /// <summary>Root of the generated mech (child of this transform).</summary>
+        public Transform visualRoot => _visualRoot;
+        /// <summary>Upper body pivot: torso, arms, head (humanoid) or body shell and head (quadruped).</summary>
+        [System.NonSerialized] public Transform bodyRoot;
+        /// <summary>Head yaw pivot at the neck hub.</summary>
+        [System.NonSerialized] public Transform headRoot;
+        /// <summary>Arm roots at the shoulder hubs (humanoid only).</summary>
+        [System.NonSerialized] public Transform leftArmRoot;
+        [System.NonSerialized] public Transform rightArmRoot;
+        /// <summary>Leg swing pivots at hip height, left (-X) and right (+X) side.</summary>
+        [System.NonSerialized] public List<Transform> leftSideLegs = new List<Transform>();
+        [System.NonSerialized] public List<Transform> rightSideLegs = new List<Transform>();
+        /// <summary>Projectile spawn point (right hand, or the dorsal hub on a quadruped).</summary>
+        [System.NonSerialized] public Transform weaponMuzzle;
+        /// <summary>Hip height of the current stance (same as <see cref="HipHeight"/>).</summary>
+        public float baseHipHeight => HipHeight;
 
         /// <summary>Height of the hip hubs after the last rebuild (for camera framing).</summary>
         public float HipHeight { get; private set; }
@@ -201,6 +222,59 @@ namespace IronFauna.Clamshell
 
             if (!isQuadrupedChassis) BuildHumanoidChassis(kneeForward, hipHeight);
             else BuildQuadrupedChassis(kneeForward, hipHeight);
+            BuildAnimationPivots(hipHeight);
+        }
+
+        /// <summary>Switches the stance and rebuilds the mech.</summary>
+        public void SetLegPose(LegPosePreset pose)
+        {
+            legPose = pose;
+            RebuildMech();
+        }
+
+        /// <summary>
+        /// Groups the built parts under pivots the motion code can move: one swing pivot per leg at hip height,
+        /// an upper-body pivot (the height MechRobotOperator expects), a head pivot at the neck, and the arm roots.
+        /// </summary>
+        private void BuildAnimationPivots(float hipHeight)
+        {
+            leftSideLegs.Clear();
+            rightSideLegs.Clear();
+            var children = new List<Transform>();
+            foreach (Transform child in _visualRoot) children.Add(child);
+
+            float bodyY = isQuadrupedChassis ? hipHeight + 0.15f : hipHeight + 0.82f;
+            bodyRoot = ClamshellParts.Empty(_visualRoot, "BodyPivot", new Vector3(0f, bodyY, 0f), Quaternion.identity);
+            headRoot = null;
+            Vector3 neckPos = Vector3.zero;
+            foreach (var child in children)
+            {
+                string n = child.name;
+                if (n.StartsWith("Leg_") || n.StartsWith("FrontLeg_") || n.StartsWith("RearLeg_"))
+                {
+                    Vector3 p = child.localPosition;
+                    var pivot = ClamshellParts.Empty(_visualRoot, n + "_SwingPivot", new Vector3(p.x, hipHeight, p.z), Quaternion.identity);
+                    child.SetParent(pivot, true);
+                    (p.x < 0f ? leftSideLegs : rightSideLegs).Add(pivot);
+                    continue;
+                }
+                if (n == "NeckHub" || n == "QuadNeckHub") neckPos = child.localPosition;
+                child.SetParent(bodyRoot, true);
+            }
+
+            headRoot = ClamshellParts.Empty(bodyRoot, "HeadPivot", bodyRoot.InverseTransformPoint(_visualRoot.TransformPoint(neckPos)), Quaternion.identity);
+            foreach (var child in children)
+            {
+                string n = child.name;
+                if (n.StartsWith("Head") || n.StartsWith("NeckHub") || n.StartsWith("QuadNeckHub") || n.StartsWith("AnimalHead") || n.StartsWith("BeastOptic"))
+                {
+                    child.SetParent(headRoot, true);
+                }
+            }
+
+            leftArmRoot = bodyRoot.Find("Arm_L");
+            rightArmRoot = bodyRoot.Find("Arm_R");
+            weaponMuzzle = rightArmRoot != null ? rightArmRoot.Find("WeaponMuzzle") : bodyRoot.Find("WeaponMuzzle");
         }
 
         /// <summary>
@@ -282,7 +356,7 @@ namespace IronFauna.Clamshell
             for (int side = -1; side <= 1; side += 2)
             {
                 string suffix = side < 0 ? "_L" : "_R";
-                Vector3 clavicleStart = new Vector3(side * 0.36f, shoulderY, 0f);
+                Vector3 clavicleStart = new Vector3(side * collarWidth, shoulderY, 0f);
                 Vector3 shoulderHub = new Vector3(side * 1.12f, shoulderY, 0f);
                 Strut(_visualRoot, "Clavicle" + suffix, clavicleStart, shoulderHub, 0.16f);
                 ClamshellOnBone(_visualRoot, "Shoulder" + suffix, clavicleStart, shoulderHub, 0.20f, 0.21f, Vector3.up, ShoulderDims,
@@ -337,6 +411,7 @@ namespace IronFauna.Clamshell
             }
 
             Hub(_visualRoot, "DorsalWeaponHub", new Vector3(0f, spineY + bodyH * 0.5f + 0.04f, 0f), jointRadius, true);
+            ClamshellParts.Empty(_visualRoot, "WeaponMuzzle", new Vector3(0f, spineY + bodyH * 0.5f + 0.2f, 0.4f), Quaternion.identity);
 
             // Neck hub + animal head: skull (back half) and snout (front half), split along the head.
             Vector3 neck = new Vector3(0f, spineY + 0.18f, 1.12f);
@@ -468,6 +543,7 @@ namespace IronFauna.Clamshell
                 lowerArmFrontSet, lowerArmBackSet, -0.35f, 0.35f, out _, out _);
             ClamshellOnBone(armRoot, "Hand", wrist, tip, 0.15f, 0f, Vector3.forward, HandDims,
                 handFrontSet, handBackSet, -0.3f, 0.3f, out _, out _);
+            if (side > 0) ClamshellParts.Empty(armRoot, "WeaponMuzzle", tip + new Vector3(0f, 0f, 0.25f), Quaternion.identity);
         }
 
         /// <summary>
