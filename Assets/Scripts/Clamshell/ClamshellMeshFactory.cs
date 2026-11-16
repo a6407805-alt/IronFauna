@@ -95,20 +95,31 @@ namespace IronFauna.Clamshell
         /// flat seam face at y = -length/2, tapered 45° bevel at the outer end y = +length/2.
         /// The section is a chamfered rectangle centred on the local origin (X width, Z height).
         /// </summary>
-        public static Mesh LengthwiseHalf(float length, float width, float height, float bevel, float endScale)
+        public static Mesh LengthwiseHalf(float length, float width, float height, float bevel, float endScale,
+            float seamBevel = 0f, float seamScale = 1f)
         {
-            string key = Key("lhalf", length, width, height, bevel, endScale);
+            string key = Key("lhalf", length, width, height, bevel, endScale, seamBevel, seamScale);
             if (Cache.TryGetValue(key, out var cached) && cached != null) return cached;
 
             bevel = Mathf.Clamp(bevel, 0.01f, length * 0.6f);
+            seamBevel = Mathf.Clamp(seamBevel, 0f, length - bevel - 0.01f);
             var section = Octagon(width, height, Mathf.Min(width, height) * 0.18f);
             float h = length * 0.5f;
-            var stations = new[]
-            {
-                new Station(-h, 1f, 1f),
-                new Station(h - bevel, 1f, 1f),
-                new Station(h, endScale, endScale),
-            };
+            Station[] stations = seamBevel > 0.001f
+                ? new[]
+                {
+                    // Seam end lowered only in height (Z) so the toe/heel can tuck under a folding calf.
+                    new Station(-h, 1f, seamScale),
+                    new Station(-h + seamBevel, 1f, 1f),
+                    new Station(h - bevel, 1f, 1f),
+                    new Station(h, endScale, endScale),
+                }
+                : new[]
+                {
+                    new Station(-h, 1f, 1f),
+                    new Station(h - bevel, 1f, 1f),
+                    new Station(h, endScale, endScale),
+                };
             var mesh = Loft(section, stations, 0f, 1f, key);
             Cache[key] = mesh;
             return mesh;
@@ -327,9 +338,38 @@ namespace IronFauna.Clamshell
             mesh.hideFlags = HideFlags.DontSave;
             mesh.SetVertices(verts);
             mesh.SetNormals(normals);
+            mesh.SetTangents(SmoothedNormalsAsTangents(verts, normals));
             mesh.SetTriangles(tris, 0);
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        /// <summary>
+        /// The outline pass extrudes along these averaged normals (stored in tangent.xyz with w = 0) so the
+        /// ink outline stays closed around the hard flat-shaded edges.
+        /// </summary>
+        private static List<Vector4> SmoothedNormalsAsTangents(List<Vector3> verts, List<Vector3> normals)
+        {
+            var sums = new Dictionary<Vector3Int, Vector3>();
+            for (int i = 0; i < verts.Count; i++)
+            {
+                var key = Quantize(verts[i]);
+                sums.TryGetValue(key, out var sum);
+                sums[key] = sum + normals[i];
+            }
+            var tangents = new List<Vector4>(verts.Count);
+            for (int i = 0; i < verts.Count; i++)
+            {
+                Vector3 n = sums[Quantize(verts[i])];
+                n = n.sqrMagnitude > 1e-10f ? n.normalized : normals[i];
+                tangents.Add(new Vector4(n.x, n.y, n.z, 0f));
+            }
+            return tangents;
+        }
+
+        private static Vector3Int Quantize(Vector3 v)
+        {
+            return new Vector3Int(Mathf.RoundToInt(v.x * 10000f), Mathf.RoundToInt(v.y * 10000f), Mathf.RoundToInt(v.z * 10000f));
         }
 
         private static void EmitPolygon(Vector3[] poly, Vector3 solidCentroid, List<Vector3> verts, List<Vector3> normals, List<int> tris)

@@ -34,6 +34,7 @@ namespace IronFauna.EditorTools
         private static void OnEditorReady()
         {
             if (Application.isBatchMode || EditorApplication.isPlayingOrWillChangePlaymode) return;
+            EnsureToonMaterials();
             RebuildMechsInOpenScenes();
 
             if (SessionState.GetBool(AutoRunKey, false)) return;
@@ -61,6 +62,42 @@ namespace IronFauna.EditorTools
             {
                 if (builder != null && builder.gameObject.scene.IsValid()) builder.RebuildMech();
             }
+        }
+
+        private const string ToonShaderName = "IronFauna/Toon";
+        private const string ToonTemplatePath = "Assets/Resources/IF_ToonTemplate.mat";
+
+        /// <summary>
+        /// Keeps a material that references the toon shader in Resources (so builds include the shader)
+        /// and moves every palette material (Assets/Materials/IF_Mat_*) onto the toon shader.
+        /// </summary>
+        [MenuItem("IronFauna/Upgrade Materials To Toon Shader")]
+        public static void EnsureToonMaterials()
+        {
+            var toon = Shader.Find(ToonShaderName);
+            if (toon == null) return;
+
+            if (AssetDatabase.LoadAssetAtPath<Material>(ToonTemplatePath) == null)
+            {
+                if (!AssetDatabase.IsValidFolder("Assets/Resources")) AssetDatabase.CreateFolder("Assets", "Resources");
+                AssetDatabase.CreateAsset(new Material(toon) { name = "IF_ToonTemplate" }, ToonTemplatePath);
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/Materials")) return;
+            foreach (string guid in AssetDatabase.FindAssets("IF_Mat_ t:Material", new[] { "Assets/Materials" }))
+            {
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                if (mat == null || mat.shader == toon) continue;
+                Color baseColor = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor") : mat.color;
+                bool emissive = mat.name.EndsWith("_Emissive");
+                mat.shader = toon;
+                mat.SetColor("_BaseColor", baseColor);
+                mat.SetColor("_OutlineColor", IronFauna.Core.IronFaunaPalette.ShadowSlate);
+                mat.SetColor("_EmissionColor", emissive ? baseColor * 2.2f : baseColor * 0f);
+                if (emissive) mat.SetFloat("_ShadowStrength", 0f);
+                EditorUtility.SetDirty(mat);
+            }
+            AssetDatabase.SaveAssets();
         }
 
         private static void CreateMenuScene()

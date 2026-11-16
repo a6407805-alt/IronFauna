@@ -15,7 +15,7 @@ namespace IronFauna.Clamshell
     public class MechClamshellBuilder : MonoBehaviour
     {
         public const string RootName = "ClamshellMechRoot";
-        public const float AnkleHeight = 0.30f;
+        public const float AnkleHeight = 0.26f;
 
         [Header("Chassis & Stance Configuration")]
         public bool isQuadrupedChassis = false;
@@ -50,7 +50,7 @@ namespace IronFauna.Clamshell
         [Header("Bone Dimensions (Universal Envelope)")]
         public float thighLength = 1.15f;
         public float calfLength = 1.15f;
-        public float jointRadius = 0.20f;
+        public float jointRadius = 0.15f;
 
         /// <summary>Height of the hip hubs after the last rebuild (for camera framing).</summary>
         public float HipHeight { get; private set; }
@@ -82,14 +82,15 @@ namespace IronFauna.Clamshell
         }
 
         // Universal envelopes (no weight classes): every set shares these, only the outer details change.
-        private static readonly ShellDims ThighDims = new ShellDims(0.36f, 0.16f, 0.075f, 0.15f);
-        private static readonly ShellDims CalfDims = new ShellDims(0.34f, 0.16f, 0.075f, 0.15f);
-        private static readonly ShellDims TorsoDims = new ShellDims(0.82f, 0.24f, 0.15f, 0.20f);
-        private static readonly ShellDims HeadDims = new ShellDims(0.46f, 0.12f, 0.14f, 0.10f);
-        private static readonly ShellDims ShoulderDims = new ShellDims(0.34f, 0.14f, 0.07f, 0.10f);
-        private static readonly ShellDims UpperArmDims = new ShellDims(0.26f, 0.11f, 0.06f, 0.10f);
-        private static readonly ShellDims LowerArmDims = new ShellDims(0.28f, 0.12f, 0.06f, 0.10f);
-        private static readonly ShellDims HandDims = new ShellDims(0.24f, 0.09f, 0.05f, 0.07f);
+        // Armor dominates the silhouette; the skeleton and hubs only peek out at the joints.
+        private static readonly ShellDims ThighDims = new ShellDims(0.46f, 0.22f, 0.09f, 0.187f);
+        private static readonly ShellDims CalfDims = new ShellDims(0.42f, 0.22f, 0.09f, 0.187f);
+        private static readonly ShellDims TorsoDims = new ShellDims(1.00f, 0.30f, 0.17f, 0.24f);
+        private static readonly ShellDims HeadDims = new ShellDims(0.56f, 0.15f, 0.15f, 0.12f);
+        private static readonly ShellDims ShoulderDims = new ShellDims(0.44f, 0.18f, 0.08f, 0.12f);
+        private static readonly ShellDims UpperArmDims = new ShellDims(0.34f, 0.15f, 0.07f, 0.12f);
+        private static readonly ShellDims LowerArmDims = new ShellDims(0.36f, 0.16f, 0.07f, 0.12f);
+        private static readonly ShellDims HandDims = new ShellDims(0.30f, 0.12f, 0.06f, 0.08f);
 
         private void Start()
         {
@@ -204,17 +205,17 @@ namespace IronFauna.Clamshell
 
         /// <summary>
         /// Each pose is a knee direction plus how far the leg is extended (hip-to-ankle distance as a
-        /// fraction of thigh + calf). The critical fold stops at 56%: deeper than that, the thigh and
-        /// calf details meet at the knee.
+        /// fraction of thigh + calf). Verified with a side-view collision check: the critical fold stops at
+        /// 66% and the forward chicken bend at 80%; deeper than that, plates meet at the knee or the toe.
         /// </summary>
         public static void GetPoseShape(LegPosePreset pose, out bool kneeForward, out float extension)
         {
             switch (pose)
             {
-                case LegPosePreset.Pose2_ChickenBendForward: kneeForward = true; extension = 0.74f; break;
+                case LegPosePreset.Pose2_ChickenBendForward: kneeForward = true; extension = 0.80f; break;
                 case LegPosePreset.Pose3_ReverseExtended: kneeForward = false; extension = 0.93f; break;
                 case LegPosePreset.Pose4_ChickenBendBackward: kneeForward = false; extension = 0.74f; break;
-                case LegPosePreset.Pose5_ReverseCriticalFold: kneeForward = false; extension = 0.56f; break;
+                case LegPosePreset.Pose5_ReverseCriticalFold: kneeForward = false; extension = 0.66f; break;
                 default: kneeForward = true; extension = 0.94f; break;
             }
         }
@@ -259,32 +260,32 @@ namespace IronFauna.Clamshell
             float neckY = waistY + 1.5f;
             Vector3 waist = new Vector3(0f, waistY, 0f);
             Vector3 neck = new Vector3(0f, neckY, 0f);
-            Strut(_visualRoot, "SpineBone", waist, neck, 0.28f);
-            ClamshellOnBone(_visualRoot, "Torso", waist, neck, 0.30f, 0.24f, Vector3.forward, TorsoDims,
+            Strut(_visualRoot, "SpineBone", waist, neck, 0.32f);
+            ClamshellOnBone(_visualRoot, "Torso", waist, neck, 0.24f, 0.20f, Vector3.forward, TorsoDims,
                 bodyFrontSet, bodyBackSet, -0.35f, 0.35f, out _, out _);
 
             // Neck + head (skull core + face/cranium halves + cyan visor)
-            Hub(_visualRoot, "NeckHub", neck, jointRadius * 0.85f, true);
-            Vector3 crown = neck + new Vector3(0f, 0.66f, 0f);
-            Transform headMount = ClamshellOnBone(_visualRoot, "Head", neck, crown, 0.20f, 0f, Vector3.forward, HeadDims,
+            Hub(_visualRoot, "NeckHub", neck, jointRadius * 0.85f, false);
+            Vector3 crown = neck + new Vector3(0f, 0.72f, 0f);
+            Transform headMount = ClamshellOnBone(_visualRoot, "Head", neck, crown, 0.18f, 0f, Vector3.forward, HeadDims,
                 headFrontSet, headBackSet, -0.42f, -0.05f, out float headLen, out _);
-            ClamshellParts.Spawn(headMount, "SkullSensorCore", ClamshellMeshFactory.BeveledBox(new Vector3(0.26f, headLen * 0.95f, 0.28f), 0.03f),
+            ClamshellParts.Spawn(headMount, "SkullSensorCore", ClamshellMeshFactory.BeveledBox(new Vector3(0.30f, headLen * 0.95f, 0.30f), 0.03f),
                 Vector3.zero, Quaternion.identity, IronFaunaPalette.GunmetalFrame);
             float visorZ = HeadDims.inner + HeadDims.depth + 0.02f;
             ClamshellParts.Spawn(headMount, "VisorOptic", ClamshellMeshFactory.BeveledBox(new Vector3(HeadDims.width * 0.62f, headLen * 0.12f, 0.05f), 0.01f),
                 new Vector3(0f, headLen * 0.18f, visorZ), Quaternion.identity, IronFaunaPalette.CyanEnergy, true);
 
             // Shoulders (pauldrons on the clavicle struts) + arms
-            float shoulderY = neckY - 0.26f;
+            float shoulderY = neckY - 0.30f;
             NeckHeight = neckY;
             ChestHeight = shoulderY;
             for (int side = -1; side <= 1; side += 2)
             {
                 string suffix = side < 0 ? "_L" : "_R";
-                Vector3 clavicleStart = new Vector3(side * 0.30f, shoulderY, 0f);
-                Vector3 shoulderHub = new Vector3(side * 1.0f, shoulderY, 0f);
-                Strut(_visualRoot, "Clavicle" + suffix, clavicleStart, shoulderHub, 0.14f);
-                ClamshellOnBone(_visualRoot, "Shoulder" + suffix, clavicleStart, shoulderHub, 0.15f, 0.22f, Vector3.up, ShoulderDims,
+                Vector3 clavicleStart = new Vector3(side * 0.36f, shoulderY, 0f);
+                Vector3 shoulderHub = new Vector3(side * 1.12f, shoulderY, 0f);
+                Strut(_visualRoot, "Clavicle" + suffix, clavicleStart, shoulderHub, 0.16f);
+                ClamshellOnBone(_visualRoot, "Shoulder" + suffix, clavicleStart, shoulderHub, 0.20f, 0.21f, Vector3.up, ShoulderDims,
                     shoulderFrontSet, shoulderBackSet, -0.35f, 0.35f, out _, out _);
                 BuildArmAssembly("Arm" + suffix, shoulderHub, side);
             }
@@ -292,7 +293,7 @@ namespace IronFauna.Clamshell
 
         private void BuildQuadrupedChassis(bool kneeForward, float hipHeight)
         {
-            const float legX = 0.62f;
+            const float legX = 0.72f;
             const float legZ = 0.85f;
             // Quadruped knees always point away from the body: knees pointing inward cross under the
             // spine in the deeper stances and the front and rear leg armor collide. The stance still sets the height.
@@ -305,13 +306,13 @@ namespace IronFauna.Clamshell
             Strut(_visualRoot, "FrontHipBar", new Vector3(-legX, hipHeight, legZ), new Vector3(legX, hipHeight, legZ), 0.16f);
             Strut(_visualRoot, "RearHipBar", new Vector3(-legX, hipHeight, -legZ), new Vector3(legX, hipHeight, -legZ), 0.16f);
             float spineY = hipHeight + 0.15f;
-            Strut(_visualRoot, "HorizontalSpine", new Vector3(0f, spineY, -1.05f), new Vector3(0f, spineY, 1.05f), 0.34f);
+            Strut(_visualRoot, "HorizontalSpine", new Vector3(0f, spineY, -1.05f), new Vector3(0f, spineY, 1.05f), 0.36f);
             ChestHeight = spineY;
 
             // Thorax (front half) + haunch (back half): split along the spine, seam over the dorsal hub.
             const float bodyHalfLen = 1.0f;
-            const float bodyW = 0.78f;
-            const float bodyH = 0.62f;
+            const float bodyW = 0.90f;
+            const float bodyH = 0.70f;
             var bodyMesh = ClamshellMeshFactory.LengthwiseHalf(bodyHalfLen, bodyW, bodyH, 0.22f, 0.55f);
             Quaternion facingFwd = Quaternion.LookRotation(Vector3.up, Vector3.forward); // local Y forward, local Z up
             Quaternion facingBack = Quaternion.LookRotation(Vector3.up, Vector3.back);
@@ -330,7 +331,7 @@ namespace IronFauna.Clamshell
 
             // Neck hub + animal head: skull (back half) and snout (front half), split along the head.
             Vector3 neck = new Vector3(0f, spineY + 0.18f, 1.12f);
-            Hub(_visualRoot, "QuadNeckHub", neck, jointRadius * 0.9f, true);
+            Hub(_visualRoot, "QuadNeckHub", neck, jointRadius * 0.9f, false);
             NeckHeight = neck.y;
 
             var skullMesh = ClamshellMeshFactory.LengthwiseHalf(0.24f, 0.42f, 0.34f, 0.08f, 0.6f);
@@ -364,15 +365,15 @@ namespace IronFauna.Clamshell
             Hub(legRoot, "KneeHub", knee, jointRadius, true);
             Hub(legRoot, "AnkleHub", ankle, jointRadius * 0.8f, false);
 
-            Strut(legRoot, "ThighBone", knee, hip, 0.14f);
-            Strut(legRoot, "CalfBone", ankle, knee, 0.14f);
+            Strut(legRoot, "ThighBone", knee, hip, 0.18f);
+            Strut(legRoot, "CalfBone", ankle, knee, 0.18f);
 
             float clear = jointRadius + JointGap;
             // Details sit on the half of each plate away from the knee so a deep fold cannot close them together.
             ClamshellOnBone(legRoot, "Thigh", knee, hip, clear, clear, Vector3.forward, ThighDims,
                 thighFrontSet, thighBackSet, 0.02f, 0.38f, out _, out _);
             ClamshellOnBone(legRoot, "Calf", ankle, knee, clear, clear, Vector3.forward, CalfDims,
-                calfFrontSet, calfBackSet, -0.38f, -0.02f, out _, out _);
+                calfFrontSet, calfBackSet, -0.22f, 0.10f, out _, out _);
 
             BuildFoot(legRoot);
         }
@@ -381,34 +382,38 @@ namespace IronFauna.Clamshell
         {
             Transform foot = ClamshellParts.Empty(legRoot, "FootBone", Vector3.zero, Quaternion.identity);
 
-            ClamshellParts.Spawn(foot, "SolePad", ClamshellMeshFactory.BeveledBox(new Vector3(0.42f, 0.03f, 1.08f), 0.01f),
-                new Vector3(0f, 0.015f, 0.1f), Quaternion.identity, IronFaunaPalette.DarkIron);
-            ClamshellParts.Spawn(foot, "BareFootStrut", ClamshellMeshFactory.BeveledBox(new Vector3(0.24f, 0.06f, 1.0f), 0.015f),
-                new Vector3(0f, 0.06f, 0.1f), Quaternion.identity, IronFaunaPalette.GunmetalFrame);
+            ClamshellParts.Spawn(foot, "SolePad", ClamshellMeshFactory.BeveledBox(new Vector3(0.54f, 0.03f, 1.16f), 0.01f),
+                new Vector3(0f, 0.015f, 0.12f), Quaternion.identity, IronFaunaPalette.DarkIron);
+            ClamshellParts.Spawn(foot, "BareFootStrut", ClamshellMeshFactory.BeveledBox(new Vector3(0.26f, 0.04f, 1.08f), 0.012f),
+                new Vector3(0f, 0.04f, 0.12f), Quaternion.identity, IronFaunaPalette.GunmetalFrame);
 
-            // Toe (front) and heel (back) halves meet under the ankle; both stay clear of the ankle hub.
+            // Toe (front) and heel (back) halves meet under the ankle hub. Both are beveled on the ankle side
+            // too, so the calf can fold over them (verified for all 5 stances).
             Quaternion facingFwd = Quaternion.LookRotation(Vector3.up, Vector3.forward);
             Quaternion facingBack = Quaternion.LookRotation(Vector3.up, Vector3.back);
+            const float baseY = 0.06f;
 
-            const float toeLen = 0.42f, toeH = 0.24f, footW = 0.38f;
-            var toe = ClamshellParts.Spawn(foot, $"Foot_FrontHalf_{footFrontSet}", ClamshellMeshFactory.LengthwiseHalf(toeLen, footW, toeH, 0.14f, 0.45f),
-                new Vector3(0f, 0.09f + toeH * 0.5f, 0.20f + toeLen * 0.5f), facingFwd, _front);
+            const float toeLen = 0.48f, toeH = 0.22f, footW = 0.50f;
+            var toe = ClamshellParts.Spawn(foot, $"Foot_FrontHalf_{footFrontSet}",
+                ClamshellMeshFactory.LengthwiseHalf(toeLen, footW, toeH, 0.16f, 0.45f, 0.12f, 0.55f),
+                new Vector3(0f, baseY + toeH * 0.5f, 0.20f + toeLen * 0.5f), facingFwd, _front);
             ClamshellFeatureKit.Build(toe.transform, footFrontSet, true, new ClamshellFeatureKit.Frame
             {
-                width = footW, length = toeLen, depth = 0.05f, outer = toeH * 0.5f, sign = 1f, bandLo = -0.38f, bandHi = 0.1f, shellColor = _front,
+                width = footW, length = toeLen, depth = 0.05f, outer = toeH * 0.5f, sign = 1f, bandLo = -0.15f, bandHi = 0.18f, shellColor = _front,
             });
 
-            const float heelLen = 0.22f, heelH = 0.15f;
-            var heel = ClamshellParts.Spawn(foot, $"Foot_BackHalf_{footBackSet}", ClamshellMeshFactory.LengthwiseHalf(heelLen, footW * 0.92f, heelH, 0.08f, 0.6f),
-                new Vector3(0f, 0.09f + heelH * 0.5f, -0.20f - heelLen * 0.5f), facingBack, _rear);
+            const float heelLen = 0.28f, heelH = 0.16f;
+            var heel = ClamshellParts.Spawn(foot, $"Foot_BackHalf_{footBackSet}",
+                ClamshellMeshFactory.LengthwiseHalf(heelLen, footW * 0.92f, heelH, 0.10f, 0.6f, 0.06f, 0.8f),
+                new Vector3(0f, baseY + heelH * 0.5f, -0.16f - heelLen * 0.5f), facingBack, _rear);
             ClamshellFeatureKit.Build(heel.transform, footBackSet, false, new ClamshellFeatureKit.Frame
             {
-                width = footW * 0.92f, length = heelLen, depth = 0.04f, outer = heelH * 0.5f, sign = 1f, bandLo = -0.4f, bandHi = 0.2f, shellColor = _rear,
+                width = footW * 0.92f, length = heelLen, depth = 0.04f, outer = heelH * 0.5f, sign = 1f, bandLo = -0.3f, bandHi = 0.2f, shellColor = _rear,
             });
 
-            var latch = ClamshellMeshFactory.BeveledBox(new Vector3(0.04f, 0.06f, 0.12f), 0.01f);
-            ClamshellParts.Spawn(foot, "ToggleLatch_L", latch, new Vector3(-0.2f, 0.09f, 0f), Quaternion.identity, IronFaunaPalette.DarkIron);
-            ClamshellParts.Spawn(foot, "ToggleLatch_R", latch, new Vector3(0.2f, 0.09f, 0f), Quaternion.identity, IronFaunaPalette.DarkIron);
+            var latch = ClamshellMeshFactory.BeveledBox(new Vector3(0.05f, 0.07f, 0.14f), 0.012f);
+            ClamshellParts.Spawn(foot, "ToggleLatch_L", latch, new Vector3(-0.26f, 0.09f, 0.02f), Quaternion.identity, IronFaunaPalette.DarkIron);
+            ClamshellParts.Spawn(foot, "ToggleLatch_R", latch, new Vector3(0.26f, 0.09f, 0.02f), Quaternion.identity, IronFaunaPalette.DarkIron);
         }
 
         private void BuildArmAssembly(string armName, Vector3 shoulderPos, int side)
@@ -420,19 +425,19 @@ namespace IronFauna.Clamshell
             Vector3 wrist = elbow + new Vector3(side * 0.02f, -0.64f, 0.22f);
             Vector3 tip = wrist + new Vector3(0f, -0.34f, 0.08f);
 
-            Hub(armRoot, "ShoulderHub", shoulder, 0.17f, true);
-            Hub(armRoot, "ElbowHub", elbow, 0.15f, true);
-            Hub(armRoot, "WristHub", wrist, 0.12f, true);
+            Hub(armRoot, "ShoulderHub", shoulder, 0.15f, false);
+            Hub(armRoot, "ElbowHub", elbow, 0.13f, true);
+            Hub(armRoot, "WristHub", wrist, 0.11f, false);
 
-            Strut(armRoot, "UpperArmBone", elbow, shoulder, 0.12f);
-            Strut(armRoot, "LowerArmBone", wrist, elbow, 0.11f);
-            Strut(armRoot, "HandBone", wrist, tip, 0.10f);
+            Strut(armRoot, "UpperArmBone", elbow, shoulder, 0.14f);
+            Strut(armRoot, "LowerArmBone", wrist, elbow, 0.13f);
+            Strut(armRoot, "HandBone", wrist, tip, 0.12f);
 
-            ClamshellOnBone(armRoot, "UpperArm", elbow, shoulder, 0.19f, 0.21f, Vector3.forward, UpperArmDims,
+            ClamshellOnBone(armRoot, "UpperArm", elbow, shoulder, 0.18f, 0.20f, Vector3.forward, UpperArmDims,
                 upperArmFrontSet, upperArmBackSet, -0.35f, 0.35f, out _, out _);
-            ClamshellOnBone(armRoot, "LowerArm", wrist, elbow, 0.16f, 0.19f, Vector3.forward, LowerArmDims,
+            ClamshellOnBone(armRoot, "LowerArm", wrist, elbow, 0.16f, 0.18f, Vector3.forward, LowerArmDims,
                 lowerArmFrontSet, lowerArmBackSet, -0.35f, 0.35f, out _, out _);
-            ClamshellOnBone(armRoot, "Hand", wrist, tip, 0.16f, 0f, Vector3.forward, HandDims,
+            ClamshellOnBone(armRoot, "Hand", wrist, tip, 0.15f, 0f, Vector3.forward, HandDims,
                 handFrontSet, handBackSet, -0.3f, 0.3f, out _, out _);
         }
 
@@ -505,10 +510,10 @@ namespace IronFauna.Clamshell
         private static void Hub(Transform parent, string name, Vector3 localPos, float radius, bool glowingCore)
         {
             Quaternion alongX = Quaternion.Euler(0f, 0f, 90f); // rotary drum axis along X (the leg/arm hinge axis)
-            ClamshellParts.Spawn(parent, name, ClamshellMeshFactory.Prism(radius, 0.16f, 16), localPos, alongX, IronFaunaPalette.GunmetalFrame);
+            ClamshellParts.Spawn(parent, name, ClamshellMeshFactory.Prism(radius, radius * 1.1f, 16), localPos, alongX, IronFaunaPalette.GunmetalFrame);
             if (glowingCore)
             {
-                ClamshellParts.Spawn(parent, name + "_OrangeCore", ClamshellMeshFactory.Prism(radius * 0.62f, 0.18f, 16), localPos, alongX, IronFaunaPalette.OrangeJointCore, true);
+                ClamshellParts.Spawn(parent, name + "_OrangeCore", ClamshellMeshFactory.Prism(radius * 0.6f, radius * 1.22f, 16), localPos, alongX, IronFaunaPalette.OrangeJointCore, true);
             }
         }
 

@@ -24,6 +24,14 @@ namespace IronFauna.Core
 #if UNITY_EDITOR
             string assetPath = $"Assets/Materials/{key}.mat";
             mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+            Shader toon = ToonShader();
+            if (mat != null && toon != null && mat.shader != toon && !Application.isPlaying)
+            {
+                // Upgrade materials saved before the toon shader existed.
+                mat.shader = toon;
+                Configure(mat, baseColor, emissive);
+                UnityEditor.EditorUtility.SetDirty(mat);
+            }
             if (mat == null && !Application.isPlaying)
             {
                 if (!UnityEditor.AssetDatabase.IsValidFolder("Assets/Materials"))
@@ -82,7 +90,16 @@ namespace IronFauna.Core
                 tex.SetPixels(pixels);
                 tex.Apply(true);
 
-                _gridFloor = CreateMaterial("IF_Mat_BlueprintGridFloor", IronFaunaPalette.UiNeutral, false);
+                // The floor needs a texture, so it stays on URP Lit rather than the toon shader.
+                Material litTemplate = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null
+                    ? UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline.defaultMaterial
+                    : null;
+                _gridFloor = litTemplate != null ? new Material(litTemplate) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                _gridFloor.name = "IF_Mat_BlueprintGridFloor";
+                // Slightly dimmed so the sunlit tan floor stays below the bloom threshold.
+                Color floorTint = IronFaunaPalette.Lerp(IronFaunaPalette.UiNeutral, IronFaunaPalette.AmbientEquatorMid, 0.35f);
+                _gridFloor.color = floorTint;
+                if (_gridFloor.HasProperty("_BaseColor")) _gridFloor.SetColor("_BaseColor", floorTint);
                 _gridFloor.hideFlags = HideFlags.DontSave;
                 if (_gridFloor.HasProperty("_BaseMap")) _gridFloor.SetTexture("_BaseMap", tex);
                 _gridFloor.mainTexture = tex;
@@ -94,17 +111,48 @@ namespace IronFauna.Core
             return _gridFloor;
         }
 
+        private const string ToonShaderName = "IronFauna/Toon";
+        private const string ToonTemplateResource = "IF_ToonTemplate";
+        private static Shader _toon;
+
+        /// <summary>The toon shader (found by name in the editor, or via the Resources template material in builds).</summary>
+        public static Shader ToonShader()
+        {
+            if (_toon != null) return _toon;
+            _toon = Shader.Find(ToonShaderName);
+            if (_toon == null)
+            {
+                var template = Resources.Load<Material>(ToonTemplateResource);
+                if (template != null) _toon = template.shader;
+            }
+            return _toon;
+        }
+
         private static Material CreateMaterial(string name, Color baseColor, bool emissive)
         {
-            Material template = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null
-                ? UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline.defaultMaterial
-                : null;
-            Material mat = template != null
-                ? new Material(template)
-                : new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            Material mat;
+            Shader toon = ToonShader();
+            if (toon != null)
+            {
+                mat = new Material(toon);
+            }
+            else
+            {
+                Material template = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null
+                    ? UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline.defaultMaterial
+                    : null;
+                mat = template != null ? new Material(template) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            }
             mat.name = name;
+            Configure(mat, baseColor, emissive);
+            return mat;
+        }
+
+        private static void Configure(Material mat, Color baseColor, bool emissive)
+        {
             mat.color = baseColor;
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", baseColor);
+            if (mat.HasProperty("_OutlineColor")) mat.SetColor("_OutlineColor", IronFaunaPalette.ShadowSlate);
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.38f);
             if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", baseColor == IronFaunaPalette.GunmetalFrame ? 0.55f : 0.15f);
 
@@ -112,9 +160,14 @@ namespace IronFauna.Core
             {
                 mat.EnableKeyword("_EMISSION");
                 mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", baseColor * 2.5f);
+                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", baseColor * 2.2f);
+                // Glowing parts read as light sources: no shade band, thin outline.
+                if (mat.HasProperty("_ShadowStrength")) mat.SetFloat("_ShadowStrength", 0f);
             }
-            return mat;
+            else if (mat.HasProperty("_EmissionColor"))
+            {
+                mat.SetColor("_EmissionColor", baseColor * 0f);
+            }
         }
     }
 }

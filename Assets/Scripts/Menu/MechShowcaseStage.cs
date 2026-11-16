@@ -189,7 +189,7 @@ namespace IronFauna.Menu
                 key.type = LightType.Directional;
             }
             key.color = IronFaunaPalette.KeyLightWarm;
-            key.intensity = 1.25f;
+            key.intensity = 1.1f;
             key.shadows = LightShadows.Soft;
             key.transform.rotation = Quaternion.Euler(42f, -38f, 0f);
 
@@ -197,6 +197,20 @@ namespace IronFauna.Menu
             RenderSettings.ambientSkyColor = IronFaunaPalette.AmbientSkyCool;
             RenderSettings.ambientEquatorColor = IronFaunaPalette.AmbientEquatorMid;
             RenderSettings.ambientGroundColor = IronFaunaPalette.AmbientGroundDark;
+
+            // The arena's volume profile pushes exposure up for the old lit materials; the toon shader
+            // already sits at full brightness, so take the boost off (runtime copy, the asset is untouched).
+            var volume = FindFirstObjectByType<Volume>();
+            if (volume != null && volume.profile != null && volume.profile.TryGet(out ColorAdjustments adjust))
+            {
+                adjust.postExposure.overrideState = true;
+                adjust.postExposure.value = 0f;
+            }
+            if (volume != null && volume.profile != null && volume.profile.TryGet(out Bloom bloom))
+            {
+                bloom.threshold.overrideState = true;
+                bloom.threshold.value = 1.0f;
+            }
 
             // Fade the floor edge into the slate backdrop.
             RenderSettings.fog = true;
