@@ -48,6 +48,8 @@ namespace IronFauna.Core
 
         // Hangar studio (realistic look)
         public static readonly Color SteelBare         = new Color32(0x5C, 0x63, 0x6D, 0xFF); // #5C636D Machined skeleton steel
+        public static readonly Color SteelCast         = new Color32(0x3A, 0x40, 0x48, 0xFF); // #3A4048 Matte cast skeleton metal
+        public static readonly Color SteelBlack        = new Color32(0x1C, 0x20, 0x26, 0xFF); // #1C2026 Blackened recesses, conduits, treads
         public static readonly Color SteelDark         = new Color32(0x2C, 0x31, 0x38, 0xFF); // #2C3138 Blackened steel: joints caps, cables, treads
         public static readonly Color StudioBackdrop    = new Color32(0x0B, 0x12, 0x1C, 0xFF); // #0B121C Hangar void behind the mech
         public static readonly Color StudioFloor       = new Color32(0x16, 0x1B, 0x23, 0xFF); // #161B23 Polished hangar deck

@@ -201,13 +201,19 @@ class Part:
             me.materials.append(bpy.data.materials[role])
         obj = bpy.data.objects.new(name, me)
         bpy.context.scene.collection.objects.link(obj)
+        # Hard-surface finish: every edge sharper than 30 degrees gets a two-segment bevel with hardened normals,
+        # then weighted normals keep the big faces flat, so each edge catches the rim light as a clean highlight.
         for p in me.polygons:
-            p.use_smooth = False
-        bev = obj.modifiers.new("Chamfer", "BEVEL")
-        bev.width = 0.004
-        bev.segments = 1
+            p.use_smooth = True
+        bev = obj.modifiers.new("Bevel", "BEVEL")
+        bev.width = 0.009
+        bev.segments = 2
         bev.limit_method = "ANGLE"
-        bev.angle_limit = math.radians(35)
+        bev.angle_limit = math.radians(30)
+        bev.harden_normals = True
+        wn = obj.modifiers.new("WeightedNormal", "WEIGHTED_NORMAL")
+        wn.keep_sharp = True
+        wn.weight = 100
         return obj
 
 

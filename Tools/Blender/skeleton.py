@@ -431,6 +431,11 @@ def build_torso_humanoid(cls):
         piston(p, (sx * 0.2, 0.33, 1.375), (sx * 0.075, 0.1, 1.315), 0.02 * ft, split=0.5)            # recoil buffers
         socket(p, (sx * 0.31, 0.38, 1.435), sk, "+z")                                                 # upper L / R
     box(p, (0, 0.38, 1.40), (0.78, 0.09, 0.07), "Frame", ch=0.014)                                    # cross beam
+    for sx in (-1, 1):                                                                               # rear torso brackets
+        box(p, (sx * 0.2, 0.07, 1.29), (0.07, 0.1, 0.2), "Frame", ch=0.014)                           # post rising from the shoulder yoke
+        bar(p, (sx * 0.2, 0.09, 1.38), (sx * 0.31, 0.37, 1.40), 0.1 * ft, "Frame")                    # heavy arm to the pylon socket
+        bar(p, (sx * 0.2, 0.07, 1.22), (sx * 0.27, 0.3, 1.385), 0.05, "Dark")                         # diagonal brace
+        box(p, (sx * 0.31, 0.38, 1.385), (0.2, 0.15, 0.05), "Dark", ch=0.012)                         # socket saddle plate
     box(p, (0, 0.43, 1.40), (0.24, 0.12, 0.09), "Frame", ch=0.016)                                    # centre pedestal
     socket(p, (0, 0.44, 1.445), sk * 1.3, "+z")                                                       # heavy centreline
     bar(p, (0, 0.09, 0.2), (0, 0.29, 0.12), 0.08, "Frame")                                            # lower spine boom
@@ -531,7 +536,22 @@ def export(obj, path):
     bpy.ops.export_scene.fbx(
         filepath=path, use_selection=True, object_types={"MESH"}, use_mesh_modifiers=True,
         apply_unit_scale=True, apply_scale_options="FBX_SCALE_UNITS", bake_space_transform=True,
-        axis_forward="-Z", axis_up="Y", mesh_smooth_type="FACE", add_leaf_bones=False, bake_anim=False, path_mode="AUTO")
+        axis_forward="-Z", axis_up="Y", mesh_smooth_type="OFF", add_leaf_bones=False, bake_anim=False, path_mode="AUTO")
+
+
+def build_joint_guard():
+    """Knee / elbow guard: a layered cowl that floats over the outside of the joint drum on two struts (sized for a
+    0.15 m joint, Unity scales it). -Y points out of the bend, Z toward the upper bone. It never touches the limb
+    armor: it sits on the open side of the joint, inside +-35 degrees."""
+    import aero_ironclad as A
+    p = Part()
+    A.lx(p, A.keel(0.30, 0.03, 0.07), [(-0.115, 0.55, 0.55), (-0.03, 1.0, 1.0), (0.06, 1.0, 0.95), (0.125, 0.5, 0.5)], "Shell", off=(0, -0.185, 0))
+    A.lx(p, A.keel(0.25, 0.018, 0.04, skirt=0.03), [(0.03, 0.95, 1.0), (0.12, 0.85, 0.9), (0.165, 0.45, 0.5)], "Dark", off=(0, -0.232, 0.004))
+    A.lx(p, A.keel(0.26, 0.02, 0.045, skirt=0.03), [(0.02, 0.95, 1.0), (0.11, 0.85, 0.9), (0.16, 0.45, 0.5)], "Shell", off=(0, -0.236, 0))    # upper shingle
+    for sx in (-1, 1):
+        box(p, (sx * 0.1, -0.165, 0.0), (0.03, 0.07, 0.06), "Dark", ch=0.006)                         # standoff struts
+    cyl(p, (0, -0.257, -0.03), 0.008, 0.008, "y", "Glow", 6)                                          # sensor node
+    return p
 
 
 def build_all(do_export=True):
@@ -549,6 +569,7 @@ def build_all(do_export=True):
     add("Skel_Hand", build_hand())
     add("Skel_Head", build_head())
     add("Skel_HeadAnimal", build_head_animal())
+    add("Skel_JointGuard", build_joint_guard())
     for cls in CLASSES:
         add(f"Skel_TorsoHumanoid_{cls}", build_torso_humanoid(cls))
         add(f"Skel_TorsoAnimal_{cls}", build_torso_animal(cls))

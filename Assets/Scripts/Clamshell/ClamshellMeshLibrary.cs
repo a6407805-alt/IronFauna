@@ -88,7 +88,10 @@ namespace IronFauna.Clamshell
                     target.min.z + (v[i].z - ob.min.z) * s);
             }
             oriented.vertices = v;
-            oriented.RecalculateNormals();
+            Vector3[] n = oriented.normals;   // modeled (beveled, weighted) normals from the fit; only the width was stretched
+            for (int i = 0; i < n.Length; i++) n[i] = new Vector3(n[i].x / Mathf.Max(widthScale, 1e-4f), n[i].y, n[i].z).normalized;
+            oriented.normals = n;
+            oriented.uv = BoxUVs(v, n);
             oriented.RecalculateBounds();
             oriented.SetTangents(ClamshellMeshFactory.SmoothedNormalsAsTangents(new List<Vector3>(v), new List<Vector3>(oriented.normals)));
             oriented.name = "IF_Custom_" + name;
@@ -119,6 +122,13 @@ namespace IronFauna.Clamshell
             bool flip = xf.determinant < 0f;
             Vector3[] v = source.vertices;
             for (int i = 0; i < v.Length; i++) v[i] = xf.MultiplyPoint3x4(v[i]);
+            Vector3[] rawNormals = source.normals;
+            bool keepNormals = rawNormals != null && rawNormals.Length == v.Length;
+            if (keepNormals)
+            {
+                Matrix4x4 nx = xf.inverse.transpose;
+                for (int i = 0; i < rawNormals.Length; i++) rawNormals[i] = nx.MultiplyVector(rawNormals[i]).normalized;
+            }
 
             mesh = new Mesh { hideFlags = HideFlags.DontSave, name = "IF_" + name };
             if (v.Length > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
@@ -130,8 +140,9 @@ namespace IronFauna.Clamshell
                 if (flip) System.Array.Reverse(tris);
                 mesh.SetTriangles(tris, sm);
             }
-            mesh.RecalculateNormals();
+            if (keepNormals) mesh.normals = rawNormals; else mesh.RecalculateNormals();
             mesh.RecalculateBounds();
+            mesh.uv = BoxUVs(v, mesh.normals);
             mesh.SetTangents(ClamshellMeshFactory.SmoothedNormalsAsTangents(new List<Vector3>(v), new List<Vector3>(mesh.normals)));
             Fitted[key] = mesh;
             return true;
@@ -251,16 +262,43 @@ namespace IronFauna.Clamshell
                 remapped[i] = new Vector3(tMin.x + (p.x - min.x) * sx, tMin.y + (p.y - min.y) * sy, z);
             }
 
+            // Keep the modeled normals (bevels with hardened, weighted normals): same axis remap, inverse scale.
+            Vector3[] srcNormals = source.normals;
+            Vector3[] fitNormals = null;
+            if (srcNormals != null && srcNormals.Length == verts.Length)
+            {
+                fitNormals = new Vector3[srcNormals.Length];
+                for (int i = 0; i < srcNormals.Length; i++)
+                {
+                    Vector3 s = srcNormals[i];
+                    fitNormals[i] = new Vector3(s[widthAxis] * widthSign / sx, s[boneAxis] / sy, s[outAxis] * outSourceSign * zSign / sz).normalized;
+                }
+            }
+
             var mesh = new Mesh { hideFlags = HideFlags.DontSave };
             if (remapped.Length > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.vertices = remapped;
             mesh.subMeshCount = source.subMeshCount;
             for (int sm = 0; sm < source.subMeshCount; sm++) mesh.SetTriangles(source.GetTriangles(sm), sm);
-            mesh.RecalculateNormals();
+            if (fitNormals != null) mesh.normals = fitNormals; else mesh.RecalculateNormals();
             mesh.RecalculateBounds();
+            mesh.uv = BoxUVs(remapped, mesh.normals);
             var normals = new List<Vector3>(mesh.normals);
             mesh.SetTangents(ClamshellMeshFactory.SmoothedNormalsAsTangents(new List<Vector3>(remapped), normals));
             return mesh;
+        }
+
+        /// <summary>Box-projected UVs (about 1.7 tiles per metre) so the wear map lands on every part without unwrapping.</summary>
+        private static Vector2[] BoxUVs(Vector3[] v, Vector3[] n)
+        {
+            var uv = new Vector2[v.Length];
+            for (int i = 0; i < v.Length; i++)
+            {
+                Vector3 a = new Vector3(Mathf.Abs(n[i].x), Mathf.Abs(n[i].y), Mathf.Abs(n[i].z));
+                Vector2 p = a.x >= a.y && a.x >= a.z ? new Vector2(v[i].z, v[i].y) : (a.y >= a.z ? new Vector2(v[i].x, v[i].z) : new Vector2(v[i].x, v[i].y));
+                uv[i] = p * 1.7f;
+            }
+            return uv;
         }
 
         private static Vector3 Axis(int i)

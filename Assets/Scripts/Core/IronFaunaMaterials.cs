@@ -185,6 +185,60 @@ namespace IronFauna.Core
             mat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
         }
 
+        private static Texture2D _wear;
+
+        /// <summary>
+        /// Tiling wear map for mech surfaces (parts carry box-projected UVs): RGB is a faint albedo mottle,
+        /// alpha scales smoothness between about 0.62 and 1 in soft patches with finer grain on top.
+        /// </summary>
+        private static Texture2D WearMap()
+        {
+            if (_wear != null) return _wear;
+            const int size = 256;
+            _wear = new Texture2D(size, size, TextureFormat.RGBA32, true)
+            {
+                name = "IF_WearMap", wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4, hideFlags = HideFlags.DontSave,
+            };
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float u = x / (float)size, v = y / (float)size;
+                    float n = 0.55f * TileNoise(u, v, 4) + 0.3f * TileNoise(u, v, 11) + 0.15f * TileNoise(u, v, 37);
+                    byte albedo = (byte)Mathf.RoundToInt(Mathf.Lerp(218f, 255f, n));
+                    byte smooth = (byte)Mathf.RoundToInt(Mathf.Lerp(158f, 255f, Mathf.SmoothStep(0f, 1f, n)));
+                    px[y * size + x] = new Color32(albedo, albedo, albedo, smooth);
+                }
+            }
+            _wear.SetPixels32(px);
+            _wear.Apply(true);
+            return _wear;
+        }
+
+        /// <summary>Value noise that repeats every <paramref name="period"/> cells, so the texture tiles.</summary>
+        private static float TileNoise(float u, float v, int period)
+        {
+            float x = u * period, y = v * period;
+            int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
+            float fx = x - x0, fy = y - y0;
+            fx = fx * fx * (3f - 2f * fx);
+            fy = fy * fy * (3f - 2f * fy);
+            float a = Hash(x0 % period, y0 % period, period), b = Hash((x0 + 1) % period, y0 % period, period);
+            float c = Hash(x0 % period, (y0 + 1) % period, period), d = Hash((x0 + 1) % period, (y0 + 1) % period, period);
+            return Mathf.Lerp(Mathf.Lerp(a, b, fx), Mathf.Lerp(c, d, fx), fy);
+        }
+
+        private static float Hash(int x, int y, int seed)
+        {
+            unchecked
+            {
+                uint h = (uint)(x * 374761393 + y * 668265263 + seed * 144665);
+                h = (h ^ (h >> 13)) * 1274126177u;
+                return ((h ^ (h >> 16)) & 0xFFFF) / 65535f;
+            }
+        }
+
         private static Material _studioDeck;
         private static Shader _lit;
 
@@ -254,17 +308,26 @@ namespace IronFauna.Core
             Color albedo = baseColor;
             float metallic, smoothness;
             if (emissive) { metallic = 0f; smoothness = 0.6f; }
-            else if (baseColor == IronFaunaPalette.GunmetalFrame) { albedo = IronFaunaPalette.SteelBare; metallic = 0.9f; smoothness = 0.48f; }
-            else if (baseColor == IronFaunaPalette.DarkIron) { albedo = IronFaunaPalette.SteelDark; metallic = 0.85f; smoothness = 0.38f; }
+            else if (baseColor == IronFaunaPalette.GunmetalFrame) { albedo = IronFaunaPalette.SteelCast; metallic = 0.7f; smoothness = 0.34f; }    // skeleton: dark matte cast metal
+            else if (baseColor == IronFaunaPalette.DarkIron) { albedo = IronFaunaPalette.SteelBlack; metallic = 0.5f; smoothness = 0.24f; }       // recesses, conduits
             else if (baseColor == IronFaunaPalette.OffWhitePanel) { metallic = 0.9f; smoothness = 0.66f; }   // polished rods, pins, trim
             else if (baseColor == IronFaunaPalette.CopperCoil) { metallic = 1f; smoothness = 0.58f; }
             else if (baseColor == IronFaunaPalette.HazardYellow) { metallic = 0.1f; smoothness = 0.45f; }   // painted warning marks
-            else { albedo = IronFaunaPalette.Lerp(baseColor, IronFaunaPalette.SteelDark, 0.38f); metallic = 0.5f; smoothness = 0.42f; }                                                  // armor: coated metal
+            else { albedo = IronFaunaPalette.Lerp(baseColor, IronFaunaPalette.SteelDark, 0.38f); metallic = 0.45f; smoothness = 0.6f; }                                                  // armor: coated metal
 
             mat.color = albedo;
             mat.SetColor("_BaseColor", albedo);
             mat.SetFloat("_Metallic", metallic);
             mat.SetFloat("_Smoothness", smoothness);
+            if (!emissive)
+            {
+                // Machined-metal breakup: the wear map tints the albedo slightly and its alpha varies the smoothness.
+                Texture2D wear = WearMap();
+                mat.SetTexture("_BaseMap", wear);
+                mat.mainTexture = wear;
+                mat.SetFloat("_SmoothnessTextureChannel", 1f);
+                mat.EnableKeyword("_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A");
+            }
             if (emissive)
             {
                 mat.EnableKeyword("_EMISSION");

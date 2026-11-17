@@ -426,7 +426,7 @@ namespace IronFauna.Clamshell
             if (showArmor)
             {
                 float visorZ = HeadDims.inner + HeadDims.depth + 0.02f;
-                ClamshellParts.Spawn(headMount, "VisorOptic", ClamshellMeshFactory.BeveledBox(new Vector3(HeadDims.width * 0.62f, headLen * 0.12f, 0.05f), 0.01f),
+                ClamshellParts.Spawn(headMount, "VisorOptic", ClamshellMeshFactory.BeveledBox(new Vector3(HeadDims.width * 0.6f, headLen * 0.03f, 0.04f), 0.004f),
                     new Vector3(0f, headLen * 0.18f, visorZ), Quaternion.identity, IronFaunaPalette.CyanEnergy, true);
             }
 
@@ -566,6 +566,8 @@ namespace IronFauna.Clamshell
             Bone(legRoot, "ThighBone", $"Skel_Thigh_{legWeight}", knee, hip, 1.15f, 0.18f);
             Bone(legRoot, "CalfBone", $"Skel_Calf_{legWeight}", ankle, knee, 1.15f, 0.18f);
 
+            JointGuard(legRoot, "KneeGuard", knee, hip, ankle, kneeForward ? Vector3.forward : Vector3.back, r / 0.15f);
+
             float clear = r + JointGap;
             // Details sit on the half of each plate away from the knee so a deep fold cannot close them together.
             ClamshellOnBone(legRoot, "Thigh", knee, hip, clear, clear, Vector3.forward, ThighDims.For(_leg),
@@ -656,6 +658,8 @@ namespace IronFauna.Clamshell
             {
                 Strut(armRoot, "HandBone", wrist, tip, 0.12f);
             }
+
+            JointGuard(armRoot, "ElbowGuard", elbow, shoulder, wrist, Vector3.back, 0.13f * jr / 0.15f * 0.9f);
 
             ClamshellOnBone(armRoot, "UpperArm", elbow, shoulder, 0.18f, 0.20f, Vector3.forward, UpperArmDims.For(_torso),
                 upperArmFrontSet, upperArmBackSet, -0.35f, 0.35f, out _, out _);
@@ -806,17 +810,34 @@ namespace IronFauna.Clamshell
         /// Spawns a modeled skeleton piece ("Skel_*" in Resources/ClamshellMeshes) at its pivot. Returns null when
         /// the model is missing so the caller can fall back to a plain strut or drum.
         /// </summary>
-        private static GameObject Skel(Transform parent, string objName, string resource, Vector3 pos, Quaternion rot, Vector3 scale)
+        private static GameObject Skel(Transform parent, string objName, string resource, Vector3 pos, Quaternion rot, Vector3 scale, Color? paint = null)
         {
             if (!ClamshellMeshLibrary.TryGetRaw(resource, scale, out Mesh mesh, out var roles)) return null;
-            var go = ClamshellParts.Spawn(parent, objName, mesh, pos, rot, IronFaunaPalette.GunmetalFrame);
+            Color shell = paint ?? IronFaunaPalette.GunmetalFrame;
+            var go = ClamshellParts.Spawn(parent, objName, mesh, pos, rot, shell);
             if (roles != null && roles.Length > 1)
             {
                 var mats = new Material[roles.Length];
-                for (int i = 0; i < roles.Length; i++) mats[i] = RoleMaterial(roles[i], IronFaunaPalette.GunmetalFrame);
+                for (int i = 0; i < roles.Length; i++) mats[i] = RoleMaterial(roles[i], shell);
                 go.GetComponent<MeshRenderer>().sharedMaterials = mats;
             }
             return go;
+        }
+
+        /// <summary>
+        /// Layered guard floating over the open (outer) side of a knee or elbow. It is mounted on the joint, not on
+        /// either limb plate, so it overlaps the joint like a shingle without ever meeting the armor as the limb folds.
+        /// </summary>
+        private void JointGuard(Transform parent, string name, Vector3 joint, Vector3 upper, Vector3 lower, Vector3 straightOut, float scale)
+        {
+            if (!showArmor) return;
+            Vector3 toUpper = (upper - joint).normalized;
+            Vector3 outDir = -(toUpper + (lower - joint).normalized);
+            if (outDir.sqrMagnitude < 0.01f) outDir = straightOut; // dead-straight limb
+            outDir.Normalize();
+            Vector3 up = Vector3.ProjectOnPlane(toUpper, outDir);
+            if (up.sqrMagnitude < 1e-6f) up = Vector3.up;
+            Skel(parent, name, "Skel_JointGuard", joint, Quaternion.LookRotation(outDir, up.normalized), Vector3.one * scale, _front);
         }
 
         /// <summary>Limb bone between two joints: the modeled bone for this weight class, or a plain strut.</summary>

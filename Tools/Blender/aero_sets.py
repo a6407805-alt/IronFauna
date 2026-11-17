@@ -30,10 +30,20 @@ def deck(w, top, skirt):
     return [(-hw, -skirt), (-hw, top * 0.4), (-hw * 0.64, top), (hw * 0.64, top), (hw, top * 0.4), (hw, -skirt)]
 
 
+REC = 0.014   # depth of the recessed deck panel
+
+
 def deck_hood(p, w, L, tip, zc, top, base):
+    """Hood whose deck is a recessed panel: two raised chamfered rails and end lips around a sunken floor,
+    so the set's signature sits inset into the armor instead of on top of it."""
     st = [(zc + tip * 0.22 * L, 0.35, 0.3), (zc + tip * 0.02 * L, 1.0, 1.0), (zc - tip * 0.2 * L, 1.0, 1.0), (zc - tip * 0.3 * L, 0.85, 0.7)]
+    hw = w / 2
     lx(p, deck(w * 0.97, top * 0.86, base), [(z + tip * 0.025 * L, sx, sd) for z, sx, sd in st], "Dark", off=(0, -base, 0))
-    lx(p, deck(w, top, base), st, "Shell", off=(0, -base, 0))
+    lx(p, [(-hw * 0.66, -base), (-hw * 0.66, top - REC), (hw * 0.66, top - REC), (hw * 0.66, -base)], st, "Shell", off=(0, -base, 0))
+    for sx in (-1, 1):
+        lx(p, [(sx * hw * 0.62, -base), (sx * hw * 0.62, top), (sx * hw * 0.72, top), (sx * hw, top * 0.4), (sx * hw, -base)], st, "Shell", off=(0, -base, 0))
+    for z in (zc + tip * 0.02 * L, zc - tip * 0.2 * L):
+        p.block(w * 0.64, 0.035, REC + 0.004, base + top - REC - 0.004, "Shell", ch=0.004, z0=z)
 
 
 def sig_ctx(kind, w, L, d, zc, zl, hb, ww=0.58):
@@ -50,13 +60,13 @@ def limb(S, kind, front):
     if front:
         lx(p, keel(w, d * 0.42, d * 0.92), dart(L, tip), "Shell")
         deck_hood(p, w, L, tip, zc, d * 0.2, d * 0.80)
-        S.front_sig(p, sig_ctx(kind, w, L, d, zs, 0.30 * L, d * hf), d * 1.0, d * 0.18)
+        S.front_sig(p, sig_ctx(kind, w, L, d, zs, 0.19 * L, d * hf, ww=0.54), d * 1.0 - REC, d * 0.18)
         for sx in (-1, 1):
             lx(p, blade(0.03, d * 0.95, d * 1.1), [(zc + tip * 0.02 * L, 1.0, 0.75), (zc - tip * 0.27 * L, 1.0, 1.0)], "Frame", off=(sx * (w / 2 - 0.05), 0, 0))
     else:
         lx(p, keel(w, d * 0.4, d * 0.78), dart(L, tip), "Shell")
         deck_hood(p, w, L, tip, zc, d * 0.16, d * 0.62)
-        S.back_sig(p, sig_ctx(kind, w, L, d, zs, 0.30 * L, d * hk), d * 0.78)
+        S.back_sig(p, sig_ctx(kind, w, L, d, zs, 0.19 * L, d * hk, ww=0.54), d * 0.78 - REC)
     p.latch_tabs(w, L)
     return p
 
@@ -85,8 +95,8 @@ def body(S, front):
     if front:
         lx(p, keel(w, d * 0.5, d * 0.95, flat=0.04), A.BODY_ST(L), "Shell")
         deck_hood(p, w, L, -1, 0.2 * L, d * 0.26, d * 0.72)
-        S.front_sig(p, sig_ctx("Body", w, L, d, 0.25 * L, 0.3 * L, d * 0.5, ww=0.4), d * 0.98, d * 0.28)
-        p.block(w * 0.16, L * 0.02, d * 0.1, d * 0.8, "Glow", ch=0.004, z0=-0.065 * L)                  # sensor slit under the chevron
+        S.front_sig(p, sig_ctx("Body", w, L, d, 0.29 * L, 0.19 * L, d * 0.5, ww=0.4), d * 0.98 - REC, d * 0.28)
+        p.block(w * 0.16, L * 0.009, d * 0.1, d * 0.8, "Glow", ch=0.002, z0=-0.065 * L)                  # sensor slit under the chevron
         for sx in (-1, 1):
             p.block(w * 0.05, L * 0.16, d * 0.2, d * 0.42, "Dark", ch=0.006, x0=sx * w * 0.27, z0=-0.24 * L)   # waist intakes
         for i in range(3):                                                                              # lapped abdominal chevrons
@@ -97,7 +107,7 @@ def body(S, front):
     else:
         lx(p, keel(w, d * 0.45, d * 0.8, flat=0.08), A.BODY_ST(L), "Shell")
         deck_hood(p, w, L, -1, 0.24 * L, d * 0.2, d * 0.66)
-        S.back_sig(p, sig_ctx("Body", w, L, d, 0.24 * L, 0.36 * L, d * 0.5, ww=0.56), d * 0.86)
+        S.back_sig(p, sig_ctx("Body", w, L, d, 0.33 * L, 0.2 * L, d * 0.5, ww=0.54), d * 0.86 - REC)
         p.hazard_band(w * 0.26, L * 0.022, 0.012, d * 0.5, z0=-0.41 * L, n=5)
     p.latch_tabs(w, L)
     return p

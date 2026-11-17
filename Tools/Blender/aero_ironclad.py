@@ -114,6 +114,7 @@ def limb_back(p, w, L, d, tip, zc, hb):
     z_lo, z_hi = zc + tip * 0.22 * L, zc - tip * 0.10 * L
     lx(p, box_sec(ws, hs, hs * 0.2), [(z_lo, 0.7, 0.08), (z_hi, 1.0, 1.0)], "Shell", off=(0, -d * 0.5, 0))
     p.block(ws * 0.78, 0.03, hs * 0.62, d * 0.5 + hs * 0.16, "Dark", ch=0.004, z0=z_hi - tip * 0.012)
+    p.block(ws * 0.34, 0.012, hs * 0.16, d * 0.5 + hs * 0.36, "Glow", ch=0.002, z0=z_hi - tip * 0.03)       # recessed thruster glow
     lx(p, keel(ws * 0.9, hs * 0.2, hs * 0.5, skirt=d * 0.3), [(z_hi - tip * 0.02, 1.0, 1.0), (z_hi - tip * 0.16 * L, 0.5, 0.4)],
        "Frame", off=(0, -d * 0.5, 0))                                                                      # nozzle shroud
     p.latch_tabs(w, L)
@@ -164,7 +165,7 @@ def build_shoulder(front):
 
 
 # =============================================================================== torso
-BODY_ST = lambda L: [(-L / 2, 0.4, 0.4), (-0.3 * L, 0.52, 0.62), (0.0, 0.8, 0.9), (0.24 * L, 0.84, 1.0), (L / 2 - 0.08 * L, 0.8, 0.72), (L / 2, 0.6, 0.4)]
+BODY_ST = lambda L: [(-L / 2, 0.32, 0.4), (-0.3 * L, 0.44, 0.62), (0.0, 0.8, 0.9), (0.24 * L, 0.84, 1.0), (L / 2 - 0.08 * L, 0.8, 0.72), (L / 2, 0.6, 0.4)]
 
 
 def build_body_front():
@@ -174,7 +175,7 @@ def build_body_front():
     # chest hood: full-width upper plate ending in a chevron that points at the waist
     hood(p, w, L, d, -1, 0.2 * L, d * 0.5, d * 0.72)
     p.block(w * 0.04, L * 0.22, 0.012, d * 1.22 - 0.006, "Panel", ch=0.003, z0=0.2 * L)
-    p.block(w * 0.16, L * 0.02, d * 0.1, d * 0.8, "Glow", ch=0.004, z0=-0.065 * L)                      # sensor slit under the chevron point
+    p.block(w * 0.16, L * 0.009, d * 0.1, d * 0.8, "Glow", ch=0.002, z0=-0.065 * L)                      # sensor slit under the chevron point
     for sx in (-1, 1):
         # collar-bone strakes raking back toward the shoulders
         lx(p, blade(0.03, d * 0.34, d * 0.34), [(0.08 * L, 1.0, 0.3), (0.36 * L, 1.0, 1.0)], "Frame", off=(sx * w * 0.3, -d * 1.1, 0))
@@ -221,7 +222,7 @@ def build_head_front():
     p = Part()
     lx(p, keel(w, d * 0.5, d), HEAD_ST(L), "Shell")
     lx(p, keel(w * 0.92, d * 0.25, d * 0.5, skirt=d * 0.5), [(0.12 * L, 0.9, 1.0), (0.3 * L, 1.0, 0.75), (0.44 * L, 0.8, 0.4)], "Shell", off=(0, -d * 0.85, 0))  # raked brow
-    p.block(w * 0.62, L * 0.045, d * 0.5, d * 0.6, "Glow", ch=0.004, z0=0.06 * L)                       # visor band under the brow
+    p.block(w * 0.62, L * 0.02, d * 0.5, d * 0.6, "Glow", ch=0.002, z0=0.06 * L)                       # visor band under the brow
     for sx in (-1, 1):                                                                                 # swept cheek guards
         lx(p, keel(w * 0.26, d * 0.1, d * 0.3, skirt=d * 0.5),
            [(-0.32 * L, 0.4, 0.5, sx * w * 0.2), (-0.1 * L, 1.0, 1.0, sx * w * 0.32), (0.0, 0.9, 0.8, sx * w * 0.34)], "Shell", off=(0, -d * 0.72, 0))
@@ -299,7 +300,7 @@ def export(obj, path):
     bpy.ops.export_scene.fbx(
         filepath=path, use_selection=True, object_types={"MESH"}, use_mesh_modifiers=True,
         apply_unit_scale=True, apply_scale_options="FBX_SCALE_UNITS", bake_space_transform=True,
-        axis_forward="-Z", axis_up="Y", mesh_smooth_type="FACE", add_leaf_bones=False, bake_anim=False, path_mode="AUTO")
+        axis_forward="-Z", axis_up="Y", mesh_smooth_type="OFF", add_leaf_bones=False, bake_anim=False, path_mode="AUTO")
 
 
 if __name__ == "__main__":
