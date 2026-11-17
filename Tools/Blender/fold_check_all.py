@@ -4,8 +4,12 @@ import bpy, math, sys
 from shapely.geometry import MultiPoint, Point
 
 blend = sys.argv[1]
-T = C = 1.15; r = 0.15; gap = 0.06; inner = 0.09; ankleH = 0.26
-ENV = {"Thigh": (0.46, 0.22), "Calf": (0.42, 0.22)}
+def _arg(flag, default):
+    return float(sys.argv[sys.argv.index(flag) + 1]) if flag in sys.argv else default
+# Weight-class multipliers (see MechWeightClass in the Unity project): armor width / depth, seam gap, joint radius.
+AW, AD, AI, JR = _arg("--aw", 1.0), _arg("--ad", 1.0), _arg("--ai", 1.0), _arg("--jr", 1.0)
+T = C = 1.15; r = 0.15 * JR; gap = 0.06; inner = 0.09 * AI; ankleH = 0.26
+ENV = {"Thigh": (0.46 * AW, 0.22 * AD), "Calf": (0.42 * AW, 0.22 * AD)}
 POSES = [("Human", True, 0.94), ("ChickenFwd", True, 0.80), ("ReverseExt", False, 0.93), ("ChickenBack", False, 0.74), ("CritFold", False, 0.70)]
 NAMES = ["Ironclad", "Bastion", "Overclock", "Ripjaw", "Afterburn", "Voltaic", "Salvo", "Goliath", "Mantis", "Aegis"]
 

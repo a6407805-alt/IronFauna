@@ -72,6 +72,10 @@ namespace IronFauna.Menu
         private MenuUI.Cycler _chassisCycler;
         private MenuUI.Cycler _poseCycler;
         private MenuUI.Cycler _paintCycler;
+        private MenuUI.Cycler _torsoWeightCycler;
+        private MenuUI.Cycler _legWeightCycler;
+        private MenuUI.Cycler _viewCycler;
+        private bool _skeletonView;
         private MenuUI.Cycler _fullSetCycler;
         private Text _armsNote;
         private Text _headerInfo;
@@ -299,10 +303,13 @@ namespace IronFauna.Menu
             _chassisCycler = MenuUI.CreateCycler(page.transform, "Chassis", ToggleChassis, ToggleChassis);
             _poseCycler = MenuUI.CreateCycler(page.transform, "Stance", () => CyclePose(-1), () => CyclePose(1));
             _paintCycler = MenuUI.CreateCycler(page.transform, "Paint", () => CyclePaint(-1), () => CyclePaint(1));
+            _torsoWeightCycler = MenuUI.CreateCycler(page.transform, "Torso weight", () => CycleTorsoWeight(-1), () => CycleTorsoWeight(1));
+            _legWeightCycler = MenuUI.CreateCycler(page.transform, "Leg weight", () => CycleLegWeight(-1), () => CycleLegWeight(1));
+            _viewCycler = MenuUI.CreateCycler(page.transform, "View", ToggleSkeletonView, ToggleSkeletonView);
             var note = MenuUI.Label(page.transform,
-                "Every part is a two-half clamshell on one bone. Mix any front with any back: armor never covers a joint, and the hip always stays balanced over the foot.",
+                "Pick a torso and leg weight class, then clamp armor onto the skeleton. Any front half fits any back half; the seam always runs down the sides.",
                 19, IronFaunaPalette.GridLineLight, TextAnchor.UpperLeft);
-            MenuUI.Size(note, 110f);
+            MenuUI.Size(note, 90f);
         }
 
         private void BuildSlotPage(Transform pages, Tab tab, SlotRow[] rows)
@@ -395,6 +402,26 @@ namespace IronFauna.Menu
             FrameCameraForTab();
         }
 
+        private void CycleTorsoWeight(int delta)
+        {
+            _loadout.torsoWeight = MechFrameSpec.Cycle(_loadout.torsoWeight, delta);
+            Changed();
+        }
+
+        private void CycleLegWeight(int delta)
+        {
+            _loadout.legWeight = MechFrameSpec.Cycle(_loadout.legWeight, delta);
+            Changed();
+        }
+
+        /// <summary>Garage-only: hide the armor to inspect the bare skeleton and its weapon sockets.</summary>
+        private void ToggleSkeletonView()
+        {
+            _skeletonView = !_skeletonView;
+            RebuildMech();
+            RefreshAll();
+        }
+
         private void CyclePaint(int delta)
         {
             _loadout.paintScheme += delta;
@@ -415,6 +442,7 @@ namespace IronFauna.Menu
             bool quad = _loadout.quadruped;
             _loadout = MechLoadout.Default();
             _loadout.quadruped = quad;
+            _skeletonView = false;
             Changed();
         }
 
@@ -435,6 +463,7 @@ namespace IronFauna.Menu
         private void RebuildMech()
         {
             _stage.Mech.ApplyLoadout(_loadout);
+            _stage.Mech.showArmor = !_skeletonView;
             _stage.Mech.RebuildMech();
         }
 
@@ -456,6 +485,9 @@ namespace IronFauna.Menu
             _chassisCycler.Value.text = quad ? "QUADRUPED BEAST" : "HUMANOID";
             _poseCycler.Value.text = PoseNames[Mathf.Clamp((int)_loadout.legPose, 0, PoseNames.Length - 1)].ToUpperInvariant();
             _paintCycler.Value.text = IronFaunaPalette.GetPaint(_loadout.paintScheme).name.ToUpperInvariant();
+            _torsoWeightCycler.Value.text = _loadout.torsoWeight.ToString().ToUpperInvariant();
+            _legWeightCycler.Value.text = _loadout.legWeight.ToString().ToUpperInvariant();
+            _viewCycler.Value.text = _skeletonView ? "SKELETON ONLY" : "ARMORED";
             _fullSetCycler.Value.text = ClamshellCatalog.SetName(_fullSet, false).ToUpperInvariant();
 
             foreach (var kv in _slotCyclers)

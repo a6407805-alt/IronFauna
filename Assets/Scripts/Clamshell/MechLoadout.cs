@@ -15,6 +15,8 @@ namespace IronFauna.Clamshell
         public bool quadruped;
         public LegPosePreset legPose = LegPosePreset.Pose1_HumanLeg;
         public int paintScheme;
+        public MechWeightClass torsoWeight = MechWeightClass.Medium;
+        public MechWeightClass legWeight = MechWeightClass.Medium;
         public int[] slotSets = new int[SlotCount];
 
         public ClamshellSetArchetype Get(ClamshellSlot slot)
@@ -65,6 +67,17 @@ namespace IronFauna.Clamshell
                 var s = ClamshellCatalog.Stats(Get(slot));
                 for (int c = 0; c < copies; c++) total += s;
             }
+
+            // Weight classes: the torso trades protection against cooling and cost, the legs trade speed against load.
+            float armor = 1f, speed = 1f, firepower = 1f, cooling = 1f;
+            if (torsoWeight == MechWeightClass.Light) { armor *= 0.88f; cooling *= 1.10f; total.cost -= 60; }
+            else if (torsoWeight == MechWeightClass.Heavy) { armor *= 1.15f; firepower *= 1.10f; total.cost += 120; }
+            if (legWeight == MechWeightClass.Light) { speed *= 1.15f; armor *= 0.95f; total.cost -= 40; }
+            else if (legWeight == MechWeightClass.Heavy) { speed *= 0.85f; armor *= 1.10f; total.cost += 80; }
+            total.armor = Mathf.RoundToInt(total.armor * armor);
+            total.speed = Mathf.RoundToInt(total.speed * speed);
+            total.firepower = Mathf.RoundToInt(total.firepower * firepower);
+            total.cooling = Mathf.RoundToInt(total.cooling * cooling);
             return total;
         }
 
@@ -98,8 +111,16 @@ namespace IronFauna.Clamshell
             if (!PlayerPrefs.HasKey(Key)) return MechLoadout.Default();
             try
             {
-                var loadout = JsonUtility.FromJson<MechLoadout>(PlayerPrefs.GetString(Key));
-                return loadout ?? MechLoadout.Default();
+                string json = PlayerPrefs.GetString(Key);
+                var loadout = JsonUtility.FromJson<MechLoadout>(json);
+                if (loadout == null) return MechLoadout.Default();
+                if (!json.Contains("\"torsoWeight\""))
+                {
+                    // Saved before weight classes existed: that frame is today's Medium.
+                    loadout.torsoWeight = MechWeightClass.Medium;
+                    loadout.legWeight = MechWeightClass.Medium;
+                }
+                return loadout;
             }
             catch (ArgumentException)
             {

@@ -23,6 +23,7 @@ namespace IronFauna.Clamshell
         /// <summary>Colour role per sub-mesh, taken from the Blender material name (Shell, Panel, Hazard, Dark, Frame, Glow, Core, Copper).</summary>
         public enum PartRole { Shell, Panel, Hazard, Dark, Frame, Glow, Core, Copper }
         private static readonly HashSet<string> Missing = new HashSet<string>();
+        private static readonly Dictionary<string, Matrix4x4> NodeMatrices = new Dictionary<string, Matrix4x4>();
 
         public static string ResourceName(ClamshellSlot slot, ClamshellSetArchetype set)
         {
@@ -61,9 +62,10 @@ namespace IronFauna.Clamshell
         /// Lengthwise parts (feet, quadruped body, animal head) are modeled at true size: X width, Z length with
         /// +Z the free tip, height toward -Y from Y = 0. Loaded by name (e.g. "FootFront_Set02_Bastion") and scaled
         /// uniformly so the model's length matches <paramref name="target"/> (local Y), centred on X and seated on
-        /// the target's bottom (min Z). Details may stick out sideways or upward.
+        /// the target's bottom (min Z). Details may stick out sideways or upward. <paramref name="widthScale"/>
+        /// stretches the width only (Light / Heavy frames).
         /// </summary>
-        public static bool TryGetLengthwise(string name, Bounds target, out Mesh mesh, out PartRole[] roles)
+        public static bool TryGetLengthwise(string name, Bounds target, out Mesh mesh, out PartRole[] roles, float widthScale = 1f)
         {
             mesh = null;
             roles = null;
@@ -71,7 +73,7 @@ namespace IronFauna.Clamshell
             if (source == null) return false;
             Roles.TryGetValue(name, out roles);
 
-            string key = $"LW|{name}|{target.center.x:F3},{target.center.y:F3},{target.center.z:F3}|{target.size.x:F3},{target.size.y:F3},{target.size.z:F3}";
+            string key = $"LW|{name}|{widthScale:F3}|{target.center.x:F3},{target.center.y:F3},{target.center.z:F3}|{target.size.x:F3},{target.size.y:F3},{target.size.z:F3}";
             if (Fitted.TryGetValue(key, out mesh) && mesh != null) return true;
 
             // Re-orient like a plate (bone = Y, offset axis = Z) with outward = +Z (up), then scale uniformly.
@@ -81,7 +83,7 @@ namespace IronFauna.Clamshell
             float s = target.size.y / Mathf.Max(ob.size.y, 1e-5f);
             for (int i = 0; i < v.Length; i++)
             {
-                v[i] = new Vector3(target.center.x + (v[i].x - ob.center.x) * s,
+                v[i] = new Vector3(target.center.x + (v[i].x - ob.center.x) * s * widthScale,
                     target.min.y + (v[i].y - ob.min.y) * s,
                     target.min.z + (v[i].z - ob.min.z) * s);
             }
@@ -95,8 +97,49 @@ namespace IronFauna.Clamshell
             return true;
         }
 
+        /// <summary>
+        /// Skeleton pieces ("Skel_*") are modeled at true size and used as they are: no fitting, only the given
+        /// scale. Blender's (X, -Y front, Z up) arrives as Unity (x, y up, z front), so a piece modeled around
+        /// its pivot drops straight onto the joint it belongs to.
+        /// </summary>
+        public static bool TryGetRaw(string name, Vector3 scale, out Mesh mesh, out PartRole[] roles)
+        {
+            mesh = null;
+            roles = null;
+            Mesh source = LoadSource(name);
+            if (source == null) return false;
+            Roles.TryGetValue(name, out roles);
+
+            string key = $"RAW|{name}|{scale.x:F3},{scale.y:F3},{scale.z:F3}";
+            if (Fitted.TryGetValue(key, out mesh) && mesh != null) return true;
+
+            // Apply the model's own node transform (unit scale / axis fix-ups the importer left on the object).
+            Matrix4x4 node = NodeMatrices.TryGetValue(name, out var m) ? m : Matrix4x4.identity;
+            Matrix4x4 xf = Matrix4x4.Scale(scale) * node;
+            bool flip = xf.determinant < 0f;
+            Vector3[] v = source.vertices;
+            for (int i = 0; i < v.Length; i++) v[i] = xf.MultiplyPoint3x4(v[i]);
+
+            mesh = new Mesh { hideFlags = HideFlags.DontSave, name = "IF_" + name };
+            if (v.Length > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.vertices = v;
+            mesh.subMeshCount = source.subMeshCount;
+            for (int sm = 0; sm < source.subMeshCount; sm++)
+            {
+                int[] tris = source.GetTriangles(sm);
+                if (flip) System.Array.Reverse(tris);
+                mesh.SetTriangles(tris, sm);
+            }
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            mesh.SetTangents(ClamshellMeshFactory.SmoothedNormalsAsTangents(new List<Vector3>(v), new List<Vector3>(mesh.normals)));
+            Fitted[key] = mesh;
+            return true;
+        }
+
         public static void ClearCache()
         {
+            NodeMatrices.Clear();
             Fitted.Clear();
             Sources.Clear();
             Roles.Clear();
@@ -115,7 +158,11 @@ namespace IronFauna.Clamshell
             {
                 var filter = prefab.GetComponentInChildren<MeshFilter>();
                 var renderer = prefab.GetComponentInChildren<MeshRenderer>();
-                if (filter != null) mesh = filter.sharedMesh;
+                if (filter != null)
+                {
+                    mesh = filter.sharedMesh;
+                    NodeMatrices[name] = filter.transform.localToWorldMatrix;
+                }
                 if (mesh != null && renderer != null)
                 {
                     var mats = renderer.sharedMaterials;

@@ -19,7 +19,9 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
   - `OffWhitePanel`: `#F0ECE1` · `HazardYellow`: `#E6B800` · `ShadowSlate`: `#1E2229`
   - `OrangeJointCore`: `#FF7A1A` (emissive rotary joint cores) · `CyanEnergy`: `#24E5FF` (visors, radiators, hard-light, reactor core)
 
-## 3. Universal Clamshell Modular System (No Weight Classes — 220 Interchangeable Parts)
+## 3. Two-Layer Build: Skeleton + Universal Clamshell Armor (220 Interchangeable Parts, 3 Weight Classes)
+- **Design brief (adopted 2026-11-16, replaces older rules where they conflict):** every mech is (1) a structural skeleton that looks finished on its own and (2) two-piece clamshell armor that mounts on it. Visual blend: Armored Core 4/For Answer + Zoids Battle Legends + Gundam inner frames. Assembly order: torso (Humanoid/Animal × Light/Medium/Heavy) → legs (4 types × 3 weights) → helmet → arms (grip hands, wrist weapons, forearm weapons, whole-arm guns). Seams run down the sides only, never the centre of the face or chest.
+- **Built so far:** skeleton + weight classes + hardpoint sockets (section 7). **Not built yet:** overlapping/sliding knee armor (armor still stops short of every joint), the 4 separate leg types (still one two-bone leg with 5 stances), arm weapon types, weapons for the sockets, destruction.
 - **Single-Bone Clamping:** Every armor piece splits into **two clamshell halves** (`Front Half` in Crimson Red + `Back Half` in Darker Maroon) that clamp onto **one bone only** and lock via mechanical toggle latches across the parting seam.
 - **100% Exposed Rotary Joint Hubs:** Armor stops short of every circular joint drum (`Hip`, glowing-orange `Knee`, `Ankle`, `Neck`, `Shoulder`, `Elbow`, `Wrist`, `Waist`) with `45°` beveled clearance cutouts. Never cover a joint or allow armor overlap.
 - **5 Balanced Leg Poses:** `Pose1_HumanLeg`, `Pose2_ChickenBendForward`, `Pose3_ReverseExtended`, `Pose4_ChickenBendBackward`, `Pose5_ReverseCriticalFold` — in every pose, the Hip Hub stays on the vertical plumb line directly above the Foot.
@@ -57,4 +59,13 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
 - Lengthwise parts (`FootFront/FootBack`, `QuadBodyFront/QuadBodyBack`, `AnimalHeadFront/AnimalHeadBack` + `_<Set>.fbx`) are modeled at true size: X width, Z length (+Z = free tip), height toward -Y from Y = 0. `ClamshellMeshLibrary.TryGetLengthwise` scales them uniformly by length and seats them on the bottom; keep details inside the shell's length.
 - Material role `Copper` maps to `IronFaunaPalette.CopperCoil`.
 - `Tools/Blender/fold_check_all.py <blend>` checks thigh/calf/foot of every set in all 5 stances (toe details stay under ~0.30 m height: the calf passes over the toe in Pose2).
+
+## 7. Skeleton, Weight Classes & Hardpoints
+- `Assets/Scripts/Clamshell/MechFrameSpec.cs` — `MechWeightClass` (Light/Medium/Heavy) and the per-class numbers: frame thickness, armor width/depth, seam offset, joint radius, hip/shoulder/collar/quadruped leg spacing. **Mirrors `CLASSES` in `Tools/Blender/skeleton.py` — change both together.** Medium = the original universal envelope.
+- `MechClamshellBuilder.torsoWeight` (torso, arms, hardpoint sizes) and `legWeight` (thigh, calf, foot, leg joints) are independent; both are saved in `MechLoadout` and affect stats. `showArmor = false` builds the bare skeleton (garage "View" toggle).
+- `Tools/Blender/skeleton.py` builds 26 `Skel_*.fbx` pieces into `Assets/Resources/ClamshellMeshes/`: torso frames (`Skel_TorsoHumanoid_<Class>`, `Skel_TorsoAnimal_<Class>`), limb bones with pistons and armor hangers (`Skel_<Thigh|Calf|UpperArm|LowerArm>_<Class>`), `Skel_Foot_<Class>`, `Skel_Hand`, `Skel_Head`, `Skel_HeadAnimal`, `Skel_Joint`/`Skel_JointCore` (unit radius).
+- Skeleton pieces are true size and never fitted: Blender X = side, -Y = front, Z = up, origin at the pivot; `ClamshellMeshLibrary.TryGetRaw` loads them as they are. If a model is missing the builder falls back to plain struts and drums.
+- Clearance rule: where armor clamps on, the skeleton stays inside the slot between the halves (|front/back| below the seam offset). Head and hands are universal (not weight-classed).
+- Hardpoints (`MechHardpoint` components in `MechClamshellBuilder.hardpoints`): humanoid `BackUpperL`, `BackUpperR`, `BackCentre`, `LowerSpine`; animal `Dorsal`, `FlankL`, `FlankR`, `Tail`. Socket size by torso class — Light: Small sides / Medium main; Medium: Medium / Large; Heavy: Large / Large.
+- `fold_check_all.py <blend> --aw --ad --ai --jr` re-runs the leg clearance check for a weight class (all 10 sets clear in all three).
 - `Assets/Editor/ProjectBootstrap/IronFaunaBaselineAndSceneSetup.cs` — Editor setup for URP Global Volume (`Assets/Settings/IronFaunaGlobalVolumeProfile.asset`), lighting, and the `SampleScene.unity` Clamshell Arena.
