@@ -63,10 +63,13 @@ def limb(S, kind, front):
         S.front_sig(p, sig_ctx(kind, w, L, d, zs, 0.19 * L, d * hf, ww=0.54), d * 1.0 - REC, d * 0.18)
         for sx in (-1, 1):
             lx(p, blade(0.03, d * 0.95, d * 1.1), [(zc + tip * 0.02 * L, 1.0, 0.75), (zc - tip * 0.27 * L, 1.0, 1.0)], "Frame", off=(sx * (w / 2 - 0.05), 0, 0))
+        if kind == "LowerArm":                                                                           # vambrace blade
+            lx(p, blade(0.03, d * 0.5, d * 0.5), [(-0.42 * L, 1.0, 0.2), (0.3 * L, 1.0, 1.0)], "Frame", off=(w * 0.36, -d * 0.7, 0))
     else:
         lx(p, keel(w, d * 0.4, d * 0.78), dart(L, tip), "Shell")
         deck_hood(p, w, L, tip, zc, d * 0.16, d * 0.62)
         S.back_sig(p, sig_ctx(kind, w, L, d, zs, 0.19 * L, d * hk, ww=0.54), d * 0.78 - REC)
+        A.leg_fins(p, kind, w, L, d, tip, zc)
     p.latch_tabs(w, L)
     return p
 
@@ -80,6 +83,8 @@ def shoulder(S, front):
         lx(p, keel(w, d * 0.5, d), st, "Shell")
         lx(p, deck(w * 0.74, d * 0.2, d * 0.4), [(-0.3 * L, 0.8, 0.7), (-0.18 * L, 1.0, 1.0), (0.2 * L, 1.0, 1.0), (0.4 * L, 0.3, 0.5)], "Shell", off=(0, -d * 0.78, 0))
         S.front_sig(p, sig_ctx("Shoulder", w, L, d, 0.0, 0.34 * L, d * 0.45, ww=0.42), d * 0.98, d * 0.2)
+        for sx in (-1, 1):                                                                               # twin pauldron fins
+            A.fin(p, 0.028, -0.22 * L, 0.44 * L, d * 0.8, d * 0.72, "Shell", x0=sx * w * 0.33)
     else:
         lx(p, keel(w, d * 0.4, d * 0.7), st, "Shell")
         lx(p, deck(w * 0.7, d * 0.12, d * 0.3), [(-0.3 * L, 0.8, 0.7), (-0.18 * L, 1.0, 1.0), (0.22 * L, 1.0, 1.0), (0.36 * L, 0.5, 0.6)], "Shell", off=(0, -d * 0.6, 0))
@@ -108,6 +113,7 @@ def body(S, front):
         lx(p, keel(w, d * 0.45, d * 0.8, flat=0.08), A.BODY_ST(L), "Shell")
         deck_hood(p, w, L, -1, 0.24 * L, d * 0.2, d * 0.66)
         S.back_sig(p, sig_ctx("Body", w, L, d, 0.33 * L, 0.2 * L, d * 0.5, ww=0.54), d * 0.86 - REC)
+        A.back_fins(p, w, L, d)
         p.hazard_band(w * 0.26, L * 0.022, 0.012, d * 0.5, z0=-0.41 * L, n=5)
     p.latch_tabs(w, L)
     return p
@@ -133,6 +139,7 @@ def head(S, front):
     w, L, d = head_base(p)
     lx(p, keel(w * 0.92, d * 0.25, d * 0.5, skirt=d * 0.5), [(0.21 * L, 0.9, 1.0), (0.34 * L, 1.0, 0.75), (0.45 * L, 0.8, 0.4)], "Shell", off=(0, -d * 0.85, 0))   # raked brow
     S.eyes(p, w, L, d)
+    lx(p, blade(0.03, d * 0.45, d * 0.45), [(0.2 * L, 1.0, 0.25), (0.47 * L, 1.0, 1.0)], "Frame", off=(0, -d * 1.05, 0))   # crest fin
     for sx in (-1, 1):                                                                                   # swept cheek guards
         lx(p, keel(w * 0.26, d * 0.1, d * 0.3, skirt=d * 0.5),
            [(-0.34 * L, 0.4, 0.5, sx * w * 0.2), (-0.12 * L, 1.0, 1.0, sx * w * 0.32), (-0.02 * L, 0.9, 0.8, sx * w * 0.34)], "Shell", off=(0, -d * 0.72, 0))

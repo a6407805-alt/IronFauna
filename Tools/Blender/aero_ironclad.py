@@ -71,6 +71,24 @@ def blade(t, lo, hi):
     return [(-t / 2, 0.0), (t / 2, 0.0), (t / 2, lo), (-t / 2, hi)]
 
 
+def fin(p, t, z0, z1, base, h, role="Shell", x0=0.0):
+    """Swept stabiliser fin: grows from the plate at z0 to full height near z1, with a clipped trailing tip."""
+    lx(p, blade(t, h, h), [(z0, 1.0, 0.1), (z0 + (z1 - z0) * 0.72, 1.0, 1.0), (z1, 1.0, 0.5)], role, off=(x0, -base, 0))
+
+
+def leg_fins(p, kind, w, L, d, tip, zc):
+    """Twin fins on the back of thighs and calves, sweeping away from the knee."""
+    if kind in ("Thigh", "Calf"):
+        for sx in (-1, 1):
+            fin(p, 0.03, zc + tip * 0.08 * L, zc - tip * 0.32 * L, d * 0.5, d * 0.95, "Shell", x0=sx * (w / 2 - 0.07))
+
+
+def back_fins(p, w, L, d):
+    """Twin stabilisers on the back plate, rising behind the shoulders."""
+    for sx in (-1, 1):
+        fin(p, 0.04, -0.06 * L, 0.42 * L, d * 0.6, d * 0.95, "Shell", x0=sx * w * 0.4)
+
+
 def box_sec(w, hgt, ch):
     hw = w / 2
     return [(-hw, 0.0), (hw, 0.0), (hw, hgt - ch), (hw - ch, hgt), (-hw + ch, hgt), (-hw, hgt - ch)]
@@ -140,6 +158,7 @@ def build_limb(kind, front):
             lx(p, blade(0.03, d * 0.5, d * 0.5), [(-0.42 * L, 1.0, 0.2), (0.3 * L, 1.0, 1.0)], "Frame", off=(w * 0.3, -d * 0.7, 0))
     else:
         limb_back(p, w, L, d, tip, zc * L, hk)
+        leg_fins(p, kind, w, L, d, tip, zc * L)
     return p
 
 
@@ -209,6 +228,7 @@ def build_body_back():
         for k in range(3):                                                                              # upper cooling louvers
             p.block(w * 0.2, L * 0.018, d * 0.08, d * 0.62, "Dark", ch=0.003, x0=sx * w * 0.3, z0=0.36 * L + k * 0.035 * L)
     p.hazard_band(w * 0.26, L * 0.022, 0.012, d * 0.5, z0=-0.41 * L, n=5)
+    back_fins(p, w, L, d)
     p.latch_tabs(w, L)
     return p
 

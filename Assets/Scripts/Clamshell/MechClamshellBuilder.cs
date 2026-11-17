@@ -63,7 +63,7 @@ namespace IronFauna.Clamshell
         public float calfLength = 1.15f;
         public float jointRadius = 0.15f;
         [Tooltip("Half-width where the clavicle struts leave the spine (humanoid).")]
-        public float collarWidth = 0.36f;
+        public float collarWidth = 0.30f;
 
         // ---- Animation pivots, refreshed on every rebuild (driven by MechRobotOperator) ----
         /// <summary>Root of the generated mech (child of this transform).</summary>
@@ -124,10 +124,10 @@ namespace IronFauna.Clamshell
 
         // Medium-class envelopes. Every armor set shares them (only the outer details change) and
         // ShellDims.For() resizes them for Light and Heavy frames. Head and hands are universal.
-        private static readonly ShellDims ThighDims = new ShellDims(0.46f, 0.22f, 0.09f, 0.187f);
+        private static readonly ShellDims ThighDims = new ShellDims(0.52f, 0.22f, 0.09f, 0.187f);
         private static readonly ShellDims CalfDims = new ShellDims(0.42f, 0.22f, 0.09f, 0.187f);
         private static readonly ShellDims TorsoDims = new ShellDims(1.00f, 0.30f, 0.17f, 0.24f);
-        private static readonly ShellDims HeadDims = new ShellDims(0.56f, 0.15f, 0.15f, 0.12f);
+        private static readonly ShellDims HeadDims = new ShellDims(0.448f, 0.12f, 0.12f, 0.096f); // head is 0.8 of the first build: reads less like a toy
         private static readonly ShellDims ShoulderDims = new ShellDims(0.44f, 0.18f, 0.08f, 0.12f);
         private static readonly ShellDims UpperArmDims = new ShellDims(0.34f, 0.15f, 0.07f, 0.12f);
         private static readonly ShellDims LowerArmDims = new ShellDims(0.36f, 0.16f, 0.07f, 0.12f);
@@ -415,10 +415,10 @@ namespace IronFauna.Clamshell
 
             // Neck + head (skull core + face/cranium halves + cyan visor)
             Hub(_visualRoot, "NeckHub", neck, jointRadius * 0.85f, false);
-            Vector3 crown = neck + new Vector3(0f, 0.72f, 0f);
-            Transform headMount = ClamshellOnBone(_visualRoot, "Head", neck, crown, 0.18f, 0f, Vector3.forward, HeadDims,
+            Vector3 crown = neck + new Vector3(0f, 0.576f, 0f);
+            Transform headMount = ClamshellOnBone(_visualRoot, "Head", neck, crown, 0.144f, 0f, Vector3.forward, HeadDims,
                 headFrontSet, headBackSet, -0.42f, -0.05f, out float headLen, out _);
-            if (Skel(_visualRoot, "HeadSkeleton", "Skel_Head", neck, Quaternion.identity, Vector3.one) == null)
+            if (Skel(_visualRoot, "HeadSkeleton", "Skel_Head", neck, Quaternion.identity, Vector3.one * 0.8f) == null)
             {
                 ClamshellParts.Spawn(headMount, "SkullSensorCore", ClamshellMeshFactory.BeveledBox(new Vector3(0.30f, headLen * 0.95f, 0.30f), 0.03f),
                     Vector3.zero, Quaternion.identity, IronFaunaPalette.GunmetalFrame);
@@ -437,7 +437,7 @@ namespace IronFauna.Clamshell
             for (int side = -1; side <= 1; side += 2)
             {
                 string suffix = side < 0 ? "_L" : "_R";
-                Vector3 clavicleStart = new Vector3(side * collarWidth * (_torso.collar / 0.36f), shoulderY, 0f);
+                Vector3 clavicleStart = new Vector3(side * collarWidth * (_torso.collar / 0.30f), shoulderY, 0f);
                 Vector3 shoulderHub = new Vector3(side * _torso.shoulderX, shoulderY, 0f);
                 if (!torsoSkeleton) Strut(_visualRoot, "Clavicle" + suffix, clavicleStart, shoulderHub, 0.16f);
                 ClamshellOnBone(_visualRoot, "Shoulder" + suffix, clavicleStart, shoulderHub, 0.20f, 0.21f, Vector3.up, ShoulderDims.For(_torso),

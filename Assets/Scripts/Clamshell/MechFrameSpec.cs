@@ -41,11 +41,11 @@ namespace IronFauna.Clamshell
             switch (weight)
             {
                 case MechWeightClass.Light:
-                    return new MechFrameSpec { weight = weight, frame = 0.82f, armorWidth = 0.88f, armorDepth = 0.85f, seamOffset = 0.90f, jointRadius = 0.90f, hipX = 0.43f, shoulderX = 1.02f, collar = 0.32f, legX = 0.66f };
+                    return new MechFrameSpec { weight = weight, frame = 0.82f, armorWidth = 0.88f, armorDepth = 0.85f, seamOffset = 0.90f, jointRadius = 0.90f, hipX = 0.43f, shoulderX = 0.86f, collar = 0.27f, legX = 0.66f };
                 case MechWeightClass.Heavy:
-                    return new MechFrameSpec { weight = weight, frame = 1.20f, armorWidth = 1.14f, armorDepth = 1.15f, seamOffset = 1.12f, jointRadius = 1.12f, hipX = 0.55f, shoulderX = 1.24f, collar = 0.42f, legX = 0.80f };
+                    return new MechFrameSpec { weight = weight, frame = 1.20f, armorWidth = 1.14f, armorDepth = 1.15f, seamOffset = 1.12f, jointRadius = 1.12f, hipX = 0.55f, shoulderX = 1.07f, collar = 0.38f, legX = 0.80f };
                 default:
-                    return new MechFrameSpec { weight = MechWeightClass.Medium, frame = 1f, armorWidth = 1f, armorDepth = 1f, seamOffset = 1f, jointRadius = 1f, hipX = 0.48f, shoulderX = 1.12f, collar = 0.36f, legX = 0.72f };
+                    return new MechFrameSpec { weight = MechWeightClass.Medium, frame = 1f, armorWidth = 1f, armorDepth = 1f, seamOffset = 1f, jointRadius = 1f, hipX = 0.48f, shoulderX = 0.95f, collar = 0.30f, legX = 0.72f };
             }
         }
 

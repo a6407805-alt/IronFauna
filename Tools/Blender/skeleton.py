@@ -43,9 +43,9 @@ os.makedirs(OUT_DIR, exist_ok=True)
 #   ft frame thickness, aw/ad armor width/depth, ai seam offset, jr joint radius,
 #   hipX / shX / collar humanoid half-widths, legX quadruped leg half-spacing, sock hardpoint socket radius.
 CLASSES = {
-    "Light": dict(ft=0.82, aw=0.88, ad=0.85, ai=0.90, jr=0.90, hipX=0.43, shX=1.02, collar=0.32, legX=0.66, sock=0.060),
-    "Medium": dict(ft=1.00, aw=1.00, ad=1.00, ai=1.00, jr=1.00, hipX=0.48, shX=1.12, collar=0.36, legX=0.72, sock=0.080),
-    "Heavy": dict(ft=1.20, aw=1.14, ad=1.15, ai=1.12, jr=1.12, hipX=0.55, shX=1.24, collar=0.42, legX=0.80, sock=0.105),
+    "Light": dict(ft=0.82, aw=0.88, ad=0.85, ai=0.90, jr=0.90, hipX=0.43, shX=0.86, collar=0.27, legX=0.66, sock=0.060),
+    "Medium": dict(ft=1.00, aw=1.00, ad=1.00, ai=1.00, jr=1.00, hipX=0.48, shX=0.95, collar=0.30, legX=0.72, sock=0.080),
+    "Heavy": dict(ft=1.20, aw=1.14, ad=1.15, ai=1.12, jr=1.12, hipX=0.55, shX=1.07, collar=0.38, legX=0.80, sock=0.105),
 }
 JOINT_GAP = 0.06
 LEG_Z = 0.85  # quadruped leg half-spacing front/back
@@ -246,7 +246,7 @@ def limb_specs(cls):
     ua = math.sqrt(0.06 ** 2 + 0.70 ** 2 + 0.06 ** 2)
     la = math.sqrt(0.02 ** 2 + 0.64 ** 2 + 0.22 ** 2)
     return [
-        ("Thigh", 1.15, r, r, 0.46 * aw, 0.09 * ai, leg_clear, leg_clear, 0.15, 0.032),
+        ("Thigh", 1.15, r, r, 0.52 * aw, 0.09 * ai, leg_clear, leg_clear, 0.15, 0.032),
         ("Calf", 1.15, r * 0.8, r, 0.42 * aw, 0.09 * ai, leg_clear, leg_clear, 0.14, 0.030),
         ("UpperArm", ua, 0.13 * jr, 0.15 * jr, 0.34 * aw, 0.07 * ai, 0.18, 0.20, 0.10, 0.022),
         ("LowerArm", la, 0.11 * jr, 0.13 * jr, 0.36 * aw, 0.07 * ai, 0.16, 0.18, 0.10, 0.022),
