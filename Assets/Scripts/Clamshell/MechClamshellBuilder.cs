@@ -33,6 +33,8 @@ namespace IronFauna.Clamshell
         public MechWeightClass legWeight = MechWeightClass.Medium;
         [Tooltip("Off = bare skeleton (garage skeleton view, or all armor knocked off).")]
         public bool showArmor = true;
+        [Tooltip("Presentation stance for the title screen and garage: feet planted wide, arms raised, head turned. Leave off for gameplay, where the motion controller poses the mech.")]
+        public bool showcasePose;
 
         [Header("Mix-and-Match Clamshell Set Selection (Any Front + Any Back)")]
         public ClamshellSetArchetype headFrontSet = ClamshellSetArchetype.Set01_Ironclad;
@@ -300,6 +302,40 @@ namespace IronFauna.Clamshell
             leftArmRoot = bodyRoot.Find("Arm_L");
             rightArmRoot = bodyRoot.Find("Arm_R");
             weaponMuzzle = rightArmRoot != null ? rightArmRoot.Find("WeaponMuzzle") : bodyRoot.Find("WeaponMuzzle");
+            if (showcasePose) ApplyShowcasePose();
+        }
+
+        /// <summary>
+        /// Presentation stance: legs splayed with the toes out and one foot leading (soles stay flat on the deck),
+        /// torso turned a little, head looking back toward the viewer. The arms are posed in BuildArmAssembly.
+        /// </summary>
+        private void ApplyShowcasePose()
+        {
+            float lift = 0f;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                var legs = pass == 0 ? leftSideLegs : rightSideLegs;
+                float side = pass == 0 ? -1f : 1f;
+                foreach (var pivot in legs)
+                {
+                    if (pivot == null || pivot.childCount == 0) continue;
+                    float roll = side * 5f;                                   // feet wider than the hips
+                    float yawOut = isQuadrupedChassis ? 0f : side * 9f;       // toes out
+                    float pitch = isQuadrupedChassis ? 0f : side * 3f;        // left foot leads, right foot trails
+                    pivot.localRotation = Quaternion.Euler(pitch, yawOut, roll);
+
+                    Transform legRoot = pivot.GetChild(0);
+                    Transform foot = legRoot.Find("FootBone");
+                    if (foot == null) continue;
+                    Vector3 ankle = _visualRoot.InverseTransformPoint(legRoot.TransformPoint(new Vector3(0f, AnkleHeight, 0f)));
+                    foot.rotation = _visualRoot.rotation * Quaternion.Euler(0f, yawOut, 0f);
+                    foot.position = _visualRoot.TransformPoint(ankle - new Vector3(0f, AnkleHeight, 0f));
+                    lift = Mathf.Max(lift, ankle.y - AnkleHeight);
+                }
+            }
+            _visualRoot.localPosition = new Vector3(0f, -lift, 0f);
+            if (bodyRoot != null) bodyRoot.localRotation = Quaternion.Euler(2f, isQuadrupedChassis ? 0f : 5f, 0f);
+            if (headRoot != null) headRoot.localRotation = Quaternion.Euler(isQuadrupedChassis ? 6f : 4f, isQuadrupedChassis ? 10f : -14f, 0f);
         }
 
         /// <summary>
@@ -599,6 +635,15 @@ namespace IronFauna.Clamshell
             Vector3 elbow = new Vector3(side * 0.06f, -0.70f, 0.06f);
             Vector3 wrist = elbow + new Vector3(side * 0.02f, -0.64f, 0.22f);
             Vector3 tip = wrist + new Vector3(0f, -0.34f, 0.08f);
+            if (showcasePose)
+            {
+                // Weapons-ready: elbows out and back, forearms forward; the right arm leads. Bone lengths unchanged.
+                bool lead = side > 0;
+                float upper = elbow.magnitude, lower = (wrist - elbow).magnitude, hand = (tip - wrist).magnitude;
+                elbow = new Vector3(side * 0.16f, -0.66f, lead ? -0.10f : -0.04f).normalized * upper;
+                wrist = elbow + new Vector3(-side * 0.05f, lead ? -0.30f : -0.52f, lead ? 0.60f : 0.44f).normalized * lower;
+                tip = wrist + new Vector3(0f, lead ? -0.10f : -0.28f, lead ? 0.33f : 0.21f).normalized * hand;
+            }
 
             float jr = _torso.jointRadius;
             Hub(armRoot, "ShoulderHub", shoulder, 0.15f * jr, false);

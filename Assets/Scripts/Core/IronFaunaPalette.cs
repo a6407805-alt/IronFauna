@@ -39,6 +39,23 @@ namespace IronFauna.Core
 
         // UI neutrals (multiplier white for uGUI tints)
         public static readonly Color UiNeutral         = new Color32(0xFF, 0xFF, 0xFF, 0xFF); // #FFFFFF Untinted UI graphic
+        public static readonly Color UiPanel           = new Color32(0x0A, 0x0F, 0x17, 0xFF); // #0A0F17 Garage panel backing (used translucent)
+        public static readonly Color UiButton          = new Color32(0x1A, 0x23, 0x30, 0xFF); // #1A2330 Idle button / row control
+        public static readonly Color UiSelect          = new Color32(0x2F, 0x5F, 0x8F, 0xFF); // #2F5F8F Hovered / selected control
+        public static readonly Color UiText            = new Color32(0xDC, 0xE4, 0xEE, 0xFF); // #DCE4EE Primary readout text
+        public static readonly Color UiTextDim         = new Color32(0x85, 0x92, 0xA3, 0xFF); // #8592A3 Labels and hints
+        public static readonly Color UiAccent          = new Color32(0xA9, 0xD4, 0xFF, 0xFF); // #A9D4FF Header readouts, rules, stat bars
+
+        // Hangar studio (realistic look)
+        public static readonly Color SteelBare         = new Color32(0x5C, 0x63, 0x6D, 0xFF); // #5C636D Machined skeleton steel
+        public static readonly Color SteelDark         = new Color32(0x2C, 0x31, 0x38, 0xFF); // #2C3138 Blackened steel: joints caps, cables, treads
+        public static readonly Color StudioBackdrop    = new Color32(0x0B, 0x12, 0x1C, 0xFF); // #0B121C Hangar void behind the mech
+        public static readonly Color StudioFloor       = new Color32(0x16, 0x1B, 0x23, 0xFF); // #161B23 Polished hangar deck
+        public static readonly Color StudioFloorLine   = new Color32(0x24, 0x2C, 0x38, 0xFF); // #242C38 Deck panel seams
+        public static readonly Color StudioKey         = new Color32(0xFF, 0xF4, 0xE6, 0xFF); // #FFF4E6 Overhead key light
+        public static readonly Color StudioRim         = new Color32(0x8F, 0xC4, 0xFF, 0xFF); // #8FC4FF Cool rim light from behind
+        public static readonly Color StudioFill        = new Color32(0x4A, 0x5A, 0x72, 0xFF); // #4A5A72 Soft fill / ambient sky
+        public static readonly Color StudioAmbientLow  = new Color32(0x0E, 0x12, 0x18, 0xFF); // #0E1218 Ambient ground
 
         // Garage paint schemes (front / rear halves). Index 0 is the art-bible default.
         public static readonly Color DesertFront       = new Color32(0xC9, 0xA1, 0x5B, 0xFF); // #C9A15B Desert Raider front

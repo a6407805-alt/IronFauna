@@ -155,19 +155,19 @@ namespace IronFauna.Menu
             _titleCanvas = canvas.gameObject;
             var root = canvas.transform;
 
-            var column = MenuUI.Panel(root, "TitleColumn", IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.72f));
+            var column = MenuUI.Panel(root, "TitleColumn", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.72f));
             MenuUI.Place(column.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(760f, 0f));
-            var stripe = MenuUI.Panel(column.transform, "HazardEdge", IronFaunaPalette.HazardYellow);
+            var stripe = MenuUI.Panel(column.transform, "HazardEdge", IronFaunaPalette.UiAccent);
             MenuUI.Place(stripe.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-8f, 0f), Vector2.zero);
 
-            var title = MenuUI.Label(column.transform, "IRONFAUNA", 124, IronFaunaPalette.OffWhitePanel, TextAnchor.LowerLeft, FontStyle.Bold);
+            var title = MenuUI.Label(column.transform, "IRONFAUNA", 124, IronFaunaPalette.UiText, TextAnchor.LowerLeft, FontStyle.Bold);
             title.horizontalOverflow = HorizontalWrapMode.Overflow;
             MenuUI.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(80f, -360f), new Vector2(-40f, -170f));
 
-            var bar = MenuUI.Panel(column.transform, "TitleBar", IronFaunaPalette.CrimsonFront);
+            var bar = MenuUI.Panel(column.transform, "TitleBar", IronFaunaPalette.UiSelect);
             MenuUI.Place(bar.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -380f), new Vector2(560f, -368f));
 
-            var tagline = MenuUI.Label(column.transform, "YOU ARE THE TOWER AND THE DEFENDER", 26, IronFaunaPalette.CyanEnergy, TextAnchor.UpperLeft, FontStyle.Bold);
+            var tagline = MenuUI.Label(column.transform, "YOU ARE THE TOWER AND THE DEFENDER", 26, IronFaunaPalette.UiAccent, TextAnchor.UpperLeft, FontStyle.Bold);
             MenuUI.Place(tagline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(84f, -440f), new Vector2(-40f, -396f));
 
             var buttons = MenuUI.NewRect(column.transform, "TitleButtons");
@@ -178,13 +178,13 @@ namespace IronFauna.Menu
             AddTitleButton(buttons, "DEPLOY", () => IronFaunaGameFlow.Deploy(_loadout));
             AddTitleButton(buttons, "QUIT", IronFaunaGameFlow.Quit);
 
-            _titleFooter = MenuUI.Label(column.transform, "", 18, IronFaunaPalette.GridLineLight, TextAnchor.LowerLeft);
+            _titleFooter = MenuUI.Label(column.transform, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft);
             MenuUI.Place(_titleFooter.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(84f, 40f), new Vector2(-40f, 80f));
         }
 
         private static void AddTitleButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
         {
-            var b = MenuUI.CreateButton(parent, label, 34, IronFaunaPalette.GunmetalFrame, IronFaunaPalette.CrimsonFront, IronFaunaPalette.OffWhitePanel, action);
+            var b = MenuUI.CreateButton(parent, label, 34, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
             MenuUI.Size(b, 84f);
         }
 
@@ -199,17 +199,17 @@ namespace IronFauna.Menu
             var root = canvas.transform;
 
             // Header
-            var header = MenuUI.Panel(root, "Header", IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.85f));
+            var header = MenuUI.Panel(root, "Header", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.85f));
             MenuUI.Place(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -84f), Vector2.zero);
-            var headerTitle = MenuUI.Label(header.transform, "GARAGE", 46, IronFaunaPalette.OffWhitePanel, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var headerTitle = MenuUI.Label(header.transform, "GARAGE", 46, IronFaunaPalette.UiText, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Place(headerTitle.rectTransform, Vector2.zero, new Vector2(0.4f, 1f), new Vector2(40f, 0f), Vector2.zero);
-            _headerInfo = MenuUI.Label(header.transform, "", 22, IronFaunaPalette.HazardYellow, TextAnchor.MiddleRight, FontStyle.Bold);
+            _headerInfo = MenuUI.Label(header.transform, "", 22, IronFaunaPalette.UiAccent, TextAnchor.MiddleRight, FontStyle.Bold);
             MenuUI.Place(_headerInfo.rectTransform, new Vector2(0.4f, 0f), Vector2.one, Vector2.zero, new Vector2(-40f, 0f));
-            var headerEdge = MenuUI.Panel(header.transform, "HazardEdge", IronFaunaPalette.HazardYellow);
+            var headerEdge = MenuUI.Panel(header.transform, "HazardEdge", IronFaunaPalette.UiAccent);
             MenuUI.Place(headerEdge.rectTransform, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 6f));
 
             // Left column: tabs + slot pages
-            var left = MenuUI.Panel(root, "PartsColumn", IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.72f));
+            var left = MenuUI.Panel(root, "PartsColumn", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.72f));
             MenuUI.Place(left.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(32f, 120f), new Vector2(712f, -108f));
 
             var tabs = MenuUI.NewRect(left.transform, "Tabs");
@@ -219,7 +219,7 @@ namespace IronFauna.Menu
             foreach (Tab t in System.Enum.GetValues(typeof(Tab)))
             {
                 Tab captured = t;
-                var b = MenuUI.CreateButton(tabs, t.ToString().ToUpperInvariant(), 20, IronFaunaPalette.UiNeutral, IronFaunaPalette.UiNeutral, IronFaunaPalette.OffWhitePanel, () => SelectTab(captured));
+                var b = MenuUI.CreateButton(tabs, t.ToString().ToUpperInvariant(), 20, IronFaunaPalette.UiNeutral, IronFaunaPalette.UiNeutral, IronFaunaPalette.UiText, () => SelectTab(captured));
                 MenuUI.Size(b, 60f, 120f, 1f);
                 _tabButtons[t] = b.targetGraphic as Image;
             }
@@ -236,16 +236,16 @@ namespace IronFauna.Menu
             _fullSetCycler = MenuUI.CreateCycler(fullSet, "Full set", () => CycleFullSet(-1), () => CycleFullSet(1));
             var applyRow = MenuUI.NewRect(left.transform, "ApplyRow");
             MenuUI.Place(applyRow, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 16f), new Vector2(-16f, 64f));
-            var applyBtn = MenuUI.CreateButton(applyRow, "APPLY SET TO THIS TAB", 20, IronFaunaPalette.GunmetalFrame, IronFaunaPalette.CrimsonFront, IronFaunaPalette.OffWhitePanel, ApplyFullSetToTab);
+            var applyBtn = MenuUI.CreateButton(applyRow, "APPLY SET TO THIS TAB", 20, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, ApplyFullSetToTab);
             MenuUI.Fill((RectTransform)applyBtn.transform);
 
             // Right column: stats + selected part
-            var right = MenuUI.Panel(root, "StatsColumn", IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.72f));
+            var right = MenuUI.Panel(root, "StatsColumn", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.72f));
             MenuUI.Place(right.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-532f, 420f), new Vector2(-32f, -108f));
             var statsStack = MenuUI.NewRect(right.transform, "Stats");
             MenuUI.Fill(statsStack);
             MenuUI.VStack(statsStack.gameObject, 10f, 24);
-            var statsTitle = MenuUI.Label(statsStack, "LOADOUT STATS", 26, IronFaunaPalette.OffWhitePanel, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var statsTitle = MenuUI.Label(statsStack, "LOADOUT STATS", 26, IronFaunaPalette.UiText, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Size(statsTitle, 40f);
             AddStat(statsStack, "Armor");
             AddStat(statsStack, "Speed");
@@ -253,9 +253,9 @@ namespace IronFauna.Menu
             AddStat(statsStack, "Cooling");
             var gap = MenuUI.NewRect(statsStack, "Gap");
             MenuUI.Size(gap, 12f);
-            _selectedTitle = MenuUI.Label(statsStack, "SELECTED PART", 22, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _selectedTitle = MenuUI.Label(statsStack, "SELECTED PART", 22, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Size(_selectedTitle, 34f);
-            _selectedPerk = MenuUI.Label(statsStack, "Pick a part on the left.", 20, IronFaunaPalette.OffWhitePanel, TextAnchor.UpperLeft);
+            _selectedPerk = MenuUI.Label(statsStack, "Pick a part on the left.", 20, IronFaunaPalette.UiText, TextAnchor.UpperLeft);
             MenuUI.Size(_selectedPerk, 90f);
 
             // Bottom bar
@@ -263,22 +263,22 @@ namespace IronFauna.Menu
             MenuUI.Place(bottom, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-1180f, 32f), new Vector2(-32f, 104f));
             var bottomLayout = MenuUI.HStack(bottom.gameObject, 12f, 0);
             bottomLayout.childForceExpandWidth = true;
-            AddBarButton(bottom, "BACK", ShowTitle, IronFaunaPalette.GunmetalFrame);
-            AddBarButton(bottom, "RANDOMIZE", Randomize, IronFaunaPalette.GunmetalFrame);
-            AddBarButton(bottom, "RESET", ResetLoadout, IronFaunaPalette.GunmetalFrame);
-            AddBarButton(bottom, "SAVE", Save, IronFaunaPalette.GunmetalFrame);
+            AddBarButton(bottom, "BACK", ShowTitle, IronFaunaPalette.UiButton);
+            AddBarButton(bottom, "RANDOMIZE", Randomize, IronFaunaPalette.UiButton);
+            AddBarButton(bottom, "RESET", ResetLoadout, IronFaunaPalette.UiButton);
+            AddBarButton(bottom, "SAVE", Save, IronFaunaPalette.UiButton);
             AddBarButton(bottom, "DEPLOY", () => IronFaunaGameFlow.Deploy(_loadout), IronFaunaPalette.CrimsonFront);
 
-            _saveStatus = MenuUI.Label(root, "", 18, IronFaunaPalette.GridLineLight, TextAnchor.LowerRight);
+            _saveStatus = MenuUI.Label(root, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerRight);
             MenuUI.Place(_saveStatus.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-1180f, 108f), new Vector2(-32f, 140f));
 
-            var hint = MenuUI.Label(root, "DRAG TO ROTATE   //   SCROLL TO ZOOM   //   ESC FOR TITLE", 18, IronFaunaPalette.GridLineLight, TextAnchor.LowerRight);
+            var hint = MenuUI.Label(root, "DRAG TO ROTATE   //   SCROLL TO ZOOM   //   ESC FOR TITLE", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerRight);
             MenuUI.Place(hint.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-1180f, 140f), new Vector2(-32f, 172f));
         }
 
         private void AddBarButton(Transform parent, string label, UnityEngine.Events.UnityAction action, Color normal)
         {
-            var b = MenuUI.CreateButton(parent, label, 24, normal, IronFaunaPalette.CrimsonFront, IronFaunaPalette.OffWhitePanel, action);
+            var b = MenuUI.CreateButton(parent, label, 24, normal, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
             MenuUI.Size(b, 72f, 200f, 1f);
         }
 
@@ -308,7 +308,7 @@ namespace IronFauna.Menu
             _viewCycler = MenuUI.CreateCycler(page.transform, "View", ToggleSkeletonView, ToggleSkeletonView);
             var note = MenuUI.Label(page.transform,
                 "Pick a torso and leg weight class, then clamp armor onto the skeleton. Any front half fits any back half; the seam always runs down the sides.",
-                19, IronFaunaPalette.GridLineLight, TextAnchor.UpperLeft);
+                19, IronFaunaPalette.UiTextDim, TextAnchor.UpperLeft);
             MenuUI.Size(note, 90f);
         }
 
@@ -317,7 +317,7 @@ namespace IronFauna.Menu
             var page = NewPage(pages, tab);
             if (tab == Tab.Arms)
             {
-                _armsNote = MenuUI.Label(page.transform, "QUADRUPED CHASSIS HAS NO ARMS", 20, IronFaunaPalette.HazardYellow, TextAnchor.MiddleLeft, FontStyle.Bold);
+                _armsNote = MenuUI.Label(page.transform, "QUADRUPED CHASSIS HAS NO ARMS", 20, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
                 MenuUI.Size(_armsNote, 36f);
             }
             foreach (var row in rows)
@@ -338,7 +338,7 @@ namespace IronFauna.Menu
             foreach (var kv in _tabPages) kv.Value.SetActive(kv.Key == tab);
             foreach (var kv in _tabButtons)
             {
-                if (kv.Value != null) kv.Value.color = kv.Key == tab ? IronFaunaPalette.CrimsonFront : IronFaunaPalette.GunmetalFrame;
+                if (kv.Value != null) kv.Value.color = kv.Key == tab ? IronFaunaPalette.UiSelect : IronFaunaPalette.UiButton;
             }
             FrameCameraForTab();
             RefreshAll();

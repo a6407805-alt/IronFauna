@@ -34,7 +34,7 @@ namespace IronFauna.Menu
             canvas.sortingOrder = sortingOrder;
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.referenceResolution = new Vector2(2400f, 1350f);
             scaler.matchWidthOrHeight = 0.5f;
             return canvas;
         }
@@ -106,7 +106,7 @@ namespace IronFauna.Menu
             var colors = btn.colors;
             colors.normalColor = normal;
             colors.highlightedColor = hover;
-            colors.pressedColor = IronFaunaPalette.Lerp(hover, IronFaunaPalette.ShadowSlate, 0.25f);
+            colors.pressedColor = IronFaunaPalette.Lerp(hover, IronFaunaPalette.UiPanel, 0.25f);
             colors.selectedColor = normal;
             colors.disabledColor = IronFaunaPalette.WithAlpha(normal, 0.35f);
             colors.colorMultiplier = 1f;
@@ -175,7 +175,7 @@ namespace IronFauna.Menu
             {
                 Prev.interactable = on;
                 Next.interactable = on;
-                Value.color = on ? IronFaunaPalette.OffWhitePanel : IronFaunaPalette.WithAlpha(IronFaunaPalette.OffWhitePanel, 0.35f);
+                Value.color = on ? IronFaunaPalette.UiText : IronFaunaPalette.WithAlpha(IronFaunaPalette.UiText, 0.35f);
             }
         }
 
@@ -186,19 +186,19 @@ namespace IronFauna.Menu
             Size(row, 46f);
 
             var bg = row.gameObject.AddComponent<Image>();
-            bg.color = IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.55f);
+            bg.color = IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.55f);
 
-            var name = Label(row, label.ToUpperInvariant(), 20, IronFaunaPalette.GridLineLight, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var name = Label(row, label.ToUpperInvariant(), 20, IronFaunaPalette.UiTextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
             Size(name, 46f, 190f);
             name.GetComponent<LayoutElement>().minWidth = 190f;
 
-            Color btnColor = IronFaunaPalette.GunmetalFrame;
-            Color btnHover = IronFaunaPalette.CrimsonFront;
-            var prev = CreateButton(row, "<", 24, btnColor, btnHover, IronFaunaPalette.OffWhitePanel, onPrev);
+            Color btnColor = IronFaunaPalette.UiButton;
+            Color btnHover = IronFaunaPalette.UiSelect;
+            var prev = CreateButton(row, "<", 24, btnColor, btnHover, IronFaunaPalette.UiText, onPrev);
             Size(prev, 46f, 52f);
-            var value = Label(row, "-", 22, IronFaunaPalette.OffWhitePanel, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var value = Label(row, "-", 22, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             Size(value, 46f, 220f, 1f);
-            var next = CreateButton(row, ">", 24, btnColor, btnHover, IronFaunaPalette.OffWhitePanel, onNext);
+            var next = CreateButton(row, ">", 24, btnColor, btnHover, IronFaunaPalette.UiText, onNext);
             Size(next, 46f, 52f);
 
             return new Cycler { Value = value, Prev = prev, Next = next, Root = row.gameObject };
@@ -210,15 +210,15 @@ namespace IronFauna.Menu
             var row = NewRect(parent, "Stat_" + label);
             Size(row, 34f);
 
-            var name = Label(row, label.ToUpperInvariant(), 18, IronFaunaPalette.GridLineLight, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var name = Label(row, label.ToUpperInvariant(), 18, IronFaunaPalette.UiTextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
             Place(name.rectTransform, new Vector2(0f, 0f), new Vector2(0.32f, 1f), Vector2.zero, Vector2.zero);
 
             var track = Panel(row, "Track", IronFaunaPalette.DarkIron);
             Place(track.rectTransform, new Vector2(0.32f, 0.25f), new Vector2(0.84f, 0.75f), Vector2.zero, Vector2.zero);
-            var fill = Panel(track.transform, "Fill", IronFaunaPalette.HazardYellow);
+            var fill = Panel(track.transform, "Fill", IronFaunaPalette.UiAccent);
             Place(fill.rectTransform, Vector2.zero, new Vector2(0.5f, 1f), Vector2.zero, Vector2.zero);
 
-            valueText = Label(row, "0", 18, IronFaunaPalette.OffWhitePanel, TextAnchor.MiddleRight, FontStyle.Bold);
+            valueText = Label(row, "0", 18, IronFaunaPalette.UiText, TextAnchor.MiddleRight, FontStyle.Bold);
             Place(valueText.rectTransform, new Vector2(0.84f, 0f), new Vector2(1f, 1f), Vector2.zero, Vector2.zero);
             return fill.rectTransform;
         }

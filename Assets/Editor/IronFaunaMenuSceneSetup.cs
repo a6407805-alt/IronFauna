@@ -83,6 +83,8 @@ namespace IronFauna.EditorTools
                 AssetDatabase.CreateAsset(new Material(toon) { name = "IF_ToonTemplate" }, ToonTemplatePath);
             }
 
+            // The realistic look keeps palette materials on URP Lit (IronFaunaMaterials.Get converts them).
+            if (IronFauna.Core.IronFaunaMaterials.Realistic) return;
             if (!AssetDatabase.IsValidFolder("Assets/Materials")) return;
             foreach (string guid in AssetDatabase.FindAssets("IF_Mat_ t:Material", new[] { "Assets/Materials" }))
             {

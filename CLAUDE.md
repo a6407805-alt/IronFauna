@@ -11,7 +11,10 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
 - **Core Hook:** *You are the tower AND the defender.* Every enemy wave kill earns credits—spend them upgrading/swapping your mech's modular clamshell armor & weapons, or building walls, barriers, and auto-turrets on the grid around the central Objective Core.
 
 ## 2. Art Bible & Visual Rules (`Assets/Scripts/Core/IronFaunaPalette.cs`)
-- **Style Statement:** Borderlands × Zoids hard-surface cel-shaded industrial mecha — flat-faced machined steel clamshell plates, sharp `45°` chamfers, bold dark-ink outlines, two-band toon lighting on a tan blueprint-grid arena.
+- **Style Statement (changed 2026-11-16 at the owner's request: "looks real, feels real"):** realistic hard-surface mecha — physically based metal and coated paint (URP Lit), dark hangar studio with key/rim/fill lights, a generated reflection environment, ACES grading, restrained bloom. `IronFaunaMaterials.Realistic` (default true) selects this look; false restores the older cel-shaded toon shader (`IronFauna/Toon`, ink outlines, tan blueprint floor).
+- **Presentation:** the title screen and garage show the mech in a posed stance (`MechClamshellBuilder.showcasePose`: legs splayed, toes out, arms raised, head turned) with a slow idle motion (`MechShowcaseStage.AnimateIdle`). Gameplay leaves `showcasePose` off; the motion controller poses the mech.
+- **Lessons:** large flat glossy surfaces (floor, turntable) mirror the rim light and softboxes into a white glare — keep them matte (`MakeMatte`). `Mathf.SmoothStep(a, b, t)` interpolates; it is not GLSL `smoothstep` (use `Ramp`).
+- **Garage UI skin:** dark translucent panels and cool text colours from the `Ui*` palette entries, drawn on a 2400×1350 reference canvas for finer type.
 - **Palette (Single Source of Truth — never use literal `Color.*` outside `IronFaunaPalette.cs`):**
   - `FloorTan`: `#C8B89A` · `GunmetalFrame`: `#3A3F46` · `DarkIron`: `#23272D`
   - `CrimsonFront`: `#C8282E` (all Front/Outer clamshell halves)
