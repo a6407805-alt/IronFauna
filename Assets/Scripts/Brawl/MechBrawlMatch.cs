@@ -520,7 +520,14 @@ namespace IronFauna.Brawl
 
             // 6. Top-Center Ringside Announcer Broadcast Bar
             if (_announcer != null) _announcer.BuildUi(root);
+
+            // 7. 3D Target Reticle Bracket
+            _targetBracket = MenuUI.Label(root, "", 18, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _targetBracket.rectTransform.sizeDelta = new Vector2(340f, 52f);
+            _targetBracket.enabled = false;
         }
+
+        private Text _targetBracket;
 
         private RectTransform BarWithGhost(Transform parent, string label, float y, Color color, out RectTransform ghostRt, out Text valueLabel)
         {
@@ -846,25 +853,56 @@ namespace IronFauna.Brawl
                 {
                     var g = me.ghost;
                     bool[] limbOk = { g.hasArmL, g.hasArmR, g.hasLegL, g.hasLegR };
+                    LimbId[] limbIds = { LimbId.ArmL, LimbId.ArmR, LimbId.LegL, LimbId.LegR };
                     string[] limbNames = { "L-ARM", "R-ARM", "L-LEG", "R-LEG" };
                     for (int i = 0; i < 4; i++)
                     {
+                        float lh = me.GetLimbHealth01(limbIds[i]);
                         if (_limbBadgeImgs[i] != null)
-                            _limbBadgeImgs[i].color = limbOk[i] ? IronFaunaPalette.UiSelect : IronFaunaPalette.CrimsonFront;
+                        {
+                            _limbBadgeImgs[i].color = !limbOk[i] ? IronFaunaPalette.CrimsonFront
+                                : lh < 0.35f ? IronFaunaPalette.OrangeJointCore
+                                : lh < 0.70f ? IronFaunaPalette.HazardYellow
+                                : IronFaunaPalette.UiSelect;
+                        }
                         if (_limbBadgeTexts[i] != null)
-                            _limbBadgeTexts[i].text = limbOk[i] ? $"{limbNames[i]} OK" : $"{limbNames[i]} TORN!";
+                        {
+                            _limbBadgeTexts[i].text = limbOk[i] ? $"{limbNames[i]} {Mathf.CeilToInt(lh * 100f)}%" : $"{limbNames[i]} TORN!";
+                        }
                     }
 
                     if (_postureLabel != null)
                     {
+                        var aiComp = g.GetComponent<MechBoxerAI>();
+                        bool auto = aiComp != null && aiComp.enabled;
                         string posture = _fighters[0].out_ ? "STATUS: SPECTATING (PRESS F5 TO RESPAWN)"
                                        : g.LegsLeft == 0 ? "POSTURE: LEGLESS CRAWL (NO KICKS!)"
                                        : g.LegsLeft == 1 ? "POSTURE: 1-LEG HOP (STANDING KICK TOPPLES!)"
                                        : g.IsSeated ? "POSTURE: JIU-JITSU FLOOR SIT / SCOOT (Z)"
                                        : g.IsCrouching ? "POSTURE: MMA CROUCH / TAKEDOWN (X)"
-                                       : $"FRAME: {me.weightLabel}" + (g.hyperArmor ? " (HYPER-ARMOR)" : " · STANDING");
+                                       : $"FRAME: {me.weightLabel}" + (g.hyperArmor ? " (HYPER-ARMOR)" : auto ? " · AUTO-SPAR (F1)" : " · STANDING");
                         _postureLabel.text = posture;
                     }
+                }
+
+                if (_targetBracket != null && _playerCams.Count > 0 && _playerCams[0] != null)
+                {
+                    var tgt = _playerCams[0].target;
+                    var cam = _camera != null ? _camera : Camera.main;
+                    if (tgt != null && !tgt.IsKO && cam != null)
+                    {
+                        Vector3 vp = cam.WorldToViewportPoint(tgt.Position + Vector3.up * 2.75f);
+                        if (vp.z > 0f)
+                        {
+                            _targetBracket.enabled = true;
+                            _targetBracket.rectTransform.anchorMin = _targetBracket.rectTransform.anchorMax = new Vector2(Mathf.Clamp(vp.x, 0.08f, 0.92f), Mathf.Clamp(vp.y, 0.12f, 0.88f));
+                            _targetBracket.rectTransform.anchoredPosition = Vector2.zero;
+                            float d = Vector3.Distance(me.Position, tgt.Position);
+                            _targetBracket.text = $"[ {FighterName(tgt)} · {Mathf.CeilToInt(tgt.health)} HP · {d:0.0}m ]";
+                        }
+                        else _targetBracket.enabled = false;
+                    }
+                    else _targetBracket.enabled = false;
                 }
             }
 

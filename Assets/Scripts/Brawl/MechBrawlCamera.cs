@@ -55,10 +55,15 @@ namespace IronFauna.Brawl
             else
             {
                 // roaming: the mouse turns P1's camera; each split-screen player's gamepad right stick turns their camera
+                float mouseDelta = 0f;
                 if (playerIndex == 0)
                 {
                     var mouse = Mouse.current;
-                    if (mouse != null && Cursor.lockState == CursorLockMode.Locked) _yaw += mouse.delta.ReadValue().x * mouseSensitivity;
+                    if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
+                    {
+                        mouseDelta = mouse.delta.ReadValue().x * mouseSensitivity;
+                        _yaw += mouseDelta;
+                    }
                 }
                 var pads = Gamepad.all;
                 Gamepad pad = playerIndex < pads.Count ? pads[playerIndex] : null;
@@ -66,10 +71,20 @@ namespace IronFauna.Brawl
                 {
                     _yaw += pad.rightStick.ReadValue().x * 140f * dt;
                 }
-                else if (playerIndex > 0 && player.ghost != null && player.ghost.Velocity.sqrMagnitude > 0.4f)
+                else if (Mathf.Abs(mouseDelta) < 0.01f && target != null && player.ghost != null)
                 {
-                    float moveYaw = Mathf.Atan2(player.ghost.Velocity.x, player.ghost.Velocity.z) * Mathf.Rad2Deg;
-                    _yaw = Mathf.LerpAngle(_yaw, moveYaw, 1f - Mathf.Exp(-2.5f * dt));
+                    // When hands-off / Auto-Pilot or P2..P4, gently pan toward the opponent so the fight stays framed!
+                    var ai = player.ghost.GetComponent<MechBoxerAI>();
+                    if (playerIndex > 0 || (ai != null && ai.enabled) || player.IsKO)
+                    {
+                        Vector3 toTarget = target.Position - a;
+                        toTarget.y = 0f;
+                        if (toTarget.sqrMagnitude > 1f)
+                        {
+                            float targetYaw = Mathf.Atan2(toTarget.x, toTarget.z) * Mathf.Rad2Deg;
+                            _yaw = Mathf.LerpAngle(_yaw, targetYaw, 1f - Mathf.Exp(-3.2f * dt));
+                        }
+                    }
                 }
                 axis = Quaternion.Euler(0f, _yaw, 0f) * Vector3.forward;
                 sep = 5f;

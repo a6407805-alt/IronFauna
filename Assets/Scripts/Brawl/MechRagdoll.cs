@@ -47,6 +47,7 @@ namespace IronFauna.Brawl
         public Rigidbody Pelvis => _pelvis != null ? _pelvis.rb : null;
         public Vector3 Position => _pelvis != null ? _pelvis.rb.position : transform.position;
         public float Poise01 => Mathf.Clamp01(_poise / poiseMax);
+        public float GetLimbHealth01(LimbId id) => _lost.Contains(id) ? 0f : (_limbHealth.TryGetValue(id, out float v) ? Mathf.Clamp01(v / (id == LimbId.Head ? 70f : 55f)) : 1f);
 
         /// <summary>victim, attacker, point, damage, power 0..1, limb ripped</summary>
         public event Action<MechRagdoll, MechRagdoll, Vector3, float, float, bool> Hit;
@@ -541,14 +542,23 @@ namespace IronFauna.Brawl
             muscle = Mathf.Min(muscle, Mathf.Lerp(1f, 0.35f, damage / 25f));   // a hard hit goes slack for a beat
 
             bool ripped = false;
-            if (seg.limb != LimbId.None && !_lost.Contains(seg.limb))
+            float tearMult = attacker != null ? attacker.limbTearScale : 1f;
+            LimbId targetLimb = seg.limb;
+            if (targetLimb == LimbId.None && damage >= 9f)
             {
-                _limbHealth[seg.limb] -= damage * (headShot ? 0.9f : 1.2f);
-                float lh = _limbHealth[seg.limb];
+                LimbId[] limbs = { LimbId.ArmL, LimbId.ArmR, LimbId.LegL, LimbId.LegR };
+                LimbId pick = limbs[UnityEngine.Random.Range(0, limbs.Length)];
+                if (!_lost.Contains(pick)) targetLimb = pick;
+            }
+            if (targetLimb != LimbId.None && !_lost.Contains(targetLimb))
+            {
+                float limbDmg = damage * (seg.limb != LimbId.None ? (headShot ? 0.9f : 1.35f) : 0.65f) * tearMult;
+                _limbHealth[targetLimb] -= limbDmg;
+                float lh = _limbHealth[targetLimb];
                 // armor cracks off as the limb weakens
                 if (lh < 38f) ShedArmor(seg, dir, 1);
                 if (lh < 18f) ShedArmor(seg, dir, 2);
-                if (lh <= 0f) { RipLimb(seg.limb, dir * damage); ripped = true; }
+                if (lh <= 0f) { RipLimb(targetLimb, dir * damage); ripped = true; }
             }
             else if (health < maxHealth * 0.6f) ShedArmor(seg, dir, 1);
 

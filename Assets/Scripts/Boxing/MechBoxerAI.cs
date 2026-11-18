@@ -120,15 +120,31 @@ namespace IronFauna.Boxing
                     move.y = -0.9f;
                     break;
             }
-            // keep off the ropes
+            // keep off the ropes / cliff edge
             Vector3 p = transform.position;
             float edge = edgeHalfSize > 0f ? edgeHalfSize : _me.ringHalfSize - 1.2f;
-            if (Mathf.Abs(p.x) > edge || Mathf.Abs(p.z) > edge)
+            Vector3 oppFwd = dist > 0.01f ? d / dist : transform.forward;
+            Vector3 oppRight = Vector3.Cross(Vector3.up, oppFwd);
+            Vector3 worldWish = oppRight * move.x + oppFwd * move.y;
+            if (p.x * p.x + p.z * p.z > edge * edge * 0.75f)
             {
-                Vector3 toCentre = transform.InverseTransformDirection(-new Vector3(p.x, 0f, p.z).normalized);
-                move += new Vector2(toCentre.x, toCentre.z) * 0.8f;
+                Vector3 toCentre = -new Vector3(p.x, 0f, p.z).normalized;
+                worldWish = Vector3.Lerp(worldWish, toCentre, 0.65f);
+            }
+
+            if (_me.moveReference != null)
+            {
+                // Convert desired world direction into camera-relative input frame (for Player 1 Auto-Pilot!)
+                Vector3 refFwd = Vector3.ProjectOnPlane(_me.moveReference.forward, Vector3.up).normalized;
+                Vector3 refRight = Vector3.Cross(Vector3.up, refFwd);
+                move = new Vector2(Vector3.Dot(worldWish, refRight), Vector3.Dot(worldWish, refFwd));
+            }
+            else
+            {
+                move = new Vector2(Vector3.Dot(worldWish, oppRight), Vector3.Dot(worldWish, oppFwd));
             }
             _me.intent.move = Vector2.ClampMagnitude(move, 1f);
+            _me.intent.sprint = dist > 6.5f && _mode == Mode.Engage && !_me.Punching;
 
             // ---------------- offence
             _comboGap -= dt;
