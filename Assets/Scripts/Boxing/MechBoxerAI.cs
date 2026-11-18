@@ -105,20 +105,30 @@ namespace IronFauna.Boxing
             }
 
             Vector2 move = Vector2.zero;
-            switch (_mode)
+            if (dist > 5.0f)
             {
-                case Mode.Circle:
-                    move.x = _circleDir * 0.8f;
-                    move.y = Mathf.Clamp((dist - (idealRange + 0.6f)) * 1.2f, -1f, 1f);
-                    break;
-                case Mode.Engage:
-                    move.x = _circleDir * 0.25f;
-                    move.y = Mathf.Clamp((dist - (idealRange - 0.25f)) * 1.6f, -1f, 1f);
-                    break;
-                case Mode.Retreat:
-                    move.x = _circleDir * 0.6f;
-                    move.y = -0.9f;
-                    break;
+                // Always sprint straight toward the opponent when separated so late-round duels close distance immediately!
+                _mode = Mode.Engage;
+                move.x = _circleDir * 0.14f;
+                move.y = 1f;
+            }
+            else
+            {
+                switch (_mode)
+                {
+                    case Mode.Circle:
+                        move.x = _circleDir * 0.8f;
+                        move.y = Mathf.Clamp((dist - (idealRange + 0.6f)) * 1.2f, -1f, 1f);
+                        break;
+                    case Mode.Engage:
+                        move.x = _circleDir * 0.25f;
+                        move.y = Mathf.Clamp((dist - (idealRange - 0.25f)) * 1.6f, -1f, 1f);
+                        break;
+                    case Mode.Retreat:
+                        move.x = _circleDir * 0.6f;
+                        move.y = -0.9f;
+                        break;
+                }
             }
             // keep off the ropes / cliff edge
             Vector3 p = transform.position;
@@ -144,7 +154,7 @@ namespace IronFauna.Boxing
                 move = new Vector2(Vector3.Dot(worldWish, oppRight), Vector3.Dot(worldWish, oppFwd));
             }
             _me.intent.move = Vector2.ClampMagnitude(move, 1f);
-            _me.intent.sprint = dist > 6.5f && _mode == Mode.Engage && !_me.Punching;
+            _me.intent.sprint = dist > 4.8f && !_me.Punching;
 
             // ---------------- offence
             _comboGap -= dt;
@@ -154,12 +164,24 @@ namespace IronFauna.Boxing
                 _comboGap = Random.Range(0.08f, 0.2f);
                 if (_combo.Count == 0) { _mode = Mode.Retreat; _modeT = Random.Range(0.5f, 0.9f); }
             }
-            // counter right after the player whiffs or finishes
+            // counter right after the player whiffs or finishes, or chop down a tree / obstacle blocking our path!
             _thinkT -= dt;
             if (_thinkT <= 0f)
             {
                 _thinkT = 0.25f;
                 if (!opp.Punching && dist < idealRange + 0.2f && _combo.Count == 0 && Random.value < 0.18f + skill * 0.2f) QueueCombo();
+                else if (!_me.Punching && _combo.Count == 0)
+                {
+                    Vector3 ahead = transform.position + transform.forward * 1.4f + Vector3.up * 1.5f;
+                    foreach (var col in Physics.OverlapSphere(ahead, 1.35f, ~0, QueryTriggerInteraction.Ignore))
+                    {
+                        if (col.transform.parent != null && col.transform.parent.name == "FallingTree" || col.name == "FallingTree" || col.name.StartsWith("StreetCar"))
+                        {
+                            _me.intent.punch = _me.LegsLeft == 2 ? PunchType.Roundhouse : PunchType.ShoulderCharge;
+                            break;
+                        }
+                    }
+                }
             }
 
             // grapples: lunge in and grab now and then; once holding, throw, slam or tear something off

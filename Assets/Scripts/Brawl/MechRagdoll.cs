@@ -834,6 +834,27 @@ namespace IronFauna.Brawl
         {
             if (IsDown || ghost == null || !ghost.StrikeActive) return;
             int serial = ghost.PunchSerial;
+            if (_propStrikeSerial != serial)
+            {
+                Vector3 envProbe = Position + ghost.transform.forward * 1.4f + Vector3.up * 1.4f;
+                foreach (var col in Physics.OverlapSphere(envProbe, 1.45f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    var tree = col.GetComponentInParent<FallingTree>();
+                    if (tree != null)
+                    {
+                        _propStrikeSerial = serial;
+                        tree.ApplyStrike(envProbe, ghost.transform.forward * (16f * knockbackScale), ghost.PunchDamage * 22f * knockbackScale);
+                        break;
+                    }
+                    var prop = col.GetComponentInParent<BreakableProp>();
+                    if (prop != null)
+                    {
+                        _propStrikeSerial = serial;
+                        prop.ApplyStrike(envProbe, ghost.transform.forward * (16f * knockbackScale), ghost.PunchDamage * 20f * knockbackScale);
+                        break;
+                    }
+                }
+            }
             foreach (var mine in _segs)
             {
                 if (mine.detached) continue;
@@ -850,22 +871,6 @@ namespace IronFauna.Brawl
                 float radius = bodyStrike ? 0.85f : legStrike ? 0.62f : 0.48f;
                 foreach (var col in Physics.OverlapSphere(tipPos, radius, ~0, QueryTriggerInteraction.Ignore))
                 {
-                    if (_propStrikeSerial != serial)
-                    {
-                        var tree = col.GetComponentInParent<FallingTree>();
-                        if (tree != null)
-                        {
-                            _propStrikeSerial = serial;
-                            tree.ApplyStrike(tipPos, ghost.transform.forward * (14f * knockbackScale), ghost.PunchDamage * 18f * knockbackScale);
-                        }
-                        var prop = col.GetComponentInParent<BreakableProp>();
-                        if (prop != null)
-                        {
-                            _propStrikeSerial = serial;
-                            prop.ApplyStrike(tipPos, ghost.transform.forward * (14f * knockbackScale), ghost.PunchDamage * 18f * knockbackScale);
-                        }
-                    }
-
                     var rb = col.attachedRigidbody;
                     var otherPart = rb != null ? rb.GetComponent<MechRagdollPart>() : col.GetComponentInParent<MechRagdollPart>();
                     if (otherPart == null || otherPart.owner == null || otherPart.owner == this || otherPart.segment == null || otherPart.segment.detached) continue;
