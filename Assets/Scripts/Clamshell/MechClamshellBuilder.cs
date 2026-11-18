@@ -80,6 +80,29 @@ namespace IronFauna.Clamshell
         [System.NonSerialized] public List<Transform> rightSideLegs = new List<Transform>();
         /// <summary>Projectile spawn point (right hand, or the dorsal hub on a quadruped).</summary>
         [System.NonSerialized] public Transform weaponMuzzle;
+        /// <summary>
+        /// One bendable leg: the thigh pivot sits on the hip, the calf pivot on the knee, and the foot is free so it
+        /// can be planted on the ground in world space. Rest positions are in the leg root's local space.
+        /// </summary>
+        public class LegRig
+        {
+            public Transform root;
+            public Transform thigh;
+            public Transform calf;
+            public Transform foot;
+            public Vector3 hip;
+            public Vector3 knee;
+            public Vector3 ankle;
+            public bool kneeForward;
+            public float thighLength;
+            public float calfLength;
+        }
+
+        /// <summary>Bendable legs, refreshed on every rebuild (MechGaitAnimator walks them).</summary>
+        [System.NonSerialized] public List<LegRig> legRigs = new List<LegRig>();
+        /// <summary>Goes up on every rebuild, so animators know to pick up the new parts.</summary>
+        public int BuildVersion { get; private set; }
+
         /// <summary>Weapon sockets on the skeleton, refreshed on every rebuild.</summary>
         [System.NonSerialized] public List<MechHardpoint> hardpoints = new List<MechHardpoint>();
         /// <summary>Hip height of the current stance (same as <see cref="HipHeight"/>).</summary>
@@ -242,6 +265,8 @@ namespace IronFauna.Clamshell
             _torso = MechFrameSpec.Get(torsoWeight);
             _leg = MechFrameSpec.Get(legWeight);
             hardpoints.Clear();
+            legRigs.Clear();
+            BuildVersion++;
 
             GetPoseShape(legPose, out bool kneeForward, out float extension);
             float hipHeight = AnkleHeight + extension * (thighLength + calfLength);
@@ -576,6 +601,26 @@ namespace IronFauna.Clamshell
                 calfFrontSet, calfBackSet, -0.22f, 0.10f, out _, out _);
 
             BuildFoot(legRoot);
+
+            // Joints: hip -> thigh pivot -> calf pivot. Parts stay where they are; they just ride the right bone.
+            Transform thighPivot = ClamshellParts.Empty(legRoot, "ThighPivot", hip, Quaternion.identity);
+            Transform calfPivot = ClamshellParts.Empty(thighPivot, "CalfPivot", knee - hip, Quaternion.identity);
+            foreach (string n in new[] { "ThighBone", "Thigh_Clamshell", "KneeHub", "KneeGuard" })
+            {
+                Transform t = legRoot.Find(n);
+                if (t != null) t.SetParent(thighPivot, true);
+            }
+            foreach (string n in new[] { "CalfBone", "Calf_Clamshell", "AnkleHub" })
+            {
+                Transform t = legRoot.Find(n);
+                if (t != null) t.SetParent(calfPivot, true);
+            }
+            legRigs.Add(new LegRig
+            {
+                root = legRoot, thigh = thighPivot, calf = calfPivot, foot = legRoot.Find("FootBone"),
+                hip = hip, knee = knee, ankle = ankle, kneeForward = kneeForward,
+                thighLength = Vector3.Distance(hip, knee), calfLength = Vector3.Distance(knee, ankle),
+            });
         }
 
         private void BuildFoot(Transform legRoot)

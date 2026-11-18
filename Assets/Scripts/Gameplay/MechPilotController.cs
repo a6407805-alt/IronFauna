@@ -27,9 +27,10 @@ namespace IronFauna.Gameplay
         }
 
         [Header("Handling by leg weight class")]
-        public Handling light = new Handling { walkSpeed = 9f, boostSpeed = 22f, acceleration = 26f, braking = 30f, turnRate = 240f, jumpSpeed = 9f, hoverThrust = 27f };
-        public Handling medium = new Handling { walkSpeed = 7f, boostSpeed = 18f, acceleration = 18f, braking = 22f, turnRate = 170f, jumpSpeed = 8f, hoverThrust = 24f };
-        public Handling heavy = new Handling { walkSpeed = 5f, boostSpeed = 13f, acceleration = 11f, braking = 15f, turnRate = 110f, jumpSpeed = 6.5f, hoverThrust = 21f };
+        // Walking is a real stride (planted feet, MechGaitAnimator), so it is slow and heavy; boost is the fast mode.
+        public Handling light = new Handling { walkSpeed = 4.4f, boostSpeed = 22f, acceleration = 12f, braking = 14f, turnRate = 240f, jumpSpeed = 9f, hoverThrust = 27f };
+        public Handling medium = new Handling { walkSpeed = 3.5f, boostSpeed = 18f, acceleration = 8f, braking = 10f, turnRate = 170f, jumpSpeed = 8f, hoverThrust = 24f };
+        public Handling heavy = new Handling { walkSpeed = 2.6f, boostSpeed = 13f, acceleration = 5f, braking = 7f, turnRate = 110f, jumpSpeed = 6.5f, hoverThrust = 21f };
 
         [Header("Physics")]
         public float gravity = -24f;
@@ -169,7 +170,7 @@ namespace IronFauna.Gameplay
             _landSlow = Mathf.MoveTowards(_landSlow, 0f, dt * 2.5f);
             float topSpeed = (Boosting ? h.boostSpeed : h.walkSpeed) * (1f - 0.6f * _landSlow);
             Vector3 target = wish * topSpeed;
-            float rate = move.sqrMagnitude > 0.01f ? (Boosting ? h.acceleration * 1.8f : h.acceleration) : h.braking;
+            float rate = move.sqrMagnitude > 0.01f ? (Boosting ? h.acceleration * 3f : h.acceleration) : (_velocity.magnitude > h.walkSpeed * 1.1f ? h.braking * 2.2f : h.braking);
             if (!Grounded) rate *= airControl;
             _velocity = Vector3.MoveTowards(_velocity, target, rate * dt);
 

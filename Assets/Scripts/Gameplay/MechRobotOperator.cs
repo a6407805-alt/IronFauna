@@ -25,6 +25,8 @@ namespace IronFauna.Gameplay
         public bool externalLocomotion;
         /// <summary>When set (first/third-person pilot), shots go where the crosshair points.</summary>
         public System.Func<Vector3> aimPointOverride;
+        [Tooltip("Legs, stride bob and arm swing come from MechGaitAnimator (planted feet); this keeps lean, bank, head and weapons.")]
+        public bool externalGait;
 
         [Header("Locomotion Tuning")]
         public float baseMoveSpeed = 5.5f;
@@ -264,7 +266,7 @@ namespace IronFauna.Gameplay
             // 2. Gait bob + Idle reactor breathing
             float gaitBob = Mathf.Sin(_gaitTime * 2f) * bobAmp * gaitBlendAmplitude;
             float idleBob = Mathf.Sin(_idleTime) * idleBreatheAmp * (1f - gaitBlendAmplitude * 0.7f);
-            float halfRoll = Mathf.Sin(_gaitTime) * 2.4f * gaitBlendAmplitude;
+            float halfRoll = externalGait ? 0f : Mathf.Sin(_gaitTime) * 2.4f * gaitBlendAmplitude;
 
             // 3. Acceleration pitch lean & turn bank
             Vector3 worldAccel = (_velocity - _prevPlanarVelocity) / Mathf.Max(0.001f, dt);
@@ -276,8 +278,13 @@ namespace IronFauna.Gameplay
             _smoothedPitchLean = Mathf.Lerp(_smoothedPitchLean, targetPitch, 8f * dt);
             _smoothedRollBank  = Mathf.Lerp(_smoothedRollBank, targetBank + halfRoll, 8f * dt);
 
-            // 4. Squash & stretch recovery
-            if (_squashStretchTimer > 0f)
+            // 4. Squash & stretch recovery (the gait animator compresses the legs instead)
+            if (externalGait)
+            {
+                Builder.visualRoot.localScale = Vector3.one;
+                _squashStretchTimer = 0f;
+            }
+            else if (_squashStretchTimer > 0f)
             {
                 _squashStretchTimer -= dt;
                 Builder.visualRoot.localScale = Vector3.Lerp(Builder.visualRoot.localScale, _targetScale, 18f * dt);
@@ -291,12 +298,12 @@ namespace IronFauna.Gameplay
             if (Builder.bodyRoot != null)
             {
                 float baseBodyY = Builder.isQuadrupedChassis ? (Builder.baseHipHeight + 0.15f) : (Builder.baseHipHeight + 0.82f);
-                Builder.bodyRoot.localPosition = new Vector3(0f, baseBodyY + gaitBob + idleBob, 0f);
+                Builder.bodyRoot.localPosition = new Vector3(0f, baseBodyY + (externalGait ? 0f : gaitBob) + idleBob, 0f);
                 Builder.bodyRoot.localRotation = Quaternion.Euler(_smoothedPitchLean, 0f, _smoothedRollBank);
             }
 
             // 5. Clamshell Leg Swing (opposite phase on Left vs Right / Diagonal Pairs)
-            float legSwingAngle = Mathf.Sin(_gaitTime) * legSwingMaxDeg * gaitBlendAmplitude;
+            float legSwingAngle = externalGait ? 0f : Mathf.Sin(_gaitTime) * legSwingMaxDeg * gaitBlendAmplitude;
             foreach (var leg in Builder.leftSideLegs)
             {
                 if (leg != null) leg.localRotation = Quaternion.Euler(legSwingAngle, 0f, 0f);
@@ -310,12 +317,12 @@ namespace IronFauna.Gameplay
             if (Builder.leftArmRoot != null)
             {
                 float slashAngle = _meleeSwingTimer > 0f ? Mathf.Sin((1f - _meleeSwingTimer / 0.25f) * Mathf.PI) * -75f : 0f;
-                float armSwingL = -Mathf.Sin(_gaitTime) * armSwingMaxDeg * gaitBlendAmplitude + slashAngle;
+                float armSwingL = (externalGait ? 0f : -Mathf.Sin(_gaitTime) * armSwingMaxDeg * gaitBlendAmplitude) + slashAngle;
                 Builder.leftArmRoot.localRotation = Quaternion.Euler(armSwingL, 0f, 0f);
             }
             if (Builder.rightArmRoot != null)
             {
-                float armSwingR = Mathf.Sin(_gaitTime) * (armSwingMaxDeg * 0.6f) * gaitBlendAmplitude - (_recoilOffset * 35f);
+                float armSwingR = (externalGait ? 0f : Mathf.Sin(_gaitTime) * (armSwingMaxDeg * 0.6f) * gaitBlendAmplitude) - (_recoilOffset * 35f);
                 Builder.rightArmRoot.localRotation = Quaternion.Euler(armSwingR, 0f, 0f);
             }
 

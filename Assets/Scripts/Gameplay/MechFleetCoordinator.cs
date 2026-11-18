@@ -119,6 +119,7 @@ namespace IronFauna.Gameplay
             var anim = enemyGo.AddComponent<MechRobotOperator>();
             anim.isPlayerPiloted = false;
             anim.aiWingmanActive = false; // Driven by EnemyWalker movement
+            enemyGo.AddComponent<MechGaitAnimator>(); // planted feet and footfalls, same as the player's mech
         }
 
         private void SpawnEnergyPickup(Vector3 pos)

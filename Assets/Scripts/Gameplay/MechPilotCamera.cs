@@ -148,6 +148,8 @@ namespace IronFauna.Gameplay
         {
             var b = target.Builder;
             float h = b.isQuadrupedChassis ? b.HipHeight + 1.1f : b.NeckHeight;
+            // Ride part of the body's stride bounce, so every footfall dips the camera.
+            if (b.visualRoot != null) h += b.visualRoot.localPosition.y * 0.6f;
             return target.transform.position + Vector3.up * h;
         }
 
@@ -156,24 +158,33 @@ namespace IronFauna.Gameplay
             ShowHead();
             // Follow lags a touch behind the mech so its acceleration reads on screen.
             _pivot = Vector3.SmoothDamp(_pivot, PivotPoint(), ref _pivotVel, followDamping);
-            Vector3 origin = _pivot + look * new Vector3(shoulderOffset.x, shoulderOffset.y, 0f);
+            // Shoulder offset first, so a wall beside the mech cannot put the arm's origin inside it.
+            Vector3 shoulder = look * new Vector3(shoulderOffset.x, shoulderOffset.y, 0f);
+            float shoulderLen = ArmLength(_pivot, shoulder.normalized, shoulder.magnitude);
+            Vector3 origin = _pivot + shoulder.normalized * shoulderLen;
 
-            // Spring arm: pull in when scenery is between the pivot and the camera (the mech itself is ignored).
-            float want = distance;
+            // Spring arm: pull in when scenery is between the origin and the camera (the mech itself is ignored).
             Vector3 back = look * Vector3.back;
-            var hits = Physics.SphereCastAll(origin, collisionRadius, back, want, ~0, QueryTriggerInteraction.Ignore);
-            foreach (var hit in hits)
-            {
-                if (hit.collider.transform.IsChildOf(target.transform)) continue;
-                if (hit.distance > 0f) want = Mathf.Min(want, hit.distance);
-            }
-            want = Mathf.Max(want, 1.2f);
+            float want = Mathf.Max(ArmLength(origin, back, distance), 0.3f);
             // Snap in immediately, ease back out.
             _currentDistance = want < _currentDistance ? want : Mathf.Lerp(_currentDistance, want, 1f - Mathf.Exp(-4f * dt));
 
             Vector3 pos = origin + back * _currentDistance;
             pos.y = Mathf.Max(pos.y, 0.4f);
             transform.SetPositionAndRotation(pos + look * shakePos, look * Quaternion.Euler(shakeRot));
+        }
+
+        /// <summary>Free length along <paramref name="dir"/> before the camera sphere touches scenery (not the mech).</summary>
+        private float ArmLength(Vector3 from, Vector3 dir, float length)
+        {
+            float free = length;
+            foreach (var hit in Physics.SphereCastAll(from, collisionRadius, dir, length, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (hit.collider.transform.IsChildOf(target.transform)) continue;
+                // distance 0 = the sphere already overlaps it at the start: no room at all.
+                free = Mathf.Min(free, Mathf.Max(0f, hit.distance - 0.05f));
+            }
+            return free;
         }
 
         private void PlaceFirstPerson(Quaternion look, Vector3 shakeRot, Vector3 shakePos)

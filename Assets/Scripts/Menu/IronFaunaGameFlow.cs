@@ -101,6 +101,7 @@ namespace IronFauna.Menu
             op.aiWingmanActive = false;
             op.externalLocomotion = true;
             var pilot = go.AddComponent<MechPilotController>();
+            go.AddComponent<MechGaitAnimator>();
             Camera cam = Camera.main;
             if (cam != null)
             {
