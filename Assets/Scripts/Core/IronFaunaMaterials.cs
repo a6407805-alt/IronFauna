@@ -67,6 +67,26 @@ namespace IronFauna.Core
             }
         }
 
+        /// <summary>Matte, non-metallic material for terrain ground and rocks so hills never mirror white specular glare.</summary>
+        public static Material GetTerrain(Color baseColor)
+        {
+            string hex = ColorUtility.ToHtmlStringRGB(baseColor);
+            string key = $"IF_Mat_Terrain_{hex}";
+            if (Cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var mat = new Material(SurfaceShader()) { name = key, hideFlags = HideFlags.DontSave };
+            mat.color = baseColor;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", baseColor);
+            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.12f);
+            Texture2D wear = WearMap();
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", wear);
+            mat.mainTexture = wear;
+            MakeMatte(mat);
+            Cache[key] = mat;
+            return mat;
+        }
+
         /// <summary>Tan blueprint-grid floor material with a generated grid texture (runtime only).</summary>
         public static Material GridFloor(float tiles)
         {

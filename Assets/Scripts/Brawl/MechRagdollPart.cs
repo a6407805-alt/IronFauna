@@ -6,7 +6,7 @@ namespace IronFauna.Brawl
     public class MechRagdollPart : MonoBehaviour
     {
         public MechRagdoll owner;
-        public MechRagdoll.Segment segment;
+        [System.NonSerialized] public MechRagdoll.Segment segment;
 
         private void OnCollisionEnter(Collision c)
         {

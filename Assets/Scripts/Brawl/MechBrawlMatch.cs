@@ -96,6 +96,10 @@ namespace IronFauna.Brawl
 
         public static MechBrawlMatch Begin(MechLoadout loadout, Camera camera, BrawlMatchConfig matchConfig = null)
         {
+            foreach (var existing in FindObjectsByType<MechBrawlMatch>())
+            {
+                if (existing != null) Destroy(existing.gameObject);
+            }
             var m = new GameObject("MechBrawlMatch").AddComponent<MechBrawlMatch>();
             m._loadout = loadout != null ? loadout.Clone() : MechLoadout.Default();
             m._camera = camera != null ? camera : Camera.main;
@@ -374,7 +378,7 @@ namespace IronFauna.Brawl
             BrawlTerrain.PopulateDestructibles(_arena, stage, seed + 7);
 
             BrawlTerrain.StageColors(stage, out Color groundCol, out _, out _, out Color skyCol, out Color sunCol);
-            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            foreach (var l in FindObjectsByType<Light>())
                 if (!l.transform.IsChildOf(transform)) l.enabled = false;
             foreach (var cam in _playerCams)
             {
@@ -393,29 +397,29 @@ namespace IronFauna.Brawl
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = skyCol;
-            RenderSettings.fogStartDistance = 42f;
-            RenderSettings.fogEndDistance = 185f;
+            RenderSettings.fogStartDistance = 48f;
+            RenderSettings.fogEndDistance = 200f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = IronFaunaPalette.Lerp(skyCol, IronFaunaPalette.ShadowSlate, 0.35f);
-            RenderSettings.ambientEquatorColor = IronFaunaPalette.Lerp(groundCol, skyCol, 0.4f);
-            RenderSettings.ambientGroundColor = IronFaunaPalette.Lerp(groundCol, IronFaunaPalette.ShadowSlate, 0.6f);
+            RenderSettings.ambientSkyColor = IronFaunaPalette.Lerp(skyCol, IronFaunaPalette.OffWhitePanel, 0.25f);
+            RenderSettings.ambientEquatorColor = IronFaunaPalette.Lerp(groundCol, skyCol, 0.55f);
+            RenderSettings.ambientGroundColor = IronFaunaPalette.Lerp(groundCol, IronFaunaPalette.StudioFill, 0.45f);
 
             var sunGo = new GameObject("Sun");
             sunGo.transform.SetParent(_arena, false);
-            sunGo.transform.rotation = Quaternion.Euler(38f, -40f, 0f);
+            sunGo.transform.rotation = Quaternion.Euler(42f, -38f, 0f);
             var sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
             sun.color = sunCol;
-            sun.intensity = 1.5f;
+            sun.intensity = 1.85f;
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.85f;
+            sun.shadowStrength = 0.78f;
             var fillGo = new GameObject("SkyFill");
             fillGo.transform.SetParent(_arena, false);
-            fillGo.transform.rotation = Quaternion.Euler(60f, 140f, 0f);
+            fillGo.transform.rotation = Quaternion.Euler(55f, 142f, 0f);
             var fill = fillGo.AddComponent<Light>();
             fill.type = LightType.Directional;
-            fill.color = skyCol;
-            fill.intensity = 0.38f;
+            fill.color = IronFaunaPalette.Lerp(skyCol, IronFaunaPalette.StudioRim, 0.35f);
+            fill.intensity = 0.68f;
             fill.shadows = LightShadows.None;
         }
 
@@ -521,9 +525,9 @@ namespace IronFauna.Brawl
         {
             var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
             if (what == "SLAM" || what == "SUPLEX" || what == "TORN" || what == "JOINT CRANK") { BoxingFeel.Shake(0.6f); BoxingFeel.HitStop(0.1f); }
-            if (what == "THROW") BoxingFeel.Shake(0.3f);
-            if (who == me && (what == "TORN" || what == "SLAM" || what == "SUPLEX" || what == "THROW" || what == "JOINT CRANK"))
-                Banner(what == "TORN" ? "LIMB TORN" : what, 1.1f);
+            if (what == "THROW" || what.Contains("OFF BALANCE")) BoxingFeel.Shake(0.35f);
+            if (who == me && (what == "TORN" || what == "SLAM" || what == "SUPLEX" || what == "THROW" || what == "JOINT CRANK" || what.Contains("NO ") || what.Contains("OFF BALANCE")))
+                Banner(what == "TORN" ? "LIMB TORN" : what, 1.25f);
         }
 
         private void OnShattered(Vector3 at, float size)
@@ -553,6 +557,19 @@ namespace IronFauna.Brawl
                     _playerCams[f.localPlayerIndex].target = best != null ? best.ragdoll : null;
                 }
             }
+            // If a local player is knocked out, let their camera spectate a surviving fighter instead of staring at a dead floor
+            foreach (var f in _fighters)
+            {
+                if (!f.player || !f.out_ || f.localPlayerIndex < 0 || f.localPlayerIndex >= _playerCams.Count) continue;
+                foreach (var alive in _fighters)
+                {
+                    if (!alive.out_ && alive.ragdoll != null)
+                    {
+                        _playerCams[f.localPlayerIndex].player = alive.ragdoll;
+                        break;
+                    }
+                }
+            }
         }
 
         private void Update()
@@ -572,6 +589,12 @@ namespace IronFauna.Brawl
             {
                 // Cycle 1..4 Local Split-Screen Players live with F2
                 config.localPlayers = (config.localPlayers % 4) + 1;
+                StartRound();
+                return;
+            }
+            if (kb != null && kb.f5Key.wasPressedThisFrame)
+            {
+                // Instant round restart with F5
                 StartRound();
                 return;
             }
@@ -632,9 +655,14 @@ namespace IronFauna.Brawl
                 SetBar(_poiseBar, me.Poise01);
                 if (_postureLabel != null && me.ghost != null)
                 {
-                    string posture = me.ghost.IsSeated ? "POSTURE: JIU-JITSU FLOOR SIT / SCOOT (Z)"
-                                   : me.ghost.IsCrouching ? "POSTURE: MMA CROUCH / TAKEDOWN (X)"
-                                   : $"FRAME: {me.weightLabel}" + (me.ghost.hyperArmor ? " (HYPER-ARMOR)" : "");
+                    var g = me.ghost;
+                    string limbs = $"ARMS:{g.ArmsLeft}/2 · LEGS:{g.LegsLeft}/2";
+                    string posture = _fighters[0].out_ ? "SPECTATING (PRESS F5 TO RESPAWN)"
+                                   : g.LegsLeft == 0 ? $"LEGLESS CRAWL (NO KICKS!) · {limbs}"
+                                   : g.LegsLeft == 1 ? $"1-LEG HOP (STANDING KICK TOPPLES!) · {limbs}"
+                                   : g.IsSeated ? $"JIU-JITSU FLOOR SIT / SCOOT (Z) · {limbs}"
+                                   : g.IsCrouching ? $"MMA CROUCH / TAKEDOWN (X) · {limbs}"
+                                   : $"FRAME: {me.weightLabel}" + (g.hyperArmor ? " (HYPER-ARMOR)" : "") + $" · {limbs}";
                     _postureLabel.text = posture;
                 }
             }

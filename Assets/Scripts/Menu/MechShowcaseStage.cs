@@ -214,7 +214,7 @@ namespace IronFauna.Menu
             }
 
             Light key = null;
-            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            foreach (var l in FindObjectsByType<Light>())
             {
                 if (l.type == LightType.Directional) { key = l; break; }
             }
@@ -235,7 +235,7 @@ namespace IronFauna.Menu
 
             // The arena's volume profile pushes exposure up for the old lit materials; the toon shader
             // already sits at full brightness, so take the boost off (runtime copy, the asset is untouched).
-            var volume = FindFirstObjectByType<Volume>();
+            var volume = FindAnyObjectByType<Volume>();
             if (volume != null && volume.profile != null && volume.profile.TryGet(out ColorAdjustments adjust))
             {
                 adjust.postExposure.overrideState = true;
@@ -263,7 +263,7 @@ namespace IronFauna.Menu
         private void BuildStudioLighting()
         {
             Light key = null;
-            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            foreach (var l in FindObjectsByType<Light>())
             {
                 if (l.type == LightType.Directional) { key = l; break; }
             }
@@ -294,7 +294,7 @@ namespace IronFauna.Menu
 
             BuildStudioReflection(keyRot * Vector3.back, rimRot * Vector3.back);
 
-            var volume = FindFirstObjectByType<Volume>();
+            var volume = FindAnyObjectByType<Volume>();
             if (volume == null)
             {
                 volume = new GameObject("StudioVolume").AddComponent<Volume>();

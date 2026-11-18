@@ -57,10 +57,18 @@ namespace IronFauna.EditorTools
         public static void RebuildMechsInOpenScenes()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
-            foreach (var builder in Object.FindObjectsByType<MechClamshellBuilder>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var builder in Object.FindObjectsByType<MechClamshellBuilder>(FindObjectsInactive.Include))
             {
                 if (builder != null && builder.gameObject.scene.IsValid()) builder.RebuildMech();
             }
+        }
+
+        [MenuItem("IronFauna/Start Brawl (Play Mode)")]
+        public static void StartBrawlInPlayMode()
+        {
+            if (!EditorApplication.isPlaying) return;
+            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>();
+            if (menu != null) menu.StartBrawl();
         }
 
         [MenuItem("IronFauna/Start Campaign (Play Mode)")]

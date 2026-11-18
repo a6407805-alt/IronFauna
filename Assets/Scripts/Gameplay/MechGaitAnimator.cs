@@ -60,6 +60,9 @@ namespace IronFauna.Gameplay
         [Header("MMA Crouching & Jiu-Jitsu Floor Sit")]
         [Range(0f, 1f)] public float crouchBlend;
         [Range(0f, 1f)] public float seatedBlend;
+        public bool hasLeftLeg = true;
+        public bool hasRightLeg = true;
+        [System.NonSerialized] public Vector3 combatPelvisAngles; // pitch, yaw, roll driven by MechBoxer strikes/kicks
 
         private class LegState
         {
@@ -202,15 +205,23 @@ namespace IronFauna.Gameplay
 
             // ---------------- feet
             float worstReach = 0f;
-            float sit = Mathf.Clamp01(seatedBlend);
-            float crouch = Mathf.Clamp01(crouchBlend) * (1f - sit);
+            bool noLegs = !hasLeftLeg && !hasRightLeg;
+            bool oneLeg = !noLegs && (!hasLeftLeg || !hasRightLeg);
+            float sit = noLegs ? 1f : Mathf.Clamp01(seatedBlend);
+            float crouch = Mathf.Clamp01(crouchBlend + (oneLeg ? 0.28f : 0f)) * (1f - sit);
             foreach (var leg in _legs)
             {
+                bool left = leg.rig.root.name.EndsWith("_L");
+                bool legMissing = (left && !hasLeftLeg) || (!left && !hasRightLeg);
+                if (legMissing)
+                {
+                    leg.swinging = false;
+                    continue;
+                }
                 if (sit > 0.05f)
                 {
                     // Jiu-Jitsu open guard / butt-scoot on the floor: legs extended forward, knees bent outward,
                     // heels dig and pull rhythmically when scooting across the mat.
-                    bool left = leg.rig.root.name.EndsWith("_L");
                     float side = left ? -1f : 1f;
                     float scootPhase = Mathf.Repeat(_phase + leg.offset, 1f);
                     float scootPull = walking ? Mathf.Sin(scootPhase * Mathf.PI * 2f) * 0.38f * speed01 : 0f;
@@ -304,6 +315,8 @@ namespace IronFauna.Gameplay
 
             Transform visual = _builder.visualRoot;
             visual.localPosition = new Vector3(_swayX, _bodyY, 0f);
+            float limpRoll = oneLeg ? (hasLeftLeg ? -9f : 9f) : 0f;
+            visual.localRotation = Quaternion.Euler(combatPelvisAngles.x, combatPelvisAngles.y, combatPelvisAngles.z + limpRoll);
 
             // ---------------- legs reach their feet
             foreach (var leg in _legs) SolveLeg(leg);
@@ -327,7 +340,9 @@ namespace IronFauna.Gameplay
         // ------------------------------------------------------------------------------- feet helpers
         private Vector3 NeutralPoint(LegState leg)
         {
-            return GroundPoint(transform.TransformPoint(new Vector3(leg.restRootLocal.x, 0f, leg.restRootLocal.z)));
+            bool oneLeg = hasLeftLeg != hasRightLeg;
+            float x = oneLeg ? leg.restRootLocal.x * 0.35f : leg.restRootLocal.x; // single leg hops closer to center of mass
+            return GroundPoint(transform.TransformPoint(new Vector3(x, 0f, leg.restRootLocal.z)));
         }
 
         private Vector3 LandingPoint(LegState leg, Vector3 lead)
@@ -338,7 +353,9 @@ namespace IronFauna.Gameplay
             float drop = Mathf.Max(0.05f, hip.y - transform.position.y - MechClamshellBuilder.AnkleHeight + maxReachDrop);
             float reach = Mathf.Sqrt(Mathf.Max(0f, legLen * legLen * 0.94f - drop * drop));
             lead = Vector3.ClampMagnitude(lead, Mathf.Max(0.1f, reach * 0.8f));
-            Vector3 n = transform.TransformPoint(new Vector3(leg.restRootLocal.x, 0f, leg.restRootLocal.z));
+            bool oneLeg = hasLeftLeg != hasRightLeg;
+            float x = oneLeg ? leg.restRootLocal.x * 0.35f : leg.restRootLocal.x;
+            Vector3 n = transform.TransformPoint(new Vector3(x, 0f, leg.restRootLocal.z));
             return GroundPoint(n + lead);
         }
 

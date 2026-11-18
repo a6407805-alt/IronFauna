@@ -119,7 +119,7 @@ namespace IronFauna.Brawl
             ground.transform.SetParent(root, false);
             ground.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = ground.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = IronFaunaMaterials.Get(groundCol, false);
+            mr.sharedMaterial = IronFaunaMaterials.GetTerrain(groundCol);
             ground.AddComponent<MeshCollider>().sharedMesh = mesh;
 
             // ---------------- boulders and outcrops (static, half buried)
@@ -293,7 +293,7 @@ namespace IronFauna.Brawl
             go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, yaw, 0f));
             go.transform.localScale = scale;
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = IronFaunaMaterials.Get(color, false);
+            go.AddComponent<MeshRenderer>().sharedMaterial = IronFaunaMaterials.GetTerrain(color);
             var mc = go.AddComponent<MeshCollider>();
             mc.sharedMesh = mesh;
             mc.convex = true;

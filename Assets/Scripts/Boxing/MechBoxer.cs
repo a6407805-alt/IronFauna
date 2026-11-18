@@ -85,10 +85,31 @@ namespace IronFauna.Boxing
         public float strikeSpeedScale = 1f;
         public float damageScale = 1f;
         public bool hyperArmor;
+        public bool hasArmL = true, hasArmR = true, hasLegL = true, hasLegR = true;
+        public int ArmsLeft => (hasArmL ? 1 : 0) + (hasArmR ? 1 : 0);
+        public int LegsLeft => (hasLegL ? 1 : 0) + (hasLegR ? 1 : 0);
         public float CrouchBlend => _crouchBlend;
         public float SeatedBlend => _seatedBlend;
-        public bool IsSeated => _seatedBlend > 0.45f;
+        public bool IsSeated => _seatedBlend > 0.45f || LegsLeft == 0;
         public bool IsCrouching => _crouchBlend > 0.45f || IsSeated;
+
+        /// <summary>Fired when a move is blocked by missing limbs or throws the mech off balance (message, knockdownSeconds).</summary>
+        public event Action<string, float> OffBalanceTriggered;
+
+        public void SetLimbState(bool armL, bool armR, bool legL, bool legR)
+        {
+            hasArmL = armL;
+            hasArmR = armR;
+            hasLegL = legL;
+            hasLegR = legR;
+            if (_gait == null) _gait = GetComponent<IronFauna.Gameplay.MechGaitAnimator>();
+            if (_gait != null)
+            {
+                _gait.hasLeftLeg = legL;
+                _gait.hasRightLeg = legR;
+            }
+            if (LegsLeft == 0) intent.sit = true;
+        }
 
         /// <summary>Physics brawler: the ragdoll's collisions deal the damage, so the distance check is skipped.</summary>
         [NonSerialized] public bool physicsDriven;
@@ -98,7 +119,7 @@ namespace IronFauna.Boxing
         public int PunchSerial { get; private set; }
         /// <summary>The fist is travelling at (or resting on) the target.</summary>
         public bool StrikeActive => _punch != null && (_phase == Phase.Strike || _phase == Phase.Hold);
-        public bool PunchLeadHand => _punch != null && _punch.lead;
+        public bool PunchLeadHand => _punch != null && _activeStrikeLead;
         public float PunchPower => _punch != null ? Power(_punch) : 0f;
         public float PunchDamage => _punch != null ? _punch.damage * damageScale : 0f;
         public bool StrikeSweeps => _punch != null && _punch.sweep;
@@ -322,8 +343,8 @@ namespace IronFauna.Boxing
 
         /// <summary>The move in progress is a kick (or knee).</summary>
         public bool StrikeIsKick => _punch != null && _punch.kick;
-        /// <summary>The move in progress is thrown with the lead side (hand or leg).</summary>
-        public bool StrikeLead => _punch != null && _punch.lead;
+        /// <summary>The move in progress is thrown with the lead side (hand or leg), accounting for missing-limb rerouting.</summary>
+        public bool StrikeLead => _punch != null && _activeStrikeLead;
         /// <summary>A strike is winding up (telegraph).</summary>
         public bool WindingUp => _punch != null && _phase == Phase.Windup;
         public bool StrikeIsHead => _punch != null && _punch.head;
@@ -338,7 +359,7 @@ namespace IronFauna.Boxing
         [NonSerialized] public float holdSwing = -1f;
         /// <summary>A strike button pressed while holding (LMB throw, RMB rip, Space slam ...): the ragdoll consumes it.</summary>
         [NonSerialized] public PunchType holdAction;
-        public bool Reaching => intent.grab && !holding && _punch == null && !IsKO && !suppressed;
+        public bool Reaching => intent.grab && ArmsLeft > 0 && !holding && _punch == null && !IsKO && !suppressed;
 
         /// <summary>Where a held thing is carried: out in front of the chest, dragged low on the mat when crouching/seated, raised overhead for a slam, swung in an arc.</summary>
         public Vector3 HoldPoint
@@ -402,6 +423,7 @@ namespace IronFauna.Boxing
         private float _t;
 
         private PunchSpec _punch;
+        private bool _activeStrikeLead;
         private Phase _phase;
         private float _phaseT;
         private Vector3 _aim;               // fist target (world)
@@ -570,9 +592,11 @@ namespace IronFauna.Boxing
             right = Vector3.Cross(Vector3.up, fwd);
 
             float slow = (holding ? 0.6f : 1f) * (_punch != null ? 0.35f : 1f) * (_stagger > 0f ? 0.3f : 1f) * (_guardBlend > 0.5f ? 0.7f : 1f);
-            if (_seatedBlend > 0.25f) slow *= 0.62f; // Jiu-Jitsu butt-scoot / floor body-drag speed
+            if (LegsLeft == 0) slow *= ArmsLeft > 0 ? 0.42f : 0.18f; // legless arm-crawl (or worm squirm if 0 arms)
+            else if (LegsLeft == 1) slow *= 0.58f;                    // one-legged hop
+            else if (_seatedBlend > 0.25f) slow *= 0.62f;             // Jiu-Jitsu butt-scoot / floor body-drag speed
             else if (_crouchBlend > 0.25f) slow *= 0.78f;
-            float top = (sprinting && _seatedBlend < 0.2f && _crouchBlend < 0.3f) ? sprintSpeed : maxSpeed;
+            float top = (sprinting && LegsLeft == 2 && _seatedBlend < 0.2f && _crouchBlend < 0.3f) ? sprintSpeed : maxSpeed;
             Vector3 wish = right * m.x + fwd * m.y;
             // backing off while squared up is slower than stepping in
             if (_fight > 0.5f && Vector3.Dot(wish, oppFwd) < 0f) wish *= 0.85f;
@@ -649,6 +673,18 @@ namespace IronFauna.Boxing
             }
         }
 
+        private bool HasArmForLead(bool lead)
+        {
+            bool isLeft = lead != southpaw;
+            return isLeft ? hasArmL : hasArmR;
+        }
+
+        private bool HasLegForLead(bool lead)
+        {
+            bool isLeft = lead != southpaw;
+            return isLeft ? hasLegL : hasLegR;
+        }
+
         private Arm ArmFor(bool lead)
         {
             foreach (var a in _arms) if (a.lead == lead) return a;
@@ -657,9 +693,46 @@ namespace IronFauna.Boxing
 
         private void StartPunch(PunchSpec spec)
         {
-            var arm = ArmFor(spec.lead);
+            bool useLead = spec.lead;
+
+            // 1. Kick / Knee checks against missing legs
+            if (spec.kick)
+            {
+                if (LegsLeft == 0)
+                {
+                    // Kicking with NO legs: impossible! Lurches forward on stumps and falls off balance!
+                    _joltVel += new Vector3(0f, -0.6f, 2.2f);
+                    _vel += transform.forward * 2.2f;
+                    OffBalanceTriggered?.Invoke("NO LEGS — OFF BALANCE!", 0.95f);
+                    return;
+                }
+                if (!HasLegForLead(useLead))
+                {
+                    // Switch kick to the remaining intact leg
+                    useLead = !useLead;
+                }
+            }
+            // 2. Arm Punch / Elbow checks against missing arms
+            else if (!spec.head && !spec.body)
+            {
+                if (ArmsLeft == 0)
+                {
+                    // No arms left: cannot throw punches! Desperate headbutt instead
+                    spec = Specs[PunchType.Headbutt];
+                    useLead = spec.lead;
+                    OffBalanceTriggered?.Invoke("NO ARMS — HEADBUTT!", 0f);
+                }
+                else if (!HasArmForLead(useLead))
+                {
+                    // Reroute punch to the remaining intact arm
+                    useLead = !useLead;
+                }
+            }
+
+            var arm = ArmFor(useLead);
             if (arm == null) return;
             _punch = spec;
+            _activeStrikeLead = useLead;
             _phase = Phase.Windup;
             _phaseT = 0f;
             _connected = _blockedHit = false;
@@ -702,8 +775,8 @@ namespace IronFauna.Boxing
                     if (_phaseT >= s.windup)
                     {
                         _phase = Phase.Strike; _phaseT = 0f;
-                        if (s.lungeImpulse > 0f) _vel += transform.forward * s.lungeImpulse;
-                        var arm = ArmFor(s.lead);
+                        if (s.lungeImpulse > 0f) _vel += transform.forward * (s.lungeImpulse * (LegsLeft == 0 ? 0.35f : LegsLeft == 1 ? 0.65f : 1f));
+                        var arm = ArmFor(_activeStrikeLead);
                         _strikeFrom = arm != null ? arm.wrist : _aim;
                     }
                     break;
@@ -713,6 +786,11 @@ namespace IronFauna.Boxing
                         Resolve(s);
                         _phase = Phase.Hold; _phaseT = 0f;
                         if (s.type == PunchType.FlyingScissor) intent.sit = true; // Flying scissor lands in Jiu-Jitsu floor guard
+                        // Standing on 1 leg and kicking with that ONLY leg leaves 0 legs on the ground -> topples off balance!
+                        if (s.kick && LegsLeft == 1 && !IsSeated)
+                        {
+                            OffBalanceTriggered?.Invoke("1-LEG KICK — OFF BALANCE!", 1.15f);
+                        }
                     }
                     break;
                 case Phase.Hold:
@@ -851,7 +929,7 @@ namespace IronFauna.Boxing
             _slipT = Mathf.Max(0f, _slipT - dt);
             float slip = _slipT > 0f ? Mathf.Sin(Mathf.PI * (1f - _slipT / 0.42f)) : 0f;   // in and back out
             _guardBlend = Mathf.MoveTowards(_guardBlend, intent.guard && _punch == null && !IsKO ? 1f : 0f, dt * 7f);
-            bool wantSit = intent.sit && !IsKO && !suppressed;
+            bool wantSit = (intent.sit || LegsLeft == 0) && !IsKO && !suppressed;
             bool wantCrouch = (intent.crouch || (_punch != null && (_punch.type == PunchType.CapoeiraSweep || _punch.type == PunchType.DoubleLegTakedown))) && !wantSit && !IsKO;
             _seatedBlend = Mathf.MoveTowards(_seatedBlend, wantSit ? 1f : 0f, dt * 4.5f);
             _crouchBlend = Mathf.MoveTowards(_crouchBlend, wantCrouch ? 1f : 0f, dt * 5.5f);
@@ -860,6 +938,12 @@ namespace IronFauna.Boxing
             {
                 _gait.crouchBlend = _crouchBlend;
                 _gait.seatedBlend = _seatedBlend;
+                _gait.hasLeftLeg = hasLegL;
+                _gait.hasRightLeg = hasLegR;
+                // Full-body kinetic chain: pelvis coils and opens into punches and kicks
+                float kickHipRoll = (_punch != null && _punch.kick) ? (_activeStrikeLead != southpaw ? 1f : -1f) * _kickW * (12f + Mathf.Abs(_punch.kickSide) * 7f) : 0f;
+                float kickHipPitch = (_punch != null && _punch.kick) ? -_kickW * 10f : pLean * 0.25f;
+                _gait.combatPelvisAngles = new Vector3(kickHipPitch, pYaw * 0.36f, kickHipRoll);
             }
 
             float koDrop = 0f, koPitch = 0f;
@@ -957,12 +1041,12 @@ namespace IronFauna.Boxing
         /// </summary>
         private void KickLeg(float dt, float rise)
         {
-            bool kicking = _punch != null && _punch.kick;
+            bool kicking = _punch != null && _punch.kick && LegsLeft > 0;
             float want = 0f;
             Foot f = null;
             if (kicking)
             {
-                foreach (var ft in _feet) if (ft.lead == _punch.lead) f = ft;
+                foreach (var ft in _feet) if (ft.lead == _activeStrikeLead) f = ft;
                 switch (_phase)
                 {
                     case Phase.Windup: want = EaseInOut(_phaseT / _punch.windup); break;
@@ -1065,24 +1149,25 @@ namespace IronFauna.Boxing
             Vector3 want = guard;
             float follow = 18f;
 
-            bool punching = _punch != null && !_punch.kick && !_punch.head && !_punch.body && _punch.lead == a.lead;
+            bool punching = _punch != null && !_punch.kick && !_punch.head && !_punch.body && _activeStrikeLead == a.lead;
             if (punching)
             {
                 var s = _punch;
                 float x = a.rig.side;
+                // Shoulder / clavicle protraction: the shoulder reaches forward into the punch and retracts on windup
+                float shoulProtract = _phase == Phase.Windup ? -14f * EaseInOut(_phaseT / s.windup)
+                                    : (_phase == Phase.Strike || _phase == Phase.Hold) ? 20f
+                                    : 20f * (1f - EaseInOut(_phaseT / (s.recover * (_connected ? 1f : 1.35f))));
+                a.rig.root.localRotation = Quaternion.Euler(-Mathf.Abs(shoulProtract) * 0.35f, -x * shoulProtract, 0f);
+
                 Vector3 pull = body.TransformPoint(GuardPoint(a, hopShape) + new Vector3(s.pull.x * x, s.pull.y, s.pull.z));
                 Vector3 elbowHint = new Vector3(s.elbow.x * x, s.elbow.y, s.elbow.z);
-                // the wrist stops a hand's length short of the target
                 Vector3 shoulderW = a.rig.root.TransformPoint(a.rig.shoulder);
-                float reach = (a.rig.upperLength + a.rig.foreLength - 0.03f) * s.reach;
-                float hand = Vector3.Distance(a.rig.wrist, a.rig.tip);
+                float reach = (a.rig.upperLength + a.rig.foreLength - 0.02f) * s.reach;
                 Vector3 toAim = _aim - shoulderW;
-                // full extension, every time: the arm snaps out to its whole length along the line to the target
-                // (a target inside reach gets punched through - the collision does the rest)
                 Vector3 contact = shoulderW + (toAim.sqrMagnitude > 1e-4f ? toAim.normalized : transform.forward) * reach;
                 if (s.spin > 0f)
                 {
-                    // spinning strikes: the arm is flung straight out to the side and the torso spin carries it round
                     contact = body.TransformPoint(new Vector3(x * (Mathf.Abs(a.rig.shoulder.x) + reach * 0.95f + 0.9f), _chestB + 0.1f, 0.35f));
                 }
                 switch (_phase)
@@ -1090,41 +1175,50 @@ namespace IronFauna.Boxing
                     case Phase.Windup:
                         want = Vector3.Lerp(guard, pull, EaseInOut(_phaseT / s.windup));
                         hintTarget = Vector3.Lerp(hintTarget, elbowHint, EaseInOut(_phaseT / s.windup));
-                        follow = 30f;
+                        follow = 32f;
                         break;
                     case Phase.Strike:
                     {
                         float k = EaseIn2(_phaseT / s.strike);
                         Vector3 ctrl = Vector3.Lerp(_strikeFrom, contact, 0.5f) + body.TransformDirection(new Vector3(s.arc.x * x, s.arc.y, s.arc.z));
-                        // quadratic bezier: straight for jab/cross, around the side for hooks, up from below for uppercuts
                         want = (1 - k) * (1 - k) * _strikeFrom + 2 * (1 - k) * k * ctrl + k * k * contact;
                         hintTarget = elbowHint;
-                        follow = 80f;
+                        follow = 90f;
                         break;
                     }
                     case Phase.Hold:
                         want = contact;
                         hintTarget = elbowHint;
-                        follow = _connected ? 6f : 40f;   // after a hit the fist rides the recoil a moment
+                        follow = _connected ? 6f : 40f;
                         break;
                     case Phase.Recover:
                     {
                         float k = EaseInOut(_phaseT / (s.recover * (_connected ? 1f : 1.35f)));
                         want = Vector3.Lerp(contact, guard, k);
                         hintTarget = Vector3.Lerp(elbowHint, hintTarget, k);
-                        follow = 22f;
+                        follow = 24f;
                         break;
                     }
                 }
             }
             else if (_punch != null)
             {
-                // the other hand stays home, tucked tight to the chin
-                want = body.TransformPoint(GuardPoint(a, hopShape) + new Vector3(-a.rig.side * 0.06f, 0.06f, -0.12f));
+                if (_punch.kick && a.lead == _activeStrikeLead)
+                {
+                    // Muay Thai / Kickboxing counterbalance: the kick-side arm whips down and back across the hip!
+                    want = body.TransformPoint(new Vector3(a.rig.side * 0.85f, _chestB - 0.85f, -0.35f * _kickW));
+                    hintTarget = new Vector3(a.rig.side * 0.9f, -0.5f, -0.8f);
+                    follow = 24f;
+                }
+                else
+                {
+                    // Opposite hand stays tucked tight to the temple/chin to protect the head
+                    want = body.TransformPoint(GuardPoint(a, hopShape) + new Vector3(-a.rig.side * 0.08f, 0.10f, -0.14f));
+                }
             }
             else if (holding || Reaching)
             {
-                // grapple: both hands out to the target (reaching) or clamped on what is held
+                // grapple: intact hands reach out to the target or clamp on what is held
                 Vector3 shoulderW = a.rig.root.TransformPoint(a.rig.shoulder);
                 float reach = a.rig.upperLength + a.rig.foreLength - 0.03f;
                 Vector3 target;
@@ -1140,13 +1234,18 @@ namespace IronFauna.Boxing
                 hintTarget = new Vector3(a.rig.side * 0.8f, -0.6f, -0.3f);
                 follow = 16f;
             }
-            else if (_seatedBlend > 0.35f && _vel.sqrMagnitude > 0.08f)
+            else if (_seatedBlend > 0.35f && _vel.sqrMagnitude > 0.05f)
             {
-                // Jiu-Jitsu butt-scoot on the mat: hands plant by the hips and push the robot's body across the floor
-                float scootCycle = _t * 7f + (a.lead ? 0f : Mathf.PI);
-                Vector3 matHand = transform.TransformPoint(new Vector3(a.rig.side * 0.92f, 0.25f + Mathf.Max(0f, Mathf.Sin(scootCycle)) * 0.22f, -0.15f + Mathf.Cos(scootCycle) * 0.45f));
+                // Jiu-Jitsu butt-scoot OR legless arm-crawl on the mat:
+                // When legless (LegsLeft == 0), the arms reach far out in front and haul the torso forward!
+                bool legless = LegsLeft == 0;
+                float scootCycle = _t * (legless ? 8.5f : 7f) + (a.lead ? 0f : Mathf.PI);
+                float zReach = legless ? (0.85f + Mathf.Cos(scootCycle) * 0.75f) : (-0.15f + Mathf.Cos(scootCycle) * 0.45f);
+                float xSpread = legless ? a.rig.side * 0.65f : a.rig.side * 0.92f;
+                Vector3 matHand = transform.TransformPoint(new Vector3(xSpread, 0.22f + Mathf.Max(0f, Mathf.Sin(scootCycle)) * 0.26f, zReach));
                 want = Vector3.Lerp(want, matHand, _seatedBlend);
-                hintTarget = new Vector3(a.rig.side * 0.9f, -0.4f, -0.8f);
+                hintTarget = new Vector3(a.rig.side * 0.9f, legless ? 0.2f : -0.4f, -0.8f);
+                follow = 22f;
             }
 
             a.wrist = Vector3.Lerp(a.wrist, want, 1f - Mathf.Exp(-follow * dt));

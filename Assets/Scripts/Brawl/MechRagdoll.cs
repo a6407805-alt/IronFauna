@@ -147,6 +147,12 @@ namespace IronFauna.Brawl
 
             // hide the ghost (it still animates)
             foreach (var r in animated.GetComponentsInChildren<Renderer>()) r.enabled = false;
+            ghost.SetLimbState(true, true, true, true);
+            ghost.OffBalanceTriggered += (msg, kd) =>
+            {
+                if (kd > 0f && !IsKO) Knockdown(kd);
+                if (!string.IsNullOrEmpty(msg)) GrappleEvent?.Invoke(this, msg);
+            };
         }
 
         public void ApplyLoadoutStats(MechLoadout loadout, float bonusHpMult = 1f)
@@ -397,20 +403,22 @@ namespace IronFauna.Brawl
             bool standing = !IsDown;
             if (standing && !_legsKinematic)
             {
-                // getting up: put the ghost where the body lies, then blend the legs onto the walk cycle
-                Vector3 g = ghost.transform.position;
+                // getting up: put the ghost where the body lies (snapped to the slope height!), then blend the legs onto the walk cycle
                 Vector3 pp = _pelvis.rb.position;
-                ghost.transform.position = new Vector3(pp.x, g.y, pp.z);
+                float groundY = MechBoxer.TryGround(pp + Vector3.up * 4f, out float gy) ? gy : pp.y;
+                ghost.transform.position = new Vector3(pp.x, groundY, pp.z);
                 _follow = 0f;
             }
             SetLowerBodyKinematic(standing);
             _follow = standing ? Mathf.MoveTowards(_follow, 1f, dt / 0.6f) : 0f;
 
-            // motors on the physical joints (upper body; the whole body while limp)
-            if (Mathf.Abs(_appliedMuscle - muscle) > 0.01f)
+            // motors on the physical joints (upper body; the whole body while limp; snappier during active strikes)
+            float strikeBoost = standing && ghost.StrikeActive ? 1.38f : 1f;
+            float targetDrive = muscle * strikeBoost;
+            if (Mathf.Abs(_appliedMuscle - targetDrive) > 0.01f)
             {
-                foreach (var s in _segs) ApplyDrive(s, _lost.Contains(s.limb) ? 0.02f : muscle);
-                _appliedMuscle = muscle;
+                foreach (var s in _segs) ApplyDrive(s, _lost.Contains(s.limb) ? 0.02f : targetDrive);
+                _appliedMuscle = targetDrive;
             }
             foreach (var s in _segs)
             {
@@ -430,24 +438,31 @@ namespace IronFauna.Brawl
                     s.rb.MoveRotation(Quaternion.Slerp(s.rb.rotation, s.target.rotation, Mathf.Clamp01(k)));
                 }
                 // keep the torso upright over the hips on top of its joint motor
-                PdRotate(_torso.rb, _torso.target.rotation, 5f * balance, 0.9f);
+                PdRotate(_torso.rb, _torso.target.rotation, 5.5f * balance, 0.9f);
             }
 
-            // the ghost never wanders away from the body (falls, being thrown)
+            // the ghost never wanders away from the body (falls, sliding down hills, being thrown)
             if (IsDown)
             {
-                Vector3 err = _pelvis.rb.position - _pelvis.target.position;
+                Vector3 pp = _pelvis.rb.position;
+                Vector3 err = pp - _pelvis.target.position;
                 err.y = 0f;
                 ghost.transform.position += err;
+                if (MechBoxer.TryGround(ghost.transform.position + Vector3.up * 4f, out float gy))
+                {
+                    Vector3 gp = ghost.transform.position;
+                    gp.y = gy;
+                    ghost.transform.position = gp;
+                }
             }
 
             Grapple(dt);
         }
 
-        /// <summary>Floor (not a mech) under this point, within a few metres.</summary>
+        /// <summary>Floor (not a mech) under this point, accounting for hills and slopes.</summary>
         private bool SupportUnder(Vector3 p)
         {
-            foreach (var hit in Physics.RaycastAll(p + Vector3.up * 1.5f, Vector3.down, 4.5f, ~0, QueryTriggerInteraction.Ignore))
+            foreach (var hit in Physics.RaycastAll(p + Vector3.up * 6f, Vector3.down, 14f, ~0, QueryTriggerInteraction.Ignore))
             {
                 var rb = hit.collider.attachedRigidbody;
                 if (rb != null && rb.GetComponent<MechRagdollPart>() != null) continue;
@@ -612,6 +627,18 @@ namespace IronFauna.Brawl
                 }
             }
             _appliedMuscle = -1f;
+            if (ghost != null)
+            {
+                ghost.SetLimbState(HasLimb(LimbId.ArmL), HasLimb(LimbId.ArmR), HasLimb(LimbId.LegL), HasLimb(LimbId.LegR));
+                if (ghost.ArmsLeft == 0 && _heldSeg != null) DropHold();
+            }
+            if ((limb == LimbId.LegL || limb == LimbId.LegR) && !IsKO)
+            {
+                // Losing a leg compromises balance immediately and permanently lowers max poise!
+                poiseMax *= 0.65f;
+                _poise = Mathf.Min(_poise, poiseMax);
+                Knockdown(1.5f);
+            }
             if (limb == LimbId.Head && !IsKO) KnockOut();
         }
 
