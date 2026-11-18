@@ -750,24 +750,31 @@ namespace IronFauna.Brawl
                     _playerCams[f.localPlayerIndex].target = best != null ? best.ragdoll : null;
                 }
             }
-            // If a local player is knocked out, let their camera spectate a surviving fighter instead of staring at a dead floor
+            // If a local player is knocked out, let their camera spectate the surviving fighter closest to the heart of the arena
             foreach (var f in _fighters)
             {
                 if (!f.player || !f.out_ || f.localPlayerIndex < 0 || f.localPlayerIndex >= _playerCams.Count) continue;
+                Fighter bestAlive = null;
+                float bestR2 = float.MaxValue;
                 foreach (var alive in _fighters)
                 {
                     if (!alive.out_ && alive.ragdoll != null)
                     {
-                        _playerCams[f.localPlayerIndex].player = alive.ragdoll;
-                        MechRagdoll specTarget = null;
-                        if (alive.ghost != null && alive.ghost.opponent != null)
-                        {
-                            foreach (var o in _fighters)
-                                if (o.ghost == alive.ghost.opponent && !o.out_) { specTarget = o.ragdoll; break; }
-                        }
-                        _playerCams[f.localPlayerIndex].target = specTarget;
-                        break;
+                        Vector3 ap = alive.ragdoll.Position;
+                        float r2 = ap.x * ap.x + ap.z * ap.z;
+                        if (r2 < bestR2) { bestR2 = r2; bestAlive = alive; }
                     }
+                }
+                if (bestAlive != null)
+                {
+                    _playerCams[f.localPlayerIndex].player = bestAlive.ragdoll;
+                    MechRagdoll specTarget = null;
+                    if (bestAlive.ghost != null && bestAlive.ghost.opponent != null)
+                    {
+                        foreach (var o in _fighters)
+                            if (o.ghost == bestAlive.ghost.opponent && !o.out_) { specTarget = o.ragdoll; break; }
+                    }
+                    _playerCams[f.localPlayerIndex].target = specTarget;
                 }
             }
         }
@@ -820,9 +827,10 @@ namespace IronFauna.Brawl
             Fighter last = null, justEliminated = null;
             foreach (var f in _fighters)
             {
-                if (!f.out_ && (f.ragdoll.IsKO || f.ragdoll.Position.y < ArenaTop - 13f))
+                Vector3 fp = f.ragdoll != null ? f.ragdoll.Position : Vector3.zero;
+                bool ringOut = fp.y < ArenaTop - 8f || ((fp.x * fp.x + fp.z * fp.z > (IslandRadius * 0.91f) * (IslandRadius * 0.91f)) && fp.y < ArenaTop - 2.2f);
+                if (!f.out_ && (f.ragdoll.IsKO || ringOut))
                 {
-                    bool ringOut = f.ragdoll.Position.y < ArenaTop - 13f;
                     f.out_ = true;
                     justEliminated = f;
                     if (ringOut && f.player) Banner("RING OUT", 2f);

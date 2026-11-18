@@ -504,11 +504,13 @@ namespace IronFauna.Brawl
             Grapple(dt);
         }
 
-        /// <summary>Floor (not a mech) under this point, accounting for hills and slopes.</summary>
+        /// <summary>Floor (not a mech or a steep cliff wall) under this point, accounting for hills and slopes.</summary>
         private bool SupportUnder(Vector3 p)
         {
+            if (p.x * p.x + p.z * p.z > 33.5f * 33.5f) return false;
             foreach (var hit in Physics.RaycastAll(p + Vector3.up * 6f, Vector3.down, 14f, ~0, QueryTriggerInteraction.Ignore))
             {
+                if (hit.normal.y < 0.62f) continue; // steep cliff walls are not standable floor
                 var rb = hit.collider.attachedRigidbody;
                 if (rb != null && rb.GetComponent<MechRagdollPart>() != null) continue;
                 return true;
