@@ -151,6 +151,7 @@ namespace IronFauna.Brawl
             f.ragdoll.Hit += OnHit;
             f.ragdoll.ArmorShed += (who, at) => BoxingSfx.Clank(0.3f);
             f.ragdoll.KnockedOut += who => { if (who == _fighters[0].ragdoll) Banner("K.O.", 2.5f); };
+            f.ragdoll.GrappleEvent += OnGrapple;
             f.ghost.PunchThrown += (who, power) => { if (player) BoxingSfx.Whoosh(power); };
             if (player) f.ghost.Footfall += (at, strength) => BoxingFeel.Shake(0.05f * strength);
             return f;
@@ -234,9 +235,9 @@ namespace IronFauna.Brawl
             _banner = MenuUI.Label(root, "", 140, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(_banner.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -40f), new Vector2(0f, 260f));
             var help = MenuUI.Label(root,
-                "WASD MOVE   ·   CTRL SPRINT   ·   LMB JAB   ·   RMB CROSS   ·   Q HOOK   ·   E UPPERCUT   ·   SHIFT GUARD   ·   C SLIP   ·   SCROLL + SPACE SPECIAL   ·   ESC EXIT",
+                "WASD MOVE · CTRL SPRINT · LMB JAB · RMB CROSS · Q HOOK · E UPPERCUT · F FRONT KICK · R ROUNDHOUSE · SHIFT GUARD · C SLIP · SCROLL+SPACE SPECIAL\nHOLD G GRAB:  LMB THROW · RMB TEAR LIMB · SPACE SLAM · RELEASE G THROW  ·  ESC EXIT",
                 22, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
-            MenuUI.Place(help.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 30f), new Vector2(0f, 80f));
+            MenuUI.Place(help.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 20f), new Vector2(0f, 100f));
 
             var movePanel = MenuUI.Panel(root, "SpecialPanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.7f));
             MenuUI.Place(movePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-560f, 110f), new Vector2(-50f, 330f));
@@ -295,6 +296,14 @@ namespace IronFauna.Brawl
                 BoxingFeel.FovKick = Mathf.Lerp(1.5f, 5f, k);
             }
             if (ripped && attacker == me) Banner("LIMB TORN", 1.2f);
+        }
+
+        private void OnGrapple(MechRagdoll who, string what)
+        {
+            var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
+            if (what == "SLAM" || what == "TORN") { BoxingFeel.Shake(0.6f); BoxingFeel.HitStop(0.1f); }
+            if (what == "THROW") BoxingFeel.Shake(0.3f);
+            if (who == me && (what == "TORN" || what == "SLAM" || what == "THROW")) Banner(what == "TORN" ? "LIMB TORN" : what, 1.1f);
         }
 
         private void OnShattered(Vector3 at, float size)

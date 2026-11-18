@@ -10,6 +10,9 @@ namespace IronFauna.Boxing
     ///   LMB / X  jab        RMB / Y  cross
     ///   Q / B    hook       E / A    uppercut
     ///   Shift / LB (hold)   high guard
+    ///   F front kick        R roundhouse
+    ///   G / LT (hold)       grab - release to throw; while holding: LMB throw, RMB tear a limb off, Space slam,
+    ///                       and with a torn-off limb in hand any strike swings it
     ///   Scroll / D-pad      pick a martial-arts special      Space / RT   throw it
     ///   C / RB              slip (toward the A/D or stick side; alternates when neutral)
     /// </summary>
@@ -58,6 +61,7 @@ namespace IronFauna.Boxing
             bool guard = false;
             bool slip = false;
             bool sprint = false;
+            bool grab = kb != null && kb.gKey.isPressed;
             if (mouse != null)
             {
                 if (mouse.leftButton.wasPressedThisFrame) punch = PunchType.Jab;
@@ -74,6 +78,8 @@ namespace IronFauna.Boxing
             {
                 if (kb.qKey.wasPressedThisFrame) punch = PunchType.Hook;
                 if (kb.eKey.wasPressedThisFrame) punch = PunchType.Uppercut;
+                if (kb.fKey.wasPressedThisFrame) punch = PunchType.FrontKick;
+                if (kb.rKey.wasPressedThisFrame) punch = PunchType.Roundhouse;
                 guard |= kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
                 slip |= kb.cKey.wasPressedThisFrame;
                 if (kb.spaceKey.wasPressedThisFrame) punch = SelectedSpecial;
@@ -85,7 +91,8 @@ namespace IronFauna.Boxing
                 if (pad.buttonNorth.wasPressedThisFrame) punch = PunchType.Cross;
                 if (pad.buttonEast.wasPressedThisFrame) punch = PunchType.Hook;
                 if (pad.buttonSouth.wasPressedThisFrame) punch = PunchType.Uppercut;
-                guard |= pad.leftShoulder.isPressed || pad.leftTrigger.ReadValue() > 0.4f;
+                guard |= pad.leftShoulder.isPressed;
+                grab |= pad.leftTrigger.ReadValue() > 0.4f;
                 slip |= pad.rightShoulder.wasPressedThisFrame;
                 if (pad.dpad.right.wasPressedThisFrame) Cycle(1);
                 if (pad.dpad.left.wasPressedThisFrame) Cycle(-1);
@@ -105,6 +112,7 @@ namespace IronFauna.Boxing
             if (punch != PunchType.None) i.punch = punch;
             i.guard = guard;
             i.sprint = sprint;
+            i.grab = grab;
             if (slipDir != 0) i.slip = slipDir;
             _boxer.intent = i;
         }

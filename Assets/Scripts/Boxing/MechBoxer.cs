@@ -10,6 +10,7 @@ namespace IronFauna.Boxing
         None, Jab, Cross, Hook, Uppercut,
         // martial-arts specials (scroll to pick, Space to fire)
         SpinningBackfist, SupermanPunch, Elbow, FrontKick, Roundhouse, FlyingKnee,
+        Haymaker, SideKick, AxeKick, SpinningHookKick, Headbutt, ShoulderCharge,
     }
 
     /// <summary>
@@ -35,6 +36,7 @@ namespace IronFauna.Boxing
             public bool guard;         // held: high guard
             public int slip;           // pressed this frame: -1 slip left, +1 slip right
             public bool sprint;        // held: run (open stance, no squaring up)
+            public bool grab;          // held: reach for / hold on to another mech (release = throw)
         }
 
         [NonSerialized] public Intent intent;
@@ -131,6 +133,9 @@ namespace IronFauna.Boxing
             public float lungeImpulse;        // the whole mech surges forward as the strike starts (m/s)
             public float reach = 1f;          // fraction of full arm reach (elbows are short)
             public float kickSide;            // roundhouse: the foot swings in from the side
+            public float kickUp;              // axe kick: the foot rises high and chops down
+            public bool head;                 // headbutt: the head is the weapon
+            public bool body;                 // shoulder charge: the torso is the weapon
         }
 
         // Exaggerated on purpose: long, readable wind-ups that load the whole body, big torso drive, a lunge,
@@ -205,12 +210,51 @@ namespace IronFauna.Boxing
                 twist = -15f, load = 15f, lean = -6f, roll = 0f, dip = 0.35f, lunge = 0.8f, rise = 0.9f, lungeImpulse = 7.5f,
                 damage = 18f, knock = 4f, stop = 0.16f, shake = 0.85f, aimDrop = 1.2f,
             },
+            [PunchType.Haymaker] = new PunchSpec
+            {
+                type = PunchType.Haymaker, name = "HAYMAKER", lead = false, windup = 0.45f, strike = 0.18f, hold = 0.12f, recover = 0.6f,
+                twist = -65f, load = 70f, lean = 24f, roll = 12f, dip = 0.35f, lunge = 1.1f, lungeImpulse = 3f,
+                damage = 22f, knock = 5f, stop = 0.18f, shake = 1f,
+                pull = new Vector3(0.9f, 0.5f, -1.0f), arc = new Vector3(1.2f, 1.8f, -0.2f), elbow = new Vector3(1f, 0.5f, -0.4f),
+            },
+            [PunchType.SideKick] = new PunchSpec
+            {
+                type = PunchType.SideKick, name = "SIDE KICK", lead = false, kick = true, windup = 0.3f, strike = 0.13f, hold = 0.16f, recover = 0.45f,
+                twist = -85f, load = 20f, lean = -22f, roll = -14f, dip = 0.1f, lunge = 0.4f,
+                damage = 15f, knock = 7f, stop = 0.13f, shake = 0.8f, aimDrop = 1.3f,
+            },
+            [PunchType.AxeKick] = new PunchSpec
+            {
+                type = PunchType.AxeKick, name = "AXE KICK", lead = false, kick = true, windup = 0.36f, strike = 0.2f, hold = 0.14f, recover = 0.5f,
+                twist = -20f, load = 15f, lean = -18f, roll = 0f, dip = 0.05f, lunge = 0.5f, kickUp = 2.8f,
+                damage = 20f, knock = 3f, stop = 0.17f, shake = 0.95f, aimDrop = 0.2f,
+            },
+            [PunchType.SpinningHookKick] = new PunchSpec
+            {
+                type = PunchType.SpinningHookKick, name = "SPINNING HOOK KICK", lead = false, kick = true, windup = 0.24f, strike = 0.3f, hold = 0.1f, recover = 0.55f,
+                twist = 30f, load = -30f, lean = -14f, roll = -18f, dip = 0.1f, lunge = 0.3f, spin = 360f, kickSide = -1.8f, lungeImpulse = 2f,
+                damage = 23f, knock = 5f, stop = 0.2f, shake = 1f, aimDrop = 0.4f,
+            },
+            [PunchType.Headbutt] = new PunchSpec
+            {
+                type = PunchType.Headbutt, name = "HEADBUTT", lead = true, head = true, windup = 0.3f, strike = 0.12f, hold = 0.1f, recover = 0.4f,
+                twist = 0f, load = 0f, lean = 48f, roll = 0f, dip = 0.3f, lunge = 1.3f, lungeImpulse = 5f,
+                damage = 16f, knock = 3.5f, stop = 0.16f, shake = 0.9f,
+            },
+            [PunchType.ShoulderCharge] = new PunchSpec
+            {
+                type = PunchType.ShoulderCharge, name = "SHOULDER CHARGE", lead = true, body = true, windup = 0.32f, strike = 0.35f, hold = 0.12f, recover = 0.5f,
+                twist = 75f, load = -10f, lean = 20f, roll = -8f, dip = 0.35f, lunge = 1.0f, lungeImpulse = 13f,
+                damage = 14f, knock = 8f, stop = 0.15f, shake = 0.95f,
+            },
         };
 
         /// <summary>The scroll-wheel specials, in order.</summary>
         public static readonly PunchType[] Specials =
         {
-            PunchType.SpinningBackfist, PunchType.SupermanPunch, PunchType.Elbow, PunchType.FrontKick, PunchType.Roundhouse, PunchType.FlyingKnee,
+            PunchType.SpinningBackfist, PunchType.SupermanPunch, PunchType.Haymaker, PunchType.Elbow,
+            PunchType.FrontKick, PunchType.SideKick, PunchType.Roundhouse, PunchType.AxeKick, PunchType.SpinningHookKick,
+            PunchType.FlyingKnee, PunchType.Headbutt, PunchType.ShoulderCharge,
         };
 
         public static string MoveName(PunchType t) => Specs.TryGetValue(t, out var s) ? s.name : "";
@@ -221,6 +265,35 @@ namespace IronFauna.Boxing
         public bool StrikeLead => _punch != null && _punch.lead;
         /// <summary>A strike is winding up (telegraph).</summary>
         public bool WindingUp => _punch != null && _phase == Phase.Windup;
+        public bool StrikeIsHead => _punch != null && _punch.head;
+        public bool StrikeIsBody => _punch != null && _punch.body;
+
+        // ------------------------------------------------------------------ grappling (driven by MechRagdoll)
+        /// <summary>Set by the ragdoll while this mech holds something (a mech or a torn-off limb).</summary>
+        [NonSerialized] public bool holding;
+        /// <summary>0..1 lift of the held thing overhead (slam wind-up), set by the ragdoll.</summary>
+        [NonSerialized] public float holdLift;
+        /// <summary>0..1 progress of a swing of a held limb, set by the ragdoll (-1 = none).</summary>
+        [NonSerialized] public float holdSwing = -1f;
+        /// <summary>A strike button pressed while holding (LMB throw, RMB rip, Space slam ...): the ragdoll consumes it.</summary>
+        [NonSerialized] public PunchType holdAction;
+        public bool Reaching => intent.grab && !holding && _punch == null && !IsKO && !suppressed;
+
+        /// <summary>Where a held thing is carried: out in front of the chest, raised overhead for a slam, swung in an arc.</summary>
+        public Vector3 HoldPoint
+        {
+            get
+            {
+                if (_b == null || _b.bodyRoot == null) return transform.position + transform.forward * 2f + Vector3.up * 3f;
+                Vector3 local = new Vector3(0f, _chestB + 0.1f + holdLift * 2.6f, 1.9f - holdLift * 0.9f);
+                if (holdSwing >= 0f)
+                {
+                    float a = Mathf.Lerp(-120f, 100f, EaseInOut(holdSwing)) * Mathf.Deg2Rad;
+                    local = new Vector3(Mathf.Sin(a) * 2.6f, _chestB + 0.4f, Mathf.Cos(a) * 2.6f);
+                }
+                return _b.bodyRoot.TransformPoint(local);
+            }
+        }
 
         private enum Phase { Windup, Strike, Hold, Recover }
 
@@ -448,7 +521,7 @@ namespace IronFauna.Boxing
             else fwd = oppFwd;
             right = Vector3.Cross(Vector3.up, fwd);
 
-            float slow = (_punch != null ? 0.35f : 1f) * (_stagger > 0f ? 0.3f : 1f) * (_guardBlend > 0.5f ? 0.7f : 1f);
+            float slow = (holding ? 0.6f : 1f) * (_punch != null ? 0.35f : 1f) * (_stagger > 0f ? 0.3f : 1f) * (_guardBlend > 0.5f ? 0.7f : 1f);
             float top = sprinting ? sprintSpeed : maxSpeed;
             Vector3 wish = right * m.x + fwd * m.y;
             // backing off while squared up is slower than stepping in
@@ -503,6 +576,12 @@ namespace IronFauna.Boxing
         // ------------------------------------------------------------------ punches
         private void TickPunchInput()
         {
+            if (holding)
+            {
+                if (intent.punch != PunchType.None) holdAction = intent.punch;
+                _buffer = PunchType.None;
+                return;
+            }
             if (intent.punch != PunchType.None) { _buffer = intent.punch; _bufferT = 0.28f; }
             else _bufferT -= Time.deltaTime;
             if (_bufferT <= 0f) _buffer = PunchType.None;
@@ -536,7 +615,7 @@ namespace IronFauna.Boxing
             PunchThrown?.Invoke(this, Power(spec));
         }
 
-        private static float Power(PunchSpec s) => Mathf.InverseLerp(4f, 19f, s.damage);
+        private static float Power(PunchSpec s) => Mathf.InverseLerp(4f, 23f, s.damage);
 
         private Vector3 AimPoint(PunchSpec spec)
         {
@@ -957,7 +1036,7 @@ namespace IronFauna.Boxing
             Vector3 strikeAnkle = hipW + Vector3.ClampMagnitude(toAim, legLen * 0.97f);
             if (s.knee) strikeAnkle = hipW + fwd * 0.75f + Vector3.down * (legLen * 0.32f);
             Vector3 strikeFoot = strikeAnkle - Vector3.up * MechClamshellBuilder.AnkleHeight;
-            Vector3 ctrl = Vector3.Lerp(chamber, strikeFoot, 0.5f) + side * s.kickSide + Vector3.up * (s.kickSide * 0.3f);
+            Vector3 ctrl = Vector3.Lerp(chamber, strikeFoot, 0.5f) + side * s.kickSide + Vector3.up * (Mathf.Abs(s.kickSide) * 0.3f + s.kickUp);
 
             Vector3 footPos;
             switch (_phase)
@@ -1067,7 +1146,7 @@ namespace IronFauna.Boxing
             Vector3 want = guard;
             float follow = 18f;
 
-            bool punching = _punch != null && !_punch.kick && _punch.lead == a.lead;
+            bool punching = _punch != null && !_punch.kick && !_punch.head && !_punch.body && _punch.lead == a.lead;
             if (punching)
             {
                 var s = _punch;
@@ -1079,7 +1158,9 @@ namespace IronFauna.Boxing
                 float reach = (a.rig.upperLength + a.rig.foreLength - 0.03f) * s.reach;
                 float hand = Vector3.Distance(a.rig.wrist, a.rig.tip);
                 Vector3 toAim = _aim - shoulderW;
-                Vector3 contact = shoulderW + Vector3.ClampMagnitude(toAim - toAim.normalized * hand * 0.9f, reach);
+                // full extension, every time: the arm snaps out to its whole length along the line to the target
+                // (a target inside reach gets punched through - the collision does the rest)
+                Vector3 contact = shoulderW + (toAim.sqrMagnitude > 1e-4f ? toAim.normalized : transform.forward) * reach;
                 if (s.spin > 0f)
                 {
                     // spinning strikes: the arm is flung straight out to the side and the torso spin carries it round
@@ -1121,6 +1202,24 @@ namespace IronFauna.Boxing
             {
                 // the other hand stays home, tucked tight to the chin
                 want = body.TransformPoint(GuardPoint(a, hopShape) + new Vector3(-a.rig.side * 0.06f, 0.06f, -0.12f));
+            }
+            else if (holding || Reaching)
+            {
+                // grapple: both hands out to the target (reaching) or clamped on what is held
+                Vector3 shoulderW = a.rig.root.TransformPoint(a.rig.shoulder);
+                float reach = a.rig.upperLength + a.rig.foreLength - 0.03f;
+                Vector3 target;
+                if (holding) target = HoldPoint + body.right * a.rig.side * 0.45f;
+                else
+                {
+                    Vector3 grabAt = opponent != null && (opponent.transform.position - transform.position).sqrMagnitude < 25f
+                        ? opponent.ChestPoint() : body.TransformPoint(new Vector3(0f, _chestB, 2.5f));
+                    target = grabAt + body.right * a.rig.side * 0.5f;
+                }
+                Vector3 d = target - shoulderW;
+                want = shoulderW + Vector3.ClampMagnitude(d, reach);
+                hintTarget = new Vector3(a.rig.side * 0.8f, -0.6f, -0.3f);
+                follow = 16f;
             }
 
             a.wrist = Vector3.Lerp(a.wrist, want, 1f - Mathf.Exp(-follow * dt));

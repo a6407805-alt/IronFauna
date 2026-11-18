@@ -10,7 +10,7 @@ namespace IronFauna.Brawl
 
         private void OnCollisionEnter(Collision c)
         {
-            if (owner != null && segment != null) owner.TryStrike(segment, c);
+            if (owner != null && segment != null) owner.OnPartCollision(segment, c);
         }
     }
 }

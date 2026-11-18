@@ -30,7 +30,7 @@ namespace IronFauna.Brawl
             var p = go.AddComponent<BreakableProp>();
             p.color = color;
             p.pieces = pieces;
-            p.toughness = rb.mass * 6f + 200f;
+            p.toughness = rb.mass * 3.5f + 120f;   // chaos: thrown mechs and big hits smash cover
             return p;
         }
 

@@ -29,7 +29,9 @@ namespace IronFauna.Brawl
         public MechBoxer ghost;               // the hidden animated mech
         public float health = 160f;
         public float maxHealth = 160f;
-        public float poiseMax = 34f;
+        public float poiseMax = 28f;
+        [Tooltip("Chaos: how far hits shove mechs around")]
+        public float knockbackScale = 1.8f;
 
         [Header("Strength")]
         public float muscle = 1f;             // joint motor multiplier (0 = limp)
@@ -61,6 +63,8 @@ namespace IronFauna.Brawl
             public float spring, damper;
             public readonly List<Transform> armor = new List<Transform>();
             public bool detached;
+            public Transform tip;                 // fist / toe point (grabbing, trails)
+            public MechRagdoll heldBy;            // a torn-off limb someone is wielding
         }
 
         private readonly List<Segment> _segs = new List<Segment>();
@@ -322,6 +326,7 @@ namespace IronFauna.Brawl
                     _downT -= dt;
                     muscle = Mathf.MoveTowards(muscle, 0.12f, dt * 6f);
                     balance = 0f;
+                    if (_grabbedBy != null) _downT = Mathf.Max(_downT, 0.2f);
                     // only get up where there is floor to stand on
                     if (_downT <= 0f)
                     {
@@ -391,6 +396,8 @@ namespace IronFauna.Brawl
                 err.y = 0f;
                 ghost.transform.position += err;
             }
+
+            Grapple(dt);
         }
 
         /// <summary>Floor (not a mech) under this point, within a few metres.</summary>
@@ -446,13 +453,12 @@ namespace IronFauna.Brawl
 
         // ------------------------------------------------------------------ damage
         /// <summary>Called by a striking part of <paramref name="attacker"/> that hit <paramref name="seg"/>.</summary>
-        public void ReceiveStrike(MechRagdoll attacker, Segment seg, Vector3 point, Vector3 velocity, float strikerMass, float power)
+        public void ReceiveStrike(MechRagdoll attacker, Segment seg, Vector3 point, Vector3 dir, float damage, float power)
         {
-            if (IsKO && seg.detached) return;
-            float speed = velocity.magnitude;
-            float damage = Mathf.Clamp(speed * strikerMass * 0.075f * Mathf.Lerp(0.7f, 1.5f, power), 0f, 30f);
+            if (seg.detached) return;
+            damage = Mathf.Clamp(damage, 0f, 40f);
             if (damage < 1.5f) return;
-            Vector3 dir = speed > 0.01f ? velocity / speed : -transform.forward;
+            dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : -transform.forward;
 
             bool headShot = seg.limb == LimbId.Head;
             float mult = headShot ? 1.35f : seg == _torso || seg == _pelvis ? 1f : 0.8f;
@@ -461,9 +467,9 @@ namespace IronFauna.Brawl
             _poise -= damage * (headShot ? 1.6f : 1f);
 
             // the blow really moves the body: a shove at the contact point on top of the collision itself
-            seg.rb.AddForceAtPosition(dir * damage * 9f, point, ForceMode.Impulse);
+            seg.rb.AddForceAtPosition(dir * damage * 16f * knockbackScale, point, ForceMode.Impulse);
             ghost.Interrupt(0.12f + damage * 0.012f);
-            ghost.AddKnockback(dir * Mathf.Lerp(0.6f, 4f, damage / 25f));
+            ghost.AddKnockback(dir * Mathf.Lerp(1.5f, 8f, damage / 25f) * knockbackScale);
             muscle = Mathf.Min(muscle, Mathf.Lerp(1f, 0.35f, damage / 25f));   // a hard hit goes slack for a beat
 
             bool ripped = false;
@@ -485,6 +491,7 @@ namespace IronFauna.Brawl
 
         public void Knockdown(float seconds)
         {
+            if (_heldSeg != null) DropHold();
             _downT = Mathf.Max(_downT, seconds);
             _poise = poiseMax * 0.6f;
         }
@@ -543,10 +550,22 @@ namespace IronFauna.Brawl
                     Destroy(s.joint);
                     s.joint = null;
                     s.detached = true;
+                    s.rb.isKinematic = false;
                     s.rb.AddForce(impulse * 1.2f + Vector3.up * 25f, ForceMode.Impulse);
                 }
             }
-            foreach (var s in _segs) if (s.limb == limb) s.detached = true;
+            foreach (var s in _segs) if (s.limb == limb) { s.detached = true; s.rb.isKinematic = false; }
+            // a torn-off limb is a separate object now: it may hit its old body
+            foreach (var s in _segs)
+            {
+                if (s.limb != limb) continue;
+                foreach (var o in _segs)
+                {
+                    if (o.limb == limb) continue;
+                    foreach (var c1 in s.phys.GetComponents<Collider>())
+                        foreach (var c2 in o.phys.GetComponents<Collider>()) Physics.IgnoreCollision(c1, c2, false);
+                }
+            }
             _appliedMuscle = -1f;
             if (limb == LimbId.Head && !IsKO) KnockOut();
         }
@@ -562,6 +581,7 @@ namespace IronFauna.Brawl
             var go = new GameObject("StrikeTrail");
             go.transform.SetParent(s.phys, false);
             go.transform.localPosition = local;
+            s.tip = go.transform;
             var tr = go.AddComponent<TrailRenderer>();
             tr.time = 0.22f;
             tr.minVertexDistance = 0.05f;
@@ -605,18 +625,28 @@ namespace IronFauna.Brawl
             }
         }
 
-        /// <summary>Called by a part's collision: one damaging contact per punch per victim.</summary>
+        /// <summary>A part hit something: strikes, wielded limbs, falls and thrown bodies all go through here.</summary>
+        internal void OnPartCollision(Segment mine, Collision c)
+        {
+            if (mine.heldBy != null) { mine.heldBy.WeaponStrike(mine, c); return; }
+            TryStrike(mine, c);
+            ImpactDamage(mine, c);
+        }
+
+        /// <summary>One damaging contact per strike per victim: fists, feet, knees, the head (headbutt), the torso (charge).</summary>
         internal void TryStrike(Segment mine, Collision c)
         {
-            if (IsDown || ghost == null || mine.detached) return;
+            if (IsDown || ghost == null || mine.detached || !ghost.StrikeActive) return;
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
-            if (otherPart == null || otherPart.owner == this) return;
+            if (otherPart == null || otherPart.owner == this || otherPart.segment.detached) return;
             bool arm = mine.limb == LimbId.ArmL || mine.limb == LimbId.ArmR;
             bool leg = mine.limb == LimbId.LegL || mine.limb == LimbId.LegR;
-            bool active = mine.striker && ghost.StrikeActive && ghost.StrikeLead == mine.leadHand;
-            bool armStrike = arm && active && !ghost.StrikeIsKick;
-            bool legStrike = leg && active && ghost.StrikeIsKick;
-            if (!armStrike && !legStrike) return;
+            bool side = ghost.StrikeLead == mine.leadHand;
+            bool armStrike = arm && mine.striker && side && !ghost.StrikeIsKick && !ghost.StrikeIsHead && !ghost.StrikeIsBody;
+            bool legStrike = leg && side && ghost.StrikeIsKick;
+            bool headStrike = mine == _head && ghost.StrikeIsHead;
+            bool bodyStrike = (mine == _torso || mine.name.StartsWith("UpperArm")) && ghost.StrikeIsBody;
+            if (!armStrike && !legStrike && !headStrike && !bodyStrike) return;
             int serial = ghost.PunchSerial;
             if (_struckBy.TryGetValue(otherPart.owner, out int last) && last == serial) return;
             _struckBy[otherPart.owner] = serial;
@@ -624,8 +654,304 @@ namespace IronFauna.Brawl
             Vector3 dir = otherPart.owner.Position - Position;
             dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : transform.forward;
-            float speed = Mathf.Max(c.relativeVelocity.magnitude, 3f);
-            otherPart.owner.ReceiveStrike(this, otherPart.segment, point, (dir + Vector3.up * 0.15f).normalized * speed, mine.rb.mass + 8f, ghost.PunchPower);
+            float speed = c.relativeVelocity.magnitude;
+            float damage = ghost.PunchDamage * Mathf.Clamp(speed / 8f, 0.7f, 1.4f);
+            otherPart.owner.ReceiveStrike(this, otherPart.segment, point, dir + Vector3.up * 0.25f, damage, ghost.PunchPower);
+        }
+
+        // ------------------------------------------------------------------ falls, throws, bowling
+        private float _impactT;
+        private MechRagdoll _thrownBy;
+        private float _thrownT = -10f, _slammedT = -10f;
+
+        /// <summary>A body that is down (thrown, slammed, knocked flying) takes damage from hard landings, and
+        /// bowls over anyone it crashes into.</summary>
+        private void ImpactDamage(Segment mine, Collision c)
+        {
+            if (!IsDown || mine.detached) return;
+            float speed = c.relativeVelocity.magnitude;
+            if (speed < 8.5f || Time.time - _impactT < 0.3f) return;
+            _impactT = Time.time;
+            bool slammed = Time.time - _slammedT < 2f;
+            bool thrown = Time.time - _thrownT < 3f;
+            Vector3 point = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
+            float damage = (speed - 8.5f) * 2.4f * (slammed ? 1.8f : 1f);
+            var attacker = thrown || slammed ? _thrownBy : null;
+
+            var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
+            if (otherPart != null && otherPart.owner != this && !otherPart.segment.detached)
+            {
+                // human bowling ball: whoever this crashes into goes down too
+                var other = otherPart.owner;
+                other.ReceiveStrike(attacker ?? this, otherPart.segment, point, mine.rb.linearVelocity, damage * 0.7f, 0.7f);
+                if (speed > 11f && !other.IsDown) other.Knockdown(1.2f);
+            }
+            ApplyFallDamage(mine, point, damage, attacker);
+        }
+
+        private void ApplyFallDamage(Segment seg, Vector3 point, float damage, MechRagdoll attacker)
+        {
+            damage = Mathf.Clamp(damage, 0f, 40f);
+            if (damage < 2f || IsKO) return;
+            health -= damage;
+            _lastHitT = Time.time;
+            bool ripped = false;
+            if (seg.limb != LimbId.None && !_lost.Contains(seg.limb))
+            {
+                _limbHealth[seg.limb] -= damage * 0.8f;
+                if (_limbHealth[seg.limb] < 30f) ShedArmor(seg, Vector3.up, 1);
+                if (_limbHealth[seg.limb] <= 0f) { RipLimb(seg.limb, Vector3.up * damage); ripped = true; }
+            }
+            else ShedArmor(seg, Vector3.up, 1);
+            if (health <= 0f) KnockOut();
+            Hit?.Invoke(this, attacker, point, damage, Mathf.Clamp01(damage / 25f), ripped);
+        }
+
+        // ------------------------------------------------------------------ grappling
+        private MechRagdoll _held;                // the mech being held (null when wielding a torn limb)
+        private Segment _heldSeg;                 // the part the hands are clamped on
+        private float _heldMass, _holdT, _slamT = -1f, _swingT = -1f;
+        private int _swingSerial;
+        private MechRagdoll _grabbedBy;
+        public bool IsHeld => _grabbedBy != null;
+        public bool IsHolding => _heldSeg != null;
+        public event System.Action<MechRagdoll, string> GrappleEvent;   // who, "GRAB" / "THROW" / "SLAM" / "TORN" / "PICKUP"
+
+        private void Grapple(float dt)
+        {
+            if (ghost == null) return;
+            if (_heldSeg != null && (_heldSeg.rb == null || (_held != null && _held._grabbedBy != this))) DropHold();
+            bool want = ghost.intent.grab && !IsDown;
+            if (_heldSeg == null && want && ghost.Reaching) TryGrab();
+
+            ghost.holding = _heldSeg != null;
+            if (_heldSeg == null)
+            {
+                ghost.holdLift = 0f;
+                ghost.holdSwing = -1f;
+                ghost.holdAction = PunchType.None;
+                return;
+            }
+            if (!want) { Throw(); return; }
+
+            // buttons while holding: LMB throw, RMB / Q tear, E / Space slam; a wielded limb swings on any strike
+            var act = ghost.holdAction;
+            ghost.holdAction = PunchType.None;
+            bool weapon = _held == null;
+            if (act != PunchType.None && _slamT < 0f)
+            {
+                if (weapon)
+                {
+                    if (_swingT < 0f) { _swingT = 0f; _swingSerial++; BoxingSfx.Whoosh(1f); }
+                }
+                else if (act == PunchType.Jab) { Throw(); return; }
+                else if (act == PunchType.Cross || act == PunchType.Hook) { Tug(); if (_heldSeg == null) return; }
+                else { _slamT = 0f; }
+            }
+
+            if (_slamT >= 0f)
+            {
+                _slamT += dt;
+                ghost.holdLift = Mathf.Clamp01(_slamT / 0.4f);
+                if (_slamT >= 0.48f) { Slam(); return; }
+            }
+            else ghost.holdLift = Mathf.MoveTowards(ghost.holdLift, 0f, dt * 3f);
+
+            if (_swingT >= 0f)
+            {
+                _swingT += dt / 0.32f;
+                ghost.holdSwing = Mathf.Clamp01(_swingT);
+                if (_swingT >= 1f) { _swingT = -1f; ghost.holdSwing = -1f; }
+            }
+
+            // carry: the held part is hauled to the hold point (whole-body weight, so it really comes along)
+            Rigidbody rb = _heldSeg.rb;
+            Vector3 hp = ghost.HoldPoint;
+            float w = 2f * Mathf.PI * (weapon ? 5f : 3f), zeta = 0.85f;
+            Vector3 acc = w * w * (hp - rb.position) + 2f * zeta * w * (ghost.Velocity - rb.linearVelocity);
+            acc = Vector3.ClampMagnitude(acc, weapon ? 260f : 110f);
+            rb.AddForce(acc * _heldMass * 0.75f - Physics.gravity * _heldMass * 0.9f, ForceMode.Force);
+
+            if (_held != null)
+            {
+                _holdT += dt;
+                if (_holdT > 4f && !_held.IsKO) { var h = _held; DropHold(); h.Knockdown(0.6f); GrappleEvent?.Invoke(this, "BROKE FREE"); }
+            }
+        }
+
+        private void TryGrab()
+        {
+            Segment best = null;
+            MechRagdoll bestOwner = null;
+            float bestD = 1.4f;
+            foreach (var s in _segs)
+            {
+                if (s.tip == null || s.detached || !s.name.StartsWith("Forearm")) continue;
+                Vector3 tip = s.tip.position;
+                foreach (var col in Physics.OverlapSphere(tip, 1.4f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    var rb = col.attachedRigidbody;
+                    if (rb == null) continue;
+                    var part = rb.GetComponent<MechRagdollPart>();
+                    if (part == null || part.owner == this || part.segment.heldBy != null) continue;
+                    if (!part.segment.detached && part.owner._grabbedBy != null) continue;
+                    float d = Vector3.Distance(col.ClosestPoint(tip), tip);
+                    if (d < bestD) { bestD = d; best = part.segment; bestOwner = part.owner; }
+                }
+            }
+            if (best == null) return;
+            _heldSeg = best;
+            _holdT = 0f;
+            _slamT = _swingT = -1f;
+            if (best.detached)
+            {
+                _held = null;
+                best.heldBy = this;
+                _heldMass = bestOwner.LimbMass(best.limb);
+                GrappleEvent?.Invoke(this, "PICKUP");
+            }
+            else
+            {
+                _held = bestOwner;
+                _heldMass = bestOwner._totalMass;
+                bestOwner.GrabbedBy(this);
+                GrappleEvent?.Invoke(this, "GRAB");
+            }
+            BoxingSfx.Clank(0.7f);
+        }
+
+        private void DropHold()
+        {
+            if (_heldSeg != null) _heldSeg.heldBy = null;
+            if (_held != null && _held._grabbedBy == this) _held.ReleasedBy(this);
+            _held = null;
+            _heldSeg = null;
+            _slamT = _swingT = -1f;
+            if (ghost != null) { ghost.holding = false; ghost.holdLift = 0f; ghost.holdSwing = -1f; }
+        }
+
+        private void Throw()
+        {
+            Vector3 v = ghost.transform.forward * 16f + Vector3.up * 7.5f + ghost.Velocity;
+            if (_held != null)
+            {
+                var victim = _held;
+                foreach (var s in victim._segs) if (!s.rb.isKinematic) { s.rb.linearVelocity = v; s.rb.angularVelocity = UnityEngine.Random.insideUnitSphere * 3f; }
+                victim._thrownBy = this;
+                victim._thrownT = Time.time;
+                DropHold();
+                victim.Knockdown(1.6f);
+                GrappleEvent?.Invoke(this, "THROW");
+            }
+            else if (_heldSeg != null)
+            {
+                var limbOwner = _heldSeg.phys.GetComponent<MechRagdollPart>().owner;
+                foreach (var s in limbOwner._segs) if (s.limb == _heldSeg.limb && s.detached) { s.rb.linearVelocity = v * 1.4f; s.rb.angularVelocity = UnityEngine.Random.insideUnitSphere * 12f; }
+                DropHold();
+                GrappleEvent?.Invoke(this, "THROW");
+            }
+            BoxingSfx.Whoosh(1f);
+        }
+
+        private void Slam()
+        {
+            if (_held == null) { DropHold(); return; }
+            var victim = _held;
+            Vector3 v = ghost.transform.forward * 5f + Vector3.down * 26f;
+            foreach (var s in victim._segs) if (!s.rb.isKinematic) s.rb.linearVelocity = v;
+            victim._thrownBy = this;
+            victim._slammedT = Time.time;
+            DropHold();
+            victim.Knockdown(2.2f);
+            GrappleEvent?.Invoke(this, "SLAM");
+        }
+
+        /// <summary>Yank on the held part: limbs take heavy damage and tear off into your hands.</summary>
+        private void Tug()
+        {
+            var victim = _held;
+            if (victim == null) return;
+            Vector3 toMe = (Position - victim.Position);
+            toMe.y = 0f;
+            Segment torn = victim.TugLimb(_heldSeg, toMe.normalized, this);
+            BoxingSfx.Clank(1f);
+            if (torn != null)
+            {
+                // the limb comes away in your hands - now it's a club
+                DropHold();
+                _heldSeg = torn;
+                torn.heldBy = this;
+                _heldMass = victim.LimbMass(torn.limb);
+                GrappleEvent?.Invoke(this, "TORN");
+            }
+        }
+
+        internal Segment TugLimb(Segment seg, Vector3 dir, MechRagdoll attacker)
+        {
+            LimbId limb = seg.limb;
+            if (limb == LimbId.None)
+            {
+                // torso / hips: shake them like a rag doll
+                health -= 6f;
+                foreach (var s in _segs) if (!s.rb.isKinematic) s.rb.AddForce(dir * 30f + UnityEngine.Random.insideUnitSphere * 20f, ForceMode.Impulse);
+                ShedArmor(seg, dir, 1);
+                if (health <= 0f) KnockOut();
+                Hit?.Invoke(this, attacker, seg.rb.position, 6f, 0.4f, false);
+                return null;
+            }
+            if (_lost.Contains(limb)) return null;
+            _limbHealth[limb] -= 22f;
+            health -= 7f;
+            ShedArmor(seg, dir, 1);
+            bool ripped = _limbHealth[limb] <= 0f;
+            Segment root = null;
+            if (ripped)
+            {
+                RipLimb(limb, dir * 20f);
+                foreach (var s in _segs) if (s.limb == limb && (s.parent == null || s.parent.limb != limb)) root = s;
+            }
+            if (health <= 0f && !IsKO) KnockOut();
+            Hit?.Invoke(this, attacker, seg.rb.position, ripped ? 18f : 7f, ripped ? 1f : 0.5f, ripped);
+            return root;
+        }
+
+        internal float LimbMass(LimbId limb)
+        {
+            float m = 0f;
+            foreach (var s in _segs) if (s.limb == limb) m += s.rb.mass;
+            return Mathf.Max(5f, m);
+        }
+
+        internal void GrabbedBy(MechRagdoll attacker)
+        {
+            _grabbedBy = attacker;
+            _downT = Mathf.Max(_downT, 999f);
+            _recoverT = 0f;
+            muscle = 0.2f;
+            balance = 0f;
+        }
+
+        internal void ReleasedBy(MechRagdoll attacker)
+        {
+            if (_grabbedBy != attacker) return;
+            _grabbedBy = null;
+            if (!IsKO) _downT = 1.0f;
+        }
+
+        /// <summary>Swinging a torn-off limb into another mech.</summary>
+        internal void WeaponStrike(Segment weapon, Collision c)
+        {
+            var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
+            if (otherPart == null || otherPart.owner == this || otherPart.segment.detached || otherPart.segment.heldBy != null) return;
+            float speed = c.relativeVelocity.magnitude;
+            if (speed < 4f) return;
+            int serial = 1000000 + _swingSerial;
+            if (_struckBy.TryGetValue(otherPart.owner, out int last) && last == serial) return;
+            _struckBy[otherPart.owner] = serial;
+            Vector3 point = c.contactCount > 0 ? c.GetContact(0).point : weapon.rb.position;
+            Vector3 dir = otherPart.owner.Position - Position;
+            dir.y = 0f;
+            otherPart.owner.ReceiveStrike(this, otherPart.segment, point, dir.normalized + Vector3.up * 0.3f, Mathf.Clamp(speed * 2.2f, 8f, 28f), Mathf.Clamp01(speed / 14f));
         }
     }
 }
