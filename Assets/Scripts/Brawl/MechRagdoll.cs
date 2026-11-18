@@ -66,6 +66,7 @@ namespace IronFauna.Brawl
             public Transform target;              // ghost counterpart
             public Segment parent;
             public ConfigurableJoint joint;
+            public Vector3 connectedAnchorRest;
             public Quaternion startLocal = Quaternion.identity;
             public float spring, damper;
             public readonly List<Transform> armor = new List<Transform>();
@@ -307,11 +308,13 @@ namespace IronFauna.Brawl
         {
             var j = s.phys.gameObject.AddComponent<ConfigurableJoint>();
             j.connectedBody = s.parent.rb;
-            j.autoConfigureConnectedAnchor = true;
+            j.autoConfigureConnectedAnchor = false;
             Vector3 anchor = Vector3.zero;
             if (s == _torso) anchor = s.phys.InverseTransformPoint(mech.visualRoot.TransformPoint(new Vector3(0f, mech.HipHeight + 0.30f, 0f)));
             else if (s.name.StartsWith("Foot")) anchor = new Vector3(0f, MechClamshellBuilder.AnkleHeight, 0f);
             j.anchor = anchor;
+            s.connectedAnchorRest = s.parent.phys.InverseTransformPoint(s.phys.TransformPoint(anchor));
+            j.connectedAnchor = s.connectedAnchorRest;
             j.axis = Vector3.right;
             j.secondaryAxis = Vector3.up;
             j.xMotion = j.yMotion = j.zMotion = ConfigurableJointMotion.Locked;
@@ -405,21 +408,33 @@ namespace IronFauna.Brawl
             bool standing = !IsDown;
             if (standing && !_legsKinematic)
             {
-                // getting up: put the ghost where the body lies (snapped to the slope height!), then blend the legs onto the walk cycle
-                Vector3 pp = _pelvis.rb.position;
+                // getting up: put the ghost where the body lies (snapped to the slope height!), then snap lower body and torso cleanly to prevent joint offset drift
+                Vector3 pp = _torso != null && _torso.rb != null ? _torso.rb.position : _pelvis.rb.position;
                 float groundY = MechBoxer.TryGround(pp + Vector3.up * 4f, out float gy) ? gy : pp.y;
                 ghost.transform.position = new Vector3(pp.x, groundY, pp.z);
+                foreach (var s in _segs)
+                {
+                    if (!IsLowerBody(s) || s.detached || s.target == null) continue;
+                    s.rb.position = s.target.position;
+                    s.rb.rotation = s.target.rotation;
+                }
                 if (_torso != null && _torso.rb != null && _torso.target != null)
                 {
                     _torso.rb.linearVelocity = Vector3.zero;
                     _torso.rb.angularVelocity = Vector3.zero;
-                    _torso.rb.position = Vector3.Lerp(_torso.rb.position, _torso.target.position, 0.55f);
-                    _torso.rb.rotation = Quaternion.Slerp(_torso.rb.rotation, _torso.target.rotation, 0.55f);
+                    _torso.rb.position = _torso.target.position;
+                    _torso.rb.rotation = _torso.target.rotation;
                 }
                 _follow = 0f;
             }
             SetLowerBodyKinematic(standing);
             _follow = standing ? Mathf.MoveTowards(_follow, 1f, dt / 0.6f) : 0f;
+            if (_torso != null && _torso.joint != null && _pelvis != null && _torso.target != null && _pelvis.target != null)
+            {
+                _torso.joint.connectedAnchor = standing
+                    ? _pelvis.target.InverseTransformPoint(_torso.target.TransformPoint(_torso.joint.anchor))
+                    : _torso.connectedAnchorRest;
+            }
 
             // motors on the physical joints (upper body; the whole body while limp; snappier during active strikes)
             float strikeBoost = standing && ghost.StrikeActive ? 1.38f : 1f;
@@ -558,7 +573,21 @@ namespace IronFauna.Brawl
                 // armor cracks off as the limb weakens
                 if (lh < 38f) ShedArmor(seg, dir, 1);
                 if (lh < 18f) ShedArmor(seg, dir, 2);
-                if (lh <= 0f) { RipLimb(targetLimb, dir * damage); ripped = true; }
+                if (lh <= 0f)
+                {
+                    // Decapitation only finishes a fighter who is already below 35% hull integrity; otherwise it sheds head armor & knocks down!
+                    if (targetLimb == LimbId.Head && health > maxHealth * 0.35f)
+                    {
+                        _limbHealth[targetLimb] = 16f;
+                        ShedArmor(seg, dir, 2);
+                        Knockdown(2.0f);
+                    }
+                    else
+                    {
+                        RipLimb(targetLimb, dir * damage);
+                        ripped = true;
+                    }
+                }
             }
             else if (health < maxHealth * 0.6f) ShedArmor(seg, dir, 1);
 
@@ -1066,8 +1095,17 @@ namespace IronFauna.Brawl
             Segment root = null;
             if (ripped)
             {
-                RipLimb(limb, dir * 20f);
-                foreach (var s in _segs) if (s.limb == limb && (s.parent == null || s.parent.limb != limb)) root = s;
+                if (limb == LimbId.Head && health > maxHealth * 0.35f)
+                {
+                    _limbHealth[limb] = 16f;
+                    ripped = false;
+                    Knockdown(2.0f);
+                }
+                else
+                {
+                    RipLimb(limb, dir * 20f);
+                    foreach (var s in _segs) if (s.limb == limb && (s.parent == null || s.parent.limb != limb)) root = s;
+                }
             }
             if (health <= 0f && !IsKO) KnockOut();
             Hit?.Invoke(this, attacker, seg.rb.position, ripped ? 18f : 7f, ripped ? 1f : 0.5f, ripped);

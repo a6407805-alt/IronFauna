@@ -12,7 +12,7 @@ namespace IronFauna.Boxing
         [Range(0f, 1f)] public float skill = 0.55f;
         public float idealRange = 2.7f;
         /// <summary>Keep this far inside the centre (half-size of the floor); &lt;= 0 uses the boxer's ring size.</summary>
-        public float edgeHalfSize = -1f;
+        public float edgeHalfSize = 22f;
 
         private MechBoxer _me;
         private float _circleDir = 1f;

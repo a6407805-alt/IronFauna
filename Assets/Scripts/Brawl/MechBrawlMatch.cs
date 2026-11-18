@@ -743,6 +743,13 @@ namespace IronFauna.Brawl
                     if (!alive.out_ && alive.ragdoll != null)
                     {
                         _playerCams[f.localPlayerIndex].player = alive.ragdoll;
+                        MechRagdoll specTarget = null;
+                        if (alive.ghost != null && alive.ghost.opponent != null)
+                        {
+                            foreach (var o in _fighters)
+                                if (o.ghost == alive.ghost.opponent && !o.out_) { specTarget = o.ragdoll; break; }
+                        }
+                        _playerCams[f.localPlayerIndex].target = specTarget;
                         break;
                     }
                 }
@@ -837,7 +844,9 @@ namespace IronFauna.Brawl
 
             if (_fighters.Count > 0 && _fighters[0].ragdoll != null)
             {
-                var me = _fighters[0].ragdoll;
+                var me = (_fighters[0].out_ && _playerCams.Count > 0 && _playerCams[0] != null && _playerCams[0].player != null)
+                    ? _playerCams[0].player
+                    : _fighters[0].ragdoll;
                 float hpTarget = Mathf.Clamp01(me.health / Mathf.Max(1f, me.maxHealth));
                 float dt = Time.unscaledDeltaTime;
                 _hpGhostFill = hpTarget > _hpGhostFill ? hpTarget : Mathf.MoveTowards(_hpGhostFill, hpTarget, dt * 0.42f);
@@ -858,15 +867,17 @@ namespace IronFauna.Brawl
                     for (int i = 0; i < 4; i++)
                     {
                         float lh = me.GetLimbHealth01(limbIds[i]);
+                        bool yellow = limbOk[i] && lh >= 0.35f && lh < 0.70f;
                         if (_limbBadgeImgs[i] != null)
                         {
                             _limbBadgeImgs[i].color = !limbOk[i] ? IronFaunaPalette.CrimsonFront
                                 : lh < 0.35f ? IronFaunaPalette.OrangeJointCore
-                                : lh < 0.70f ? IronFaunaPalette.HazardYellow
+                                : yellow ? IronFaunaPalette.HazardYellow
                                 : IronFaunaPalette.UiSelect;
                         }
                         if (_limbBadgeTexts[i] != null)
                         {
+                            _limbBadgeTexts[i].color = yellow ? IronFaunaPalette.DarkIron : IronFaunaPalette.UiText;
                             _limbBadgeTexts[i].text = limbOk[i] ? $"{limbNames[i]} {Mathf.CeilToInt(lh * 100f)}%" : $"{limbNames[i]} TORN!";
                         }
                     }
@@ -875,7 +886,7 @@ namespace IronFauna.Brawl
                     {
                         var aiComp = g.GetComponent<MechBoxerAI>();
                         bool auto = aiComp != null && aiComp.enabled;
-                        string posture = _fighters[0].out_ ? "STATUS: SPECTATING (PRESS F5 TO RESPAWN)"
+                        string posture = _fighters[0].out_ ? $"SPECTATING: {FighterName(me)} (PRESS F5 TO RESPAWN)"
                                        : g.LegsLeft == 0 ? "POSTURE: LEGLESS CRAWL (NO KICKS!)"
                                        : g.LegsLeft == 1 ? "POSTURE: 1-LEG HOP (STANDING KICK TOPPLES!)"
                                        : g.IsSeated ? "POSTURE: JIU-JITSU FLOOR SIT / SCOOT (Z)"
