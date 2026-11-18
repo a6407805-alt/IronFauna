@@ -687,6 +687,19 @@ namespace IronFauna.Brawl
             KnockedOut?.Invoke(this);
         }
 
+        public void ReviveSecondWind(float hp = 24f)
+        {
+            IsKO = false;
+            _koElapsed = 0f;
+            health = Mathf.Max(health, hp);
+            _poise = poiseMax * 0.8f;
+            _downT = 0.25f;
+            _recoverT = 0.7f;
+            muscle = 0.6f;
+            balance = 0.6f;
+            if (ghost != null) ghost.suppressed = false;
+        }
+
         private void ShedArmor(Segment seg, Vector3 dir, int count)
         {
             for (int i = 0; i < count && seg.armor.Count > 0; i++)

@@ -12,7 +12,7 @@ namespace IronFauna.Brawl
     [RequireComponent(typeof(Rigidbody))]
     public class FallingTree : MonoBehaviour
     {
-        public float toughness = 42f;
+        public float toughness = 78f;
         public float height = 13f;
         public float trunkRadius = 0.65f;
         public static event System.Action<Vector3> TreeFelled;
@@ -107,7 +107,7 @@ namespace IronFauna.Brawl
             _rb.AddForceAtPosition(fallDirection * 1800f, transform.position + Vector3.up * (height * 0.75f), ForceMode.Impulse);
             _rb.AddTorque(torqueAxis * 2400f, ForceMode.Impulse);
             TreeFelled?.Invoke(transform.position);
-            Destroy(gameObject, 15f);
+            Destroy(gameObject, 32f);
         }
 
         private void OnCollisionEnter(Collision c)

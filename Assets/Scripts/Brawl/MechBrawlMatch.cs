@@ -848,9 +848,9 @@ namespace IronFauna.Brawl
             }
             if (aliveTotal == 0 && last == null && justEliminated != null)
             {
-                // Double-knockout photo finish: crown the last fighter eliminated in the exchange!
+                // Double-knockout photo finish: crown & revive the last fighter eliminated in the exchange!
                 justEliminated.out_ = false;
-                justEliminated.ragdoll.health = Mathf.Max(1f, justEliminated.ragdoll.health);
+                justEliminated.ragdoll.ReviveSecondWind(24f);
                 aliveTotal = 1;
                 last = justEliminated;
             }
