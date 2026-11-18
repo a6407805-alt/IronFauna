@@ -84,6 +84,8 @@ namespace IronFauna.Brawl
         private float _downT;
         private float _recoverT;
         private float _lastHitT;
+        private float _koElapsed;
+        private bool _koCleared;
         private readonly Dictionary<MechRagdoll, int> _struckBy = new Dictionary<MechRagdoll, int>();
 
         // ------------------------------------------------------------------ build
@@ -401,6 +403,25 @@ namespace IronFauna.Brawl
                     balance = 1f;
                 }
                 _poise = Mathf.MoveTowards(_poise, poiseMax, dt * (Time.time - _lastHitT > 1.2f ? 14f : 3f));
+            }
+            else
+            {
+                _koElapsed += dt;
+                if (!_koCleared && _koElapsed > 2.0f)
+                {
+                    _koCleared = true;
+                    // Once a KO'd mech has collapsed onto the floor, ignore collisions with active fighters so living mechs never get snagged or propped up on dead chassis piles
+                    var myCols = GetComponentsInChildren<Collider>();
+                    foreach (var otherPart in FindObjectsByType<MechRagdollPart>())
+                    {
+                        if (otherPart == null || otherPart.owner == null || otherPart.owner == this) continue;
+                        foreach (var otherCol in otherPart.GetComponents<Collider>())
+                        {
+                            foreach (var myCol in myCols)
+                                if (myCol != null && otherCol != null) Physics.IgnoreCollision(myCol, otherCol, true);
+                        }
+                    }
+                }
             }
             ghost.suppressed = IsDown || _recoverT > 0f;
 
