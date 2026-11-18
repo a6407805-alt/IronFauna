@@ -33,7 +33,6 @@ namespace IronFauna.Brawl
         [Header("Strength")]
         public float muscle = 1f;             // joint motor multiplier (0 = limp)
         public float balance = 1f;            // pelvis controller multiplier (0 = no help standing)
-        public float footHold = 1f;           // how hard each foot is held on the animation's footstep
 
         public bool IsKO { get; private set; }
         public bool IsDown => _downT > 0f || IsKO;
@@ -73,9 +72,6 @@ namespace IronFauna.Brawl
         private float _recoverT;
         private float _lastHitT;
         private readonly Dictionary<MechRagdoll, int> _struckBy = new Dictionary<MechRagdoll, int>();
-        private readonly Dictionary<Segment, Vector3> _lastTargetPos = new Dictionary<Segment, Vector3>();
-        private readonly Dictionary<Segment, Vector3> _targetVel = new Dictionary<Segment, Vector3>();
-        private readonly Dictionary<Segment, float> _lastTargetT = new Dictionary<Segment, float>();
 
         // ------------------------------------------------------------------ build
         /// <summary>Turns <paramref name="mech"/> into physics segments driven by <paramref name="animated"/>.</summary>
@@ -277,12 +273,41 @@ namespace IronFauna.Brawl
         // ------------------------------------------------------------------ simulation
         private float _appliedMuscle = -1f;
 
+        private float _follow = 1f;          // 0..1: how exactly the hips and legs copy the walk cycle
+        private bool _legsKinematic;
+
+        private bool IsLowerBody(Segment s) => s == _pelvis || s.name.StartsWith("Thigh") || s.name.StartsWith("Calf") || s.name.StartsWith("Foot");
+
+        private void SetLowerBodyKinematic(bool on)
+        {
+            if (_legsKinematic == on) return;
+            _legsKinematic = on;
+            foreach (var s in _segs)
+            {
+                if (!IsLowerBody(s)) continue;
+                bool k = on && !s.detached;
+                if (s.rb.isKinematic == k) continue;
+                if (!k) { s.rb.isKinematic = false; continue; }
+                s.rb.linearVelocity = Vector3.zero;
+                s.rb.angularVelocity = Vector3.zero;
+                s.rb.isKinematic = true;
+            }
+        }
+
+        /// <summary>
+        /// Standing: the hips and legs are the Deploy walk cycle (MechGaitAnimator on the ghost), copied exactly
+        /// (kinematic), so feet plant and step for real; torso, arms and head are physical on motorised joints, so
+        /// blows rock the upper body and knock the mech back. Knocked down (or off an edge): the whole body goes
+        /// limp; getting up blends the legs back onto the walk cycle.
+        /// </summary>
         private void FixedUpdate()
         {
             if (_pelvis == null || ghost == null) return;
             float dt = Time.fixedDeltaTime;
 
-            // recover from knockdowns: limp, then the motors and balance come back and the mech hauls itself up
+            // walked or was knocked off the edge: nothing under the hips any more - fall
+            if (!IsDown && _recoverT <= 0f && !SupportUnder(ghost.transform.position)) Knockdown(2.5f);
+
             if (!IsKO)
             {
                 if (_downT > 0f)
@@ -290,25 +315,42 @@ namespace IronFauna.Brawl
                     _downT -= dt;
                     muscle = Mathf.MoveTowards(muscle, 0.12f, dt * 6f);
                     balance = 0f;
-                    if (_downT <= 0f) _recoverT = 1.3f;
+                    // only get up where there is floor to stand on
+                    if (_downT <= 0f)
+                    {
+                        if (SupportUnder(_pelvis.rb.position)) _recoverT = 0.9f;
+                        else _downT = 0.5f;
+                    }
                 }
                 else if (_recoverT > 0f)
                 {
                     _recoverT -= dt;
-                    float k = 1f - _recoverT / 1.3f;
-                    muscle = Mathf.Lerp(0.25f, 1f, k);
-                    balance = k * k;
+                    float k = 1f - _recoverT / 0.9f;
+                    muscle = Mathf.Lerp(0.3f, 1f, k);
+                    balance = k;
                 }
                 else
                 {
                     muscle = Mathf.MoveTowards(muscle, 1f, dt * 2f);
-                    balance = Mathf.MoveTowards(balance, LegsLeft() == 2 ? 1f : LegsLeft() == 1 ? 0.45f : 0.12f, dt * 2f);
+                    balance = 1f;
                 }
                 _poise = Mathf.MoveTowards(_poise, poiseMax, dt * (Time.time - _lastHitT > 1.2f ? 14f : 3f));
             }
             ghost.suppressed = IsDown || _recoverT > 0f;
 
-            // joint motors chase the ghost's pose
+            bool standing = !IsDown;
+            if (standing && !_legsKinematic)
+            {
+                // getting up: put the ghost where the body lies, then blend the legs onto the walk cycle
+                Vector3 g = ghost.transform.position;
+                Vector3 pp = _pelvis.rb.position;
+                ghost.transform.position = new Vector3(pp.x, g.y, pp.z);
+                _follow = 0f;
+            }
+            SetLowerBodyKinematic(standing);
+            _follow = standing ? Mathf.MoveTowards(_follow, 1f, dt / 0.6f) : 0f;
+
+            // motors on the physical joints (upper body; the whole body while limp)
             if (Mathf.Abs(_appliedMuscle - muscle) > 0.01f)
             {
                 foreach (var s in _segs) ApplyDrive(s, _lost.Contains(s.limb) ? 0.02f : muscle);
@@ -321,55 +363,39 @@ namespace IronFauna.Brawl
                 SetTargetRotationLocal(s.joint, targetLocal, s.startLocal);
             }
 
-            // balance: hold the pelvis on the ghost's hips (whole-body gravity compensation + PD), keep it upright
-            Rigidbody p = _pelvis.rb;
-            Transform tp = _pelvis.target;
-            bool grounded = Grounded();
-            float b = balance * (grounded ? 1f : 0.25f);
-            if (b > 0.001f)
+            if (standing)
             {
-                float w = 2f * Mathf.PI * 2.6f, zeta = 0.85f;
-                Vector3 ghostVel = ghost.Velocity;
-                Vector3 acc = w * w * (tp.position - p.position) + 2f * zeta * w * (ghostVel - p.linearVelocity);
-                acc = Vector3.ClampMagnitude(acc, 38f);
-                p.AddForce(acc * _totalMass * b * 0.55f, ForceMode.Force);
-                p.AddForce(-Physics.gravity * _totalMass * b * 0.92f, ForceMode.Force);
-                PdRotate(p, tp.rotation, 9f * b, 0.9f);
-                PdRotate(_torso.rb, _torso.target.rotation, 5f * b, 0.9f);
-            }
-
-            // feet: pinned where the animation planted them, carried along each step - so the legs walk instead of
-            // being towed by the hips
-            float fb = balance * footHold;
-            foreach (var s in _segs)
-            {
-                if (!s.name.StartsWith("Foot") || s.detached || s.target == null) continue;
-                Vector3 tpos = s.target.position;
-                // the animation moves once per rendered frame, physics steps faster: measure velocity between changes
-                if (!_lastTargetPos.TryGetValue(s, out var last)) { _lastTargetPos[s] = tpos; _lastTargetT[s] = Time.time; _targetVel[s] = Vector3.zero; }
-                else if ((tpos - last).sqrMagnitude > 1e-10f)
+                // hips and legs = the walk cycle
+                float k = _follow >= 1f ? 1f : 1f - Mathf.Exp(-10f * dt) + _follow * 0.5f;
+                foreach (var s in _segs)
                 {
-                    float el = Mathf.Max(1e-3f, Time.time - _lastTargetT[s]);
-                    _targetVel[s] = (tpos - last) / el;
-                    _lastTargetPos[s] = tpos;
-                    _lastTargetT[s] = Time.time;
+                    if (!IsLowerBody(s) || s.detached || !s.rb.isKinematic || s.target == null) continue;
+                    s.rb.MovePosition(Vector3.Lerp(s.rb.position, s.target.position, Mathf.Clamp01(k)));
+                    s.rb.MoveRotation(Quaternion.Slerp(s.rb.rotation, s.target.rotation, Mathf.Clamp01(k)));
                 }
-                else if (Time.time - _lastTargetT[s] > 0.1f) _targetVel[s] = Vector3.zero;
-                Vector3 tvel = _targetVel[s];
-                if (fb < 0.01f) continue;
-                float wf = 2f * Mathf.PI * 4.5f;
-                Vector3 fa = wf * wf * (tpos - s.rb.position) + 2f * 1.0f * wf * (tvel - s.rb.linearVelocity);
-                fa = Vector3.ClampMagnitude(fa, 90f);
-                // carry the weight of the whole leg, so a lifted foot really lifts
-                s.rb.AddForce(fa * (s.rb.mass + 22f) * fb, ForceMode.Force);
-                PdRotate(s.rb, s.target.rotation, 6f * fb, 0.9f);
+                // keep the torso upright over the hips on top of its joint motor
+                PdRotate(_torso.rb, _torso.target.rotation, 5f * balance, 0.9f);
             }
 
-            // the ghost never wanders away from the body (knockback, falls, being thrown)
-            Vector3 err = p.position - tp.position;
-            err.y = 0f;
-            float pull = IsDown ? 1f : Mathf.Clamp01((err.magnitude - 0.25f) * 2f) * dt * 6f;
-            if (pull > 0f) ghost.transform.position += err * pull;
+            // the ghost never wanders away from the body (falls, being thrown)
+            if (IsDown)
+            {
+                Vector3 err = _pelvis.rb.position - _pelvis.target.position;
+                err.y = 0f;
+                ghost.transform.position += err;
+            }
+        }
+
+        /// <summary>Floor (not a mech) under this point, within a few metres.</summary>
+        private bool SupportUnder(Vector3 p)
+        {
+            foreach (var hit in Physics.RaycastAll(p + Vector3.up * 1.5f, Vector3.down, 4.5f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                var rb = hit.collider.attachedRigidbody;
+                if (rb != null && rb.GetComponent<MechRagdollPart>() != null) continue;
+                return true;
+            }
+            return false;
         }
 
         private static void PdRotate(Rigidbody rb, Quaternion target, float freq, float zeta)
@@ -430,6 +456,7 @@ namespace IronFauna.Brawl
             // the blow really moves the body: a shove at the contact point on top of the collision itself
             seg.rb.AddForceAtPosition(dir * damage * 9f, point, ForceMode.Impulse);
             ghost.Interrupt(0.12f + damage * 0.012f);
+            ghost.AddKnockback(dir * Mathf.Lerp(0.6f, 4f, damage / 25f));
             muscle = Mathf.Min(muscle, Mathf.Lerp(1f, 0.35f, damage / 25f));   // a hard hit goes slack for a beat
 
             bool ripped = false;

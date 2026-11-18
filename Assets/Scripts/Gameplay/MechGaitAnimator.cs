@@ -360,6 +360,9 @@ namespace IronFauna.Gameplay
             foreach (var hit in hits)
             {
                 if (hit.collider.transform.IsChildOf(transform)) continue;
+                // never stand on a mech (the brawler's physical bodies, including this mech's own)
+                var body = hit.collider.attachedRigidbody;
+                if (body != null && body.GetComponent<IronFauna.Brawl.MechRagdollPart>() != null) continue;
                 if (hit.point.y > best) best = hit.point.y;
             }
             if (float.IsNegativeInfinity(best)) best = transform.position.y;

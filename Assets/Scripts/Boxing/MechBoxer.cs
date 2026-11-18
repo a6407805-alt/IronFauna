@@ -56,6 +56,8 @@ namespace IronFauna.Boxing
         public float punchTurnRange = 4.5f;
         public float sprintSpeed = 5.6f;
         public float stepTime = 0.3f;
+        [Tooltip("Legs and hips belong to another animator (MechGaitAnimator, the Deploy walk cycle): only the upper body is posed here")]
+        public bool externalLegs;
         public float minDistance = 2.05f;
 
         public float health = 100f;
@@ -83,6 +85,12 @@ namespace IronFauna.Boxing
         public float PunchPower => _punch != null ? Power(_punch) : 0f;
         public float PunchDamage => _punch != null ? _punch.damage : 0f;
         /// <summary>Ragdoll got hit: interrupt a wind-up and stagger the footwork.</summary>
+        /// <summary>Shoves the fighter (adds to its travel velocity; footwork brakes it back down).</summary>
+        public void AddKnockback(Vector3 v)
+        {
+            _vel += new Vector3(v.x, 0f, v.z);
+        }
+
         public void Interrupt(float stagger)
         {
             _stagger = Mathf.Max(_stagger, stagger);
@@ -642,8 +650,11 @@ namespace IronFauna.Boxing
             Spring(ref _jolt, ref _joltVel, Vector3.zero, 2.4f, 0.42f, dt);
 
             Vector3 root = new Vector3(_shift.x + _jolt.x, _bodyY + _jolt.y, _shift.z + _jolt.z);
-            _b.visualRoot.localPosition = root;
-            _b.visualRoot.localRotation = Quaternion.identity;
+            if (!externalLegs)
+            {
+                _b.visualRoot.localPosition = root;
+                _b.visualRoot.localRotation = Quaternion.identity;
+            }
 
             // ---------------- torso: stance turn + punch drive + travel lean + weave/slip roll + hit jolt
             float stanceYaw = 16f * sgn * _fight;
@@ -655,7 +666,8 @@ namespace IronFauna.Boxing
             Spring(ref _yaw, ref _yawVel, yawTarget, torsoHz, 0.62f, dt);
             Spring(ref _pitch, ref _pitchVel, pitchTarget, 4f, 0.55f, dt);
             Spring(ref _roll, ref _rollVel, rollTarget, 3.5f, 0.55f, dt);
-            _b.bodyRoot.localPosition = _bodyRestPos;
+            // with external legs the hips are the walk cycle's; punches, dips and hits move the upper body only
+            _b.bodyRoot.localPosition = externalLegs ? _bodyRestPos + new Vector3(root.x, (_bodyY + crouch) + _jolt.y, root.z) : _bodyRestPos;
             _b.bodyRoot.localRotation = Quaternion.Euler(_pitch + _jolt.z * 12f, _yaw, _roll - _jolt.x * 14f) * _bodyRestRot;
 
             // ---------------- head: keeps eyes on the opponent, snaps on hits
@@ -668,11 +680,17 @@ namespace IronFauna.Boxing
             }
 
             // ---------------- feet
-            FeetStep(dt, plant, localVel, sgn);
-            foreach (var f in _feet) SolveLeg(f);
+            if (!externalLegs)
+            {
+                FeetStep(dt, plant, localVel, sgn);
+                foreach (var f in _feet) SolveLeg(f);
+            }
 
             // ---------------- arms
             Spring(ref _armPush, ref _armPushVel, Vector3.zero, 3.4f, 0.5f, dt);
+            // another animator may have swung the arm roots this frame (the walk cycle's arm swing): fists are aimed
+            // in world space, so start each arm from its rest mount
+            foreach (var a in _arms) a.rig.root.localRotation = Quaternion.identity;
             foreach (var a in _arms) ArmPose(a, dt, hopShape, sgn);
         }
 

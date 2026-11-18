@@ -116,7 +116,10 @@ namespace IronFauna.Brawl
             gb.ApplyLoadout(l);
             gb.legPose = LegPosePreset.Pose1_HumanLeg;
             gb.RebuildMech();
+            // legs: the Deploy walk cycle (planted feet, individual steps, stomps); the boxer poses the upper body
+            f.ghostGo.AddComponent<IronFauna.Gameplay.MechGaitAnimator>();
             f.ghost = f.ghostGo.AddComponent<MechBoxer>();
+            f.ghost.externalLegs = true;
             f.ghost.ringHalfSize = ArenaHalf + 30f;      // the arena edge is real: no invisible walls
             f.ghost.minDistance = 2.3f;
             if (player)
