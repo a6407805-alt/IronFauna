@@ -100,6 +100,24 @@ namespace IronFauna.Clamshell
 
         /// <summary>Bendable legs, refreshed on every rebuild (MechGaitAnimator walks them).</summary>
         [System.NonSerialized] public List<LegRig> legRigs = new List<LegRig>();
+
+        /// <summary>One arm as two IK pivots in arm-root space: upper arm (at the shoulder) and forearm (at the elbow,
+        /// carrying the wrist, hand and muzzle). side = -1 left, +1 right.</summary>
+        public class ArmRig
+        {
+            public Transform root;
+            public Transform upper;
+            public Transform fore;
+            public int side;
+            public Vector3 shoulder;
+            public Vector3 elbow;
+            public Vector3 wrist;
+            public Vector3 tip;
+            public float upperLength;
+            public float foreLength;
+        }
+
+        [System.NonSerialized] public List<ArmRig> armRigs = new List<ArmRig>();
         /// <summary>Goes up on every rebuild, so animators know to pick up the new parts.</summary>
         public int BuildVersion { get; private set; }
 
@@ -266,6 +284,7 @@ namespace IronFauna.Clamshell
             _leg = MechFrameSpec.Get(legWeight);
             hardpoints.Clear();
             legRigs.Clear();
+            armRigs.Clear();
             BuildVersion++;
 
             GetPoseShape(legPose, out bool kneeForward, out float extension);
@@ -713,6 +732,26 @@ namespace IronFauna.Clamshell
             ClamshellOnBone(armRoot, "Hand", wrist, tip, 0.15f, 0f, Vector3.forward, HandDims,
                 handFrontSet, handBackSet, -0.3f, 0.3f, out _, out _);
             if (side > 0) ClamshellParts.Empty(armRoot, "WeaponMuzzle", tip + new Vector3(0f, 0f, 0.25f), Quaternion.identity);
+
+            // Joints: shoulder -> upper-arm pivot -> forearm pivot (elbow). Parts keep their place and ride the bone.
+            Transform upperPivot = ClamshellParts.Empty(armRoot, "UpperArmPivot", shoulder, Quaternion.identity);
+            Transform forePivot = ClamshellParts.Empty(upperPivot, "ForearmPivot", elbow - shoulder, Quaternion.identity);
+            foreach (string n in new[] { "UpperArmBone", "UpperArm_Clamshell", "ElbowHub", "ElbowGuard" })
+            {
+                Transform t = armRoot.Find(n);
+                if (t != null) t.SetParent(upperPivot, true);
+            }
+            foreach (string n in new[] { "LowerArmBone", "LowerArm_Clamshell", "WristHub", "HandBone", "Hand_Clamshell", "WeaponMuzzle" })
+            {
+                Transform t = armRoot.Find(n);
+                if (t != null) t.SetParent(forePivot, true);
+            }
+            armRigs.Add(new ArmRig
+            {
+                root = armRoot, upper = upperPivot, fore = forePivot, side = side,
+                shoulder = shoulder, elbow = elbow, wrist = wrist, tip = tip,
+                upperLength = Vector3.Distance(shoulder, elbow), foreLength = Vector3.Distance(elbow, wrist),
+            });
         }
 
         /// <summary>
