@@ -77,8 +77,23 @@ namespace IronFauna.Brawl
             float t = Time.unscaledTime * 26f;
             Vector3 shake = new Vector3(Mathf.PerlinNoise(t, 0.3f) - 0.5f, Mathf.PerlinNoise(1.7f, t) - 0.5f, Mathf.PerlinNoise(t, 5.1f) - 0.5f) * (0.9f * tr);
             float roll = (Mathf.PerlinNoise(t * 0.8f, 9.3f) - 0.5f) * 7f * tr;
-            transform.position = _pos + shake;
-            transform.rotation = Quaternion.LookRotation(_look - _pos) * Quaternion.Euler(0f, 0f, roll);
+            // don't bury the camera in a hill or a rock: pull it in along the line from the mech
+            Vector3 camPos = _pos;
+            Vector3 from = new Vector3(a.x, floor + 3f, a.z);
+            Vector3 toCam = camPos - from;
+            float len = toCam.magnitude;
+            if (len > 0.1f)
+            {
+                float free = len;
+                foreach (var hit in Physics.SphereCastAll(from, 0.45f, toCam / len, len, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (hit.collider.attachedRigidbody != null || hit.distance <= 0f) continue;   // only terrain and rocks
+                    free = Mathf.Min(free, hit.distance);
+                }
+                camPos = from + toCam / len * Mathf.Max(1.5f, free);
+            }
+            transform.position = camPos + shake;
+            transform.rotation = Quaternion.LookRotation(_look - camPos) * Quaternion.Euler(0f, 0f, roll);
             _cam.fieldOfView = baseFov - BoxingFeel.FovKick;
         }
     }

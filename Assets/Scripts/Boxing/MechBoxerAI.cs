@@ -36,6 +36,12 @@ namespace IronFauna.Boxing
             new[] { PunchType.Cross, PunchType.Hook },
             new[] { PunchType.Hook, PunchType.Uppercut },
             new[] { PunchType.Jab, PunchType.Uppercut, PunchType.Hook },
+            new[] { PunchType.Jab, PunchType.Roundhouse },
+            new[] { PunchType.FrontKick },
+            new[] { PunchType.Jab, PunchType.Cross, PunchType.SpinningBackfist },
+            new[] { PunchType.FlyingKnee },
+            new[] { PunchType.SupermanPunch, PunchType.Hook },
+            new[] { PunchType.Elbow, PunchType.Uppercut },
         };
 
         private void Awake() => _me = GetComponent<MechBoxer>();

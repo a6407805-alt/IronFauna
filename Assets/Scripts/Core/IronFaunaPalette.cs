@@ -59,6 +59,13 @@ namespace IronFauna.Core
         public static readonly Color StudioFill        = new Color32(0x4A, 0x5A, 0x72, 0xFF); // #4A5A72 Soft fill / ambient sky
         public static readonly Color StudioAmbientLow  = new Color32(0x0E, 0x12, 0x18, 0xFF); // #0E1218 Ambient ground
 
+        // Brawl terrain (rocky hill island)
+        public static readonly Color TerrainDirt       = new Color32(0x5B, 0x4E, 0x40, 0xFF); // #5B4E40 Packed dirt / scrub
+        public static readonly Color TerrainRock       = new Color32(0x6E, 0x6A, 0x63, 0xFF); // #6E6A63 Weathered basalt
+        public static readonly Color TerrainRockDark   = new Color32(0x3E, 0x3B, 0x37, 0xFF); // #3E3B37 Cliff faces, shadowed rock
+        public static readonly Color SkyHaze           = new Color32(0x8C, 0x9B, 0xAA, 0xFF); // #8C9BAA Overcast sky / distance fog
+        public static readonly Color SunWarm           = new Color32(0xFF, 0xE6, 0xC4, 0xFF); // #FFE6C4 Low afternoon sun
+
         // Garage paint schemes (front / rear halves). Index 0 is the art-bible default.
         public static readonly Color DesertFront       = new Color32(0xC9, 0xA1, 0x5B, 0xFF); // #C9A15B Desert Raider front
         public static readonly Color DesertRear        = new Color32(0x7A, 0x5A, 0x2E, 0xFF); // #7A5A2E Desert Raider rear

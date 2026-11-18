@@ -19,6 +19,7 @@ namespace IronFauna.Brawl
     public class MechBrawlMatch : MonoBehaviour
     {
         public const float ArenaHalf = 17f;
+        public const float IslandRadius = 34f;
         public const float ArenaTop = 6f;
         public int bots = 3;
 
@@ -38,7 +39,8 @@ namespace IronFauna.Brawl
         private MechBrawlCamera _cam;
         private Transform _arena;
         private RectTransform _hpBar, _poiseBar;
-        private Text _banner, _alive;
+        private Text _banner, _alive, _moveLabel;
+        private MechBoxerPlayerInput _input;
         private float _bannerT, _resetT = -1f, _targetT;
         private float _savedFixedDt;
 
@@ -79,6 +81,7 @@ namespace IronFauna.Brawl
                 if (f.ghostGo != null) Destroy(f.ghostGo);
             }
             _fighters.Clear();
+            _input = null;
             if (_arena != null) Destroy(_arena.gameObject);
             BuildArena();
 
@@ -86,7 +89,8 @@ namespace IronFauna.Brawl
             for (int i = 0; i < count; i++)
             {
                 float ang = i * Mathf.PI * 2f / count;
-                Vector3 pos = new Vector3(Mathf.Sin(ang), 0f, Mathf.Cos(ang)) * 8.5f + Vector3.up * ArenaTop;
+                Vector3 pos = new Vector3(Mathf.Sin(ang), 0f, Mathf.Cos(ang)) * 9f;
+                pos.y = MechBoxer.TryGround(pos + Vector3.up * 20f, out float gy) ? gy : ArenaTop;
                 float yaw = ang * Mathf.Rad2Deg + 180f;
                 var l = _loadout.Clone();
                 l.quadruped = false;
@@ -120,6 +124,7 @@ namespace IronFauna.Brawl
             f.ghostGo.AddComponent<IronFauna.Gameplay.MechGaitAnimator>();
             f.ghost = f.ghostGo.AddComponent<MechBoxer>();
             f.ghost.externalLegs = true;
+            f.ghost.followGround = true;
             f.ghost.ringHalfSize = ArenaHalf + 30f;      // the arena edge is real: no invisible walls
             f.ghost.minDistance = 2.3f;
             if (player)
@@ -131,7 +136,7 @@ namespace IronFauna.Brawl
             {
                 var ai = f.ghostGo.AddComponent<MechBoxerAI>();
                 ai.skill = Random.Range(0.35f, 0.65f);
-                ai.edgeHalfSize = ArenaHalf - 2.5f;
+                ai.edgeHalfSize = IslandRadius * 0.6f;
             }
 
             f.physGo = new GameObject(name);
@@ -155,45 +160,64 @@ namespace IronFauna.Brawl
         {
             _arena = new GameObject("BrawlArena").transform;
             _arena.SetParent(transform, false);
-            float size = ArenaHalf * 2f;
-            var deck = ClamshellParts.Spawn(_arena, "ArenaDeck", ClamshellMeshFactory.BeveledBox(new Vector3(size, 2f, size), 0.1f),
-                new Vector3(0f, ArenaTop - 1f, 0f), Quaternion.identity, IronFaunaPalette.SteelDark);
-            if (IronFaunaMaterials.Realistic) deck.GetComponent<MeshRenderer>().sharedMaterial = IronFaunaMaterials.StudioFloor(size / 4f);
-            var col = deck.AddComponent<BoxCollider>();
-            col.size = new Vector3(size, 2f, size);
-            // hazard trim on the drop
-            for (int i = 0; i < 4; i++)
-            {
-                Quaternion r = Quaternion.Euler(0f, i * 90f, 0f);
-                ClamshellParts.Spawn(_arena, "EdgeTrim", ClamshellMeshFactory.BeveledBox(new Vector3(size, 0.06f, 0.4f), 0.02f),
-                    r * new Vector3(0f, 0f, ArenaHalf - 0.2f) + Vector3.up * (ArenaTop + 0.03f), r, IronFaunaPalette.HazardYellow);
-            }
+            BrawlTerrain.Build(_arena, ArenaTop, IslandRadius, Random.Range(0, 100000));
+            Physics.SyncTransforms();
 
-            // destructible cover: pillars and wall sections stand until smashed; crates are loose
-            Color wall = IronFaunaPalette.GunmetalFrame;
-            foreach (var p in new[] { new Vector3(-6f, 0f, -6f), new Vector3(6f, 0f, 6f), new Vector3(6f, 0f, -6f), new Vector3(-6f, 0f, 6f) })
-                BreakableProp.Create(_arena, "Pillar", p + Vector3.up * (ArenaTop + 3.5f), new Vector3(1.4f, 7f, 1.4f), wall, 260f, true, new Vector3Int(2, 6, 2));
-            foreach (var w in new[] { new Vector3(0f, 0f, -12f), new Vector3(0f, 0f, 12f) })
-                BreakableProp.Create(_arena, "Wall", w + Vector3.up * (ArenaTop + 1.6f), new Vector3(7f, 3.2f, 0.6f), IronFaunaPalette.SteelCast, 260f, true, new Vector3Int(6, 3, 1));
+            // destructible cover on the ground: rock pillars stand until smashed, crates are loose
+            var rng = new System.Random(Random.Range(0, 100000));
+            for (int i = 0; i < 6; i++)
+            {
+                float ang = i / 6f * Mathf.PI * 2f + 0.4f;
+                Vector3 p = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * Mathf.Lerp(13f, 22f, (float)rng.NextDouble());
+                if (!MechBoxer.TryGround(p + Vector3.up * 20f, out float gy)) continue;
+                float h = Mathf.Lerp(5f, 8f, (float)rng.NextDouble());
+                BreakableProp.Create(_arena, "RockPillar", new Vector3(p.x, gy + h * 0.5f - 0.4f, p.z), new Vector3(1.6f, h, 1.6f),
+                    IronFaunaPalette.TerrainRock, 280f, true, new Vector3Int(2, 5, 2));
+            }
             for (int i = 0; i < 10; i++)
             {
-                Vector3 p = new Vector3(Random.Range(-14f, 14f), 0f, Random.Range(-14f, 14f));
-                if (p.magnitude < 5f) p = p.normalized * 7f;
-                float s = Random.Range(1.0f, 1.8f);
-                BreakableProp.Create(_arena, "Crate", p + Vector3.up * (ArenaTop + s * 0.5f), Vector3.one * s, IronFaunaPalette.HazardYellow, 120f, false, new Vector3Int(2, 2, 2));
+                Vector3 p = new Vector3(Random.Range(-20f, 20f), 0f, Random.Range(-20f, 20f));
+                if (p.magnitude < 6f) p = p.normalized * 8f;
+                if (!MechBoxer.TryGround(p + Vector3.up * 20f, out float gy)) continue;
+                float sz = Random.Range(1.0f, 1.8f);
+                BreakableProp.Create(_arena, "Crate", new Vector3(p.x, gy + sz * 0.5f + 0.05f, p.z), Vector3.one * sz, IronFaunaPalette.HazardYellow, 120f, false, new Vector3Int(2, 2, 2));
             }
 
-            var lightGo = new GameObject("ArenaSpot");
-            lightGo.transform.SetParent(_arena, false);
-            lightGo.transform.SetPositionAndRotation(new Vector3(0f, ArenaTop + 26f, 0f), Quaternion.Euler(90f, 0f, 0f));
-            var spot = lightGo.AddComponent<Light>();
-            spot.type = LightType.Spot;
-            spot.spotAngle = 80f;
-            spot.innerSpotAngle = 50f;
-            spot.range = 50f;
-            spot.intensity = 260f;
-            spot.color = IronFaunaPalette.StudioKey;
-            spot.shadows = LightShadows.Soft;
+            // outdoors: overcast sky, distance haze, a low warm sun; the hangar studio lights are switched off
+            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (!l.transform.IsChildOf(transform)) l.enabled = false;
+            if (_camera != null)
+            {
+                _camera.clearFlags = CameraClearFlags.SolidColor;
+                _camera.backgroundColor = IronFaunaPalette.SkyHaze;
+            }
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = IronFaunaPalette.SkyHaze;
+            RenderSettings.fogStartDistance = 45f;
+            RenderSettings.fogEndDistance = 190f;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = IronFaunaPalette.Lerp(IronFaunaPalette.SkyHaze, IronFaunaPalette.ShadowSlate, 0.35f);
+            RenderSettings.ambientEquatorColor = IronFaunaPalette.Lerp(IronFaunaPalette.TerrainDirt, IronFaunaPalette.SkyHaze, 0.4f);
+            RenderSettings.ambientGroundColor = IronFaunaPalette.Lerp(IronFaunaPalette.TerrainDirt, IronFaunaPalette.ShadowSlate, 0.6f);
+
+            var sunGo = new GameObject("Sun");
+            sunGo.transform.SetParent(_arena, false);
+            sunGo.transform.rotation = Quaternion.Euler(38f, -40f, 0f);
+            var sun = sunGo.AddComponent<Light>();
+            sun.type = LightType.Directional;
+            sun.color = IronFaunaPalette.SunWarm;
+            sun.intensity = 1.5f;
+            sun.shadows = LightShadows.Soft;
+            sun.shadowStrength = 0.85f;
+            var fillGo = new GameObject("SkyFill");
+            fillGo.transform.SetParent(_arena, false);
+            fillGo.transform.rotation = Quaternion.Euler(60f, 140f, 0f);
+            var fill = fillGo.AddComponent<Light>();
+            fill.type = LightType.Directional;
+            fill.color = IronFaunaPalette.SkyHaze;
+            fill.intensity = 0.35f;
+            fill.shadows = LightShadows.None;
         }
 
         // ------------------------------------------------------------------ hud
@@ -210,9 +234,26 @@ namespace IronFauna.Brawl
             _banner = MenuUI.Label(root, "", 140, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(_banner.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -40f), new Vector2(0f, 260f));
             var help = MenuUI.Label(root,
-                "WASD MOVE   ·   CTRL SPRINT   ·   LMB JAB   ·   RMB CROSS   ·   Q HOOK   ·   E UPPERCUT   ·   SHIFT GUARD   ·   SPACE SLIP   ·   ESC EXIT",
+                "WASD MOVE   ·   CTRL SPRINT   ·   LMB JAB   ·   RMB CROSS   ·   Q HOOK   ·   E UPPERCUT   ·   SHIFT GUARD   ·   C SLIP   ·   SCROLL + SPACE SPECIAL   ·   ESC EXIT",
                 22, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(help.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 30f), new Vector2(0f, 80f));
+
+            var movePanel = MenuUI.Panel(root, "SpecialPanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.7f));
+            MenuUI.Place(movePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-560f, 110f), new Vector2(-50f, 330f));
+            _moveLabel = MenuUI.Label(movePanel.transform, "", 30, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _moveLabel.supportRichText = true;
+            MenuUI.Fill(_moveLabel.rectTransform);
+        }
+
+        private void UpdateMoveLabel()
+        {
+            if (_moveLabel == null) return;
+            if (_input == null && _fighters.Count > 0 && _fighters[0].ghost != null) _input = _fighters[0].ghost.GetComponent<MechBoxerPlayerInput>();
+            if (_input == null) return;
+            var list = MechBoxer.Specials;
+            int i = _input.SpecialIndex, n = list.Length;
+            string prev = MechBoxer.MoveName(list[(i - 1 + n) % n]), cur = MechBoxer.MoveName(list[i]), next = MechBoxer.MoveName(list[(i + 1) % n]);
+            _moveLabel.text = $"<size=22><color=#8592A3>{prev}</color></size>\n<size=44>{cur}</size>\n<size=22><color=#8592A3>{next}</color></size>\n<size=18><color=#A9D4FF>SCROLL TO PICK  ·  SPACE TO THROW</color></size>";
         }
 
         private RectTransform Bar(Transform root, string label, Vector2 a0, Vector2 a1, float y, Color color)
@@ -292,6 +333,7 @@ namespace IronFauna.Brawl
                 Cursor.visible = false;
             }
 
+            UpdateMoveLabel();
             _targetT -= Time.unscaledDeltaTime;
             if (_targetT <= 0f) { _targetT = 0.4f; Retarget(); }
 
@@ -300,10 +342,10 @@ namespace IronFauna.Brawl
             Fighter last = null;
             foreach (var f in _fighters)
             {
-                if (!f.out_ && (f.ragdoll.IsKO || f.ragdoll.Position.y < ArenaTop - 8f))
+                if (!f.out_ && (f.ragdoll.IsKO || f.ragdoll.Position.y < ArenaTop - 12f))
                 {
                     f.out_ = true;
-                    if (f.ragdoll.Position.y < ArenaTop - 8f && f.player) Banner("RING OUT", 2f);
+                    if (f.ragdoll.Position.y < ArenaTop - 12f && f.player) Banner("RING OUT", 2f);
                 }
                 if (!f.out_) { alive++; last = f; }
             }

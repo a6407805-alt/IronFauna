@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using IronFauna.Boxing;
 using IronFauna.Clamshell;
+using IronFauna.Core;
 
 namespace IronFauna.Brawl
 {
@@ -96,8 +97,9 @@ namespace IronFauna.Brawl
                 if (ga == null) continue;
                 LimbId limb = a.side < 0 ? LimbId.ArmL : LimbId.ArmR;
                 bool lead = a.side == (animated.southpaw ? 1 : -1);
-                var up = Add("UpperArm" + Side(a.side), a.upper, ga.upper, _torso, 9f, limb, false, lead, 4200f);
-                Add("Forearm" + Side(a.side), a.fore, ga.fore, up, 8f, limb, true, lead, 3600f);
+                var up = Add("UpperArm" + Side(a.side), a.upper, ga.upper, _torso, 9f, limb, false, lead, 6000f);
+                var fo = Add("Forearm" + Side(a.side), a.fore, ga.fore, up, 8f, limb, true, lead, 5200f);
+                AddTrail(fo, a.tip - a.elbow);
             }
             for (int i = 0; i < mech.legRigs.Count; i++)
             {
@@ -106,9 +108,14 @@ namespace IronFauna.Brawl
                 var gl = FindLeg(g, left);
                 if (gl == null) continue;
                 LimbId limb = left ? LimbId.LegL : LimbId.LegR;
-                var th = Add("Thigh" + (left ? "_L" : "_R"), l.thigh, gl.thigh, _pelvis, 14f, limb, false, false, 7000f);
-                var ca = Add("Calf" + (left ? "_L" : "_R"), l.calf, gl.calf, th, 11f, limb, true, false, 6000f);
-                if (l.foot != null && gl.foot != null) Add("Foot" + (left ? "_L" : "_R"), l.foot, gl.foot, ca, 7f, limb, true, false, 3000f);
+                bool leadLeg = left != animated.southpaw;
+                var th = Add("Thigh" + (left ? "_L" : "_R"), l.thigh, gl.thigh, _pelvis, 14f, limb, true, leadLeg, 7000f);
+                var ca = Add("Calf" + (left ? "_L" : "_R"), l.calf, gl.calf, th, 11f, limb, true, leadLeg, 6000f);
+                if (l.foot != null && gl.foot != null)
+                {
+                    var ft = Add("Foot" + (left ? "_L" : "_R"), l.foot, gl.foot, ca, 7f, limb, true, leadLeg, 3000f);
+                    AddTrail(ft, new Vector3(0f, 0.12f, 0.55f));
+                }
             }
 
             // Flatten: every segment except the pelvis becomes a top-level body under the container (deepest first)
@@ -546,6 +553,58 @@ namespace IronFauna.Brawl
 
         public bool HasLimb(LimbId limb) => !_lost.Contains(limb);
 
+        // ------------------------------------------------------------------ strike trails (readability)
+        private readonly List<KeyValuePair<Segment, TrailRenderer>> _trails = new List<KeyValuePair<Segment, TrailRenderer>>();
+        private static Material _trailMat;
+
+        private void AddTrail(Segment s, Vector3 local)
+        {
+            var go = new GameObject("StrikeTrail");
+            go.transform.SetParent(s.phys, false);
+            go.transform.localPosition = local;
+            var tr = go.AddComponent<TrailRenderer>();
+            tr.time = 0.22f;
+            tr.minVertexDistance = 0.05f;
+            tr.widthCurve = new AnimationCurve(new Keyframe(0f, 0.55f), new Keyframe(1f, 0f));
+            var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(IronFaunaPalette.OffWhitePanel, 0f), new GradientColorKey(IronFaunaPalette.OrangeJointCore, 0.35f), new GradientColorKey(IronFaunaPalette.CrimsonFront, 1f) },
+                      new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0.5f, 0.4f), new GradientAlphaKey(0f, 1f) });
+            tr.colorGradient = g;
+            tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            tr.emitting = false;
+            if (_trailMat == null)
+            {
+                Shader sh = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                if (sh != null)
+                {
+                    _trailMat = new Material(sh) { hideFlags = HideFlags.DontSave };
+                    _trailMat.SetFloat("_Surface", 1f);
+                    _trailMat.SetFloat("_Blend", 2f);   // additive
+                    _trailMat.SetOverrideTag("RenderType", "Transparent");
+                    _trailMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    _trailMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    _trailMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                    _trailMat.SetInt("_ZWrite", 0);
+                    _trailMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    _trailMat.EnableKeyword("_BLENDMODE_ADD");
+                }
+            }
+            if (_trailMat != null) tr.sharedMaterial = _trailMat;
+            _trails.Add(new KeyValuePair<Segment, TrailRenderer>(s, tr));
+        }
+
+        private void Update()
+        {
+            if (ghost == null) return;
+            foreach (var kv in _trails)
+            {
+                var s = kv.Key;
+                bool leg = s.limb == LimbId.LegL || s.limb == LimbId.LegR;
+                bool mine = (ghost.StrikeActive || ghost.WindingUp) && ghost.StrikeLead == s.leadHand && ghost.StrikeIsKick == leg && !s.detached;
+                if (kv.Value != null) kv.Value.emitting = mine && !IsDown;
+            }
+        }
+
         /// <summary>Called by a part's collision: one damaging contact per punch per victim.</summary>
         internal void TryStrike(Segment mine, Collision c)
         {
@@ -553,8 +612,11 @@ namespace IronFauna.Brawl
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
             if (otherPart == null || otherPart.owner == this) return;
             bool arm = mine.limb == LimbId.ArmL || mine.limb == LimbId.ArmR;
-            bool armStrike = mine.striker && arm && ghost.StrikeActive && ghost.PunchLeadHand == mine.leadHand;
-            if (!armStrike) return;
+            bool leg = mine.limb == LimbId.LegL || mine.limb == LimbId.LegR;
+            bool active = mine.striker && ghost.StrikeActive && ghost.StrikeLead == mine.leadHand;
+            bool armStrike = arm && active && !ghost.StrikeIsKick;
+            bool legStrike = leg && active && ghost.StrikeIsKick;
+            if (!armStrike && !legStrike) return;
             int serial = ghost.PunchSerial;
             if (_struckBy.TryGetValue(otherPart.owner, out int last) && last == serial) return;
             _struckBy[otherPart.owner] = serial;

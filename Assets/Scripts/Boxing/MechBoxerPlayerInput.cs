@@ -10,13 +10,27 @@ namespace IronFauna.Boxing
     ///   LMB / X  jab        RMB / Y  cross
     ///   Q / B    hook       E / A    uppercut
     ///   Shift / LB (hold)   high guard
-    ///   Space / RB          slip (toward the A/D or stick side; alternates when neutral)
+    ///   Scroll / D-pad      pick a martial-arts special      Space / RT   throw it
+    ///   C / RB              slip (toward the A/D or stick side; alternates when neutral)
     /// </summary>
     [RequireComponent(typeof(MechBoxer))]
     public class MechBoxerPlayerInput : MonoBehaviour
     {
         private MechBoxer _boxer;
         private int _lastSlip = 1;
+        private float _scrollAcc;
+
+        /// <summary>Index into MechBoxer.Specials of the special the scroll wheel has picked.</summary>
+        public int SpecialIndex { get; private set; }
+        public PunchType SelectedSpecial => MechBoxer.Specials[SpecialIndex];
+        public event System.Action<PunchType> SpecialChanged;
+
+        private void Cycle(int d)
+        {
+            int n = MechBoxer.Specials.Length;
+            SpecialIndex = ((SpecialIndex + d) % n + n) % n;
+            SpecialChanged?.Invoke(SelectedSpecial);
+        }
 
         private void Awake() => _boxer = GetComponent<MechBoxer>();
 
@@ -48,13 +62,21 @@ namespace IronFauna.Boxing
             {
                 if (mouse.leftButton.wasPressedThisFrame) punch = PunchType.Jab;
                 if (mouse.rightButton.wasPressedThisFrame) punch = PunchType.Cross;
+                // one notch = one move (wheel deltas are 120 per notch on Windows, 1 elsewhere)
+                float sc = mouse.scroll.ReadValue().y;
+                if (Mathf.Abs(sc) > 0.01f)
+                {
+                    _scrollAcc += Mathf.Sign(sc);
+                    Cycle(sc > 0f ? -1 : 1);
+                }
             }
             if (kb != null)
             {
                 if (kb.qKey.wasPressedThisFrame) punch = PunchType.Hook;
                 if (kb.eKey.wasPressedThisFrame) punch = PunchType.Uppercut;
                 guard |= kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
-                slip |= kb.spaceKey.wasPressedThisFrame;
+                slip |= kb.cKey.wasPressedThisFrame;
+                if (kb.spaceKey.wasPressedThisFrame) punch = SelectedSpecial;
                 sprint |= kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
             }
             if (pad != null)
@@ -65,6 +87,9 @@ namespace IronFauna.Boxing
                 if (pad.buttonSouth.wasPressedThisFrame) punch = PunchType.Uppercut;
                 guard |= pad.leftShoulder.isPressed || pad.leftTrigger.ReadValue() > 0.4f;
                 slip |= pad.rightShoulder.wasPressedThisFrame;
+                if (pad.dpad.right.wasPressedThisFrame) Cycle(1);
+                if (pad.dpad.left.wasPressedThisFrame) Cycle(-1);
+                if (pad.rightTrigger.wasPressedThisFrame) punch = SelectedSpecial;
                 sprint |= pad.leftStickButton.isPressed;
             }
 
