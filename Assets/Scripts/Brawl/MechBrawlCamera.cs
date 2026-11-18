@@ -92,10 +92,12 @@ namespace IronFauna.Brawl
             }
             Vector3 right = Vector3.Cross(Vector3.up, axis);
             float floor = player.ghost.transform.position.y;
+            float lookH = (player.IsDown || player.ghost.LegsLeft == 0 || player.ghost.IsSeated) ? 1.55f
+                        : player.ghost.IsCrouching ? 2.25f : 3.05f;
 
             float back = framing ? 6.2f + Mathf.Min(sep, 12f) * 0.85f : 9f;
             Vector3 wantPos = a - axis * back + right * side + Vector3.up * (floor + height);
-            Vector3 wantLook = Vector3.Lerp(a, b, framing ? Mathf.Min(0.62f, 6f / sep) : 0.55f) + Vector3.up * (floor + 3.2f);
+            Vector3 wantLook = Vector3.Lerp(a, b, framing ? Mathf.Min(0.62f, 6f / sep) : 0.55f) + Vector3.up * (floor + lookH);
 
             if (!_snapped) { _pos = wantPos; _look = wantLook; _vel = _lookVel = Vector3.zero; _snapped = true; }
             _pos = Vector3.SmoothDamp(_pos, wantPos, ref _vel, 0.35f, Mathf.Infinity, dt);

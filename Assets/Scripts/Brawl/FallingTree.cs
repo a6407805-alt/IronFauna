@@ -81,7 +81,11 @@ namespace IronFauna.Brawl
 
         public void ApplyStrike(Vector3 point, Vector3 velocity, float damage)
         {
-            if (_fallen) return;
+            if (_fallen)
+            {
+                if (Time.time - _fallTime > 2.6f) SplinterFallenTrunk(point, velocity);
+                return;
+            }
             _damage += damage;
             if (_damage >= toughness)
             {
@@ -90,6 +94,32 @@ namespace IronFauna.Brawl
                 pushDir.y = 0f;
                 Topple(pushDir.sqrMagnitude > 1e-3f ? pushDir.normalized : Vector3.forward);
             }
+        }
+
+        private bool _splintered;
+
+        private void SplinterFallenTrunk(Vector3 point, Vector3 velocity)
+        {
+            if (_splintered) return;
+            _splintered = true;
+            var barkMat = IronFaunaMaterials.GetTerrain(IronFaunaPalette.ForestBark);
+            Mesh logMesh = ClamshellMeshFactory.BeveledBox(new Vector3(trunkRadius * 1.4f, height * 0.18f, trunkRadius * 1.4f), 0.06f);
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 world = transform.TransformPoint(new Vector3(0f, height * (0.18f + i * 0.2f), 0f));
+                var chunk = ClamshellParts.Spawn(transform.parent, "SplinteredLog", logMesh,
+                    transform.parent != null ? transform.parent.InverseTransformPoint(world) : world,
+                    transform.rotation, IronFaunaPalette.ForestBark);
+                if (chunk.TryGetComponent<Renderer>(out var r)) r.sharedMaterial = barkMat;
+                var bc = chunk.AddComponent<BoxCollider>();
+                bc.size = new Vector3(trunkRadius * 1.4f, height * 0.18f, trunkRadius * 1.4f);
+                var rb = chunk.AddComponent<Rigidbody>();
+                rb.mass = 18f;
+                rb.interpolation = RigidbodyInterpolation.Interpolate;
+                rb.linearVelocity = (velocity * 0.2f) + Vector3.up * 2.5f + Random.insideUnitSphere * 2.5f;
+                Destroy(chunk, 18f);
+            }
+            Destroy(gameObject);
         }
 
         public void Topple(Vector3 fallDirection)
@@ -148,6 +178,10 @@ namespace IronFauna.Brawl
                 {
                     prop.Shatter(c.contactCount > 0 ? c.GetContact(0).point : transform.position, _rb.linearVelocity);
                 }
+            }
+            else if (Time.time - _fallTime >= 2.8f && c.rigidbody != null && c.rigidbody.GetComponent<MechRagdollPart>() != null && c.relativeVelocity.magnitude > 3.5f)
+            {
+                SplinterFallenTrunk(c.contactCount > 0 ? c.GetContact(0).point : transform.position, c.relativeVelocity);
             }
         }
     }
