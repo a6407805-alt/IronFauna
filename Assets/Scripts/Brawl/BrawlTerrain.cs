@@ -272,8 +272,13 @@ namespace IronFauna.Brawl
                     Color col = (f % 2 == 0) ? IronFaunaPalette.CityConcrete : IronFaunaPalette.CityGlass;
                     Vector3 center = new Vector3(basePos.x, gy + (f + 0.5f) * floorH, basePos.z);
                     // Bottom floor is anchored until smashed; upper floors rest on top so they collapse when the base is destroyed!
-                    BreakableProp.Create(arena, $"CityBuilding_F{f + 1}", center,
+                    var floorProp = BreakableProp.Create(arena, $"CityBuilding_F{f + 1}", center,
                         new Vector3(w, floorH * 0.96f, d), col, 95f, f == 0, new Vector3Int(3, 2, 3));
+                    // Lit window ribbon around each story
+                    Color neon = (b % 3 == 0) ? IronFaunaPalette.CyanEnergy : (b % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.OrangeJointCore;
+                    ClamshellParts.Spawn(floorProp.transform, "WindowBand",
+                        ClamshellMeshFactory.BeveledBox(new Vector3(w * 1.02f, 0.34f, d * 1.02f), 0.02f),
+                        Vector3.zero, Quaternion.identity, neon, true);
                 }
             }
 
@@ -283,8 +288,11 @@ namespace IronFauna.Brawl
                 float ang = i / 8f * Mathf.PI * 2f + 0.2f;
                 Vector3 p = new Vector3(Mathf.Cos(ang) * 9.5f, 0f, Mathf.Sin(ang) * 9.5f);
                 if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
-                BreakableProp.Create(arena, "Streetlight", new Vector3(p.x, gy + 3.2f, p.z),
+                var post = BreakableProp.Create(arena, "Streetlight", new Vector3(p.x, gy + 3.2f, p.z),
                     new Vector3(0.55f, 6.4f, 0.55f), IronFaunaPalette.GunmetalFrame, 120f, true, new Vector3Int(1, 4, 1));
+                ClamshellParts.Spawn(post.transform, "StreetLampHead",
+                    ClamshellMeshFactory.BeveledBox(new Vector3(1.1f, 0.32f, 1.1f), 0.04f),
+                    new Vector3(0f, 3.25f, 0f), Quaternion.identity, IronFaunaPalette.HazardYellow, true);
             }
 
             // 3. Parked street cars / vehicles (explosive when smashed or when a mech is slammed onto them!)

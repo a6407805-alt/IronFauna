@@ -16,8 +16,8 @@ namespace IronFauna.Brawl
         public MechRagdoll target;
         public int playerIndex;
         public float baseFov = 48f;
-        public float height = 4.8f;
-        public float side = 2.6f;
+        public float height = 4.6f;
+        public float side = 1.25f;
 
         private Camera _cam;
         private Vector3 _pos, _vel, _look, _lookVel;
@@ -107,7 +107,8 @@ namespace IronFauna.Brawl
             float roll = (Mathf.PerlinNoise(t * 0.8f, 9.3f) - 0.5f) * 7f * tr;
             // don't bury the camera in a hill or a rock: pull it in along the line from the mech
             Vector3 camPos = _pos;
-            Vector3 from = new Vector3(a.x, floor + 3f, a.z);
+            Vector3 lookPt = _look;
+            Vector3 from = new Vector3(a.x, floor + 2.8f, a.z);
             Vector3 toCam = camPos - from;
             float len = toCam.magnitude;
             if (len > 0.1f)
@@ -117,13 +118,15 @@ namespace IronFauna.Brawl
                 {
                     if (hit.distance <= 0f) continue;
                     var rb = hit.collider.attachedRigidbody;
-                    if (rb != null && rb.GetComponent<MechRagdollPart>() != null) continue; // ignore mechs, pull in on terrain, buildings & trees
+                    if (rb != null && !rb.isKinematic) continue; // ignore mechs and loose physics debris so rubble never yanks the camera
                     free = Mathf.Min(free, hit.distance);
                 }
-                camPos = from + toCam / len * Mathf.Max(1.5f, free);
+                float pullRatio = Mathf.Clamp01(free / len);
+                camPos = from + toCam / len * Mathf.Max(2.2f, free);
+                lookPt = Vector3.Lerp(from + axis * 1.2f, _look, pullRatio);
             }
             transform.position = camPos + shake;
-            transform.rotation = Quaternion.LookRotation(_look - camPos) * Quaternion.Euler(0f, 0f, roll);
+            transform.rotation = Quaternion.LookRotation(lookPt - camPos) * Quaternion.Euler(0f, 0f, roll);
             _cam.fieldOfView = baseFov - BoxingFeel.FovKick;
         }
     }

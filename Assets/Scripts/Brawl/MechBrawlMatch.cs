@@ -484,13 +484,13 @@ namespace IronFauna.Brawl
 
             // 2. Top-Right Framed Scoreboard Card
             var scoreCard = MenuUI.Panel(root, "ScoreboardCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.86f));
-            MenuUI.Place(scoreCard.rectTransform, new Vector2(0.71f, 1f), new Vector2(0.98f, 1f), new Vector2(0f, -310f), new Vector2(0f, -20f));
+            MenuUI.Place(scoreCard.rectTransform, new Vector2(0.72f, 1f), new Vector2(0.98f, 1f), new Vector2(0f, -334f), new Vector2(0f, -18f));
             var scoreTop = MenuUI.Panel(scoreCard.transform, "ScoreTopRule", IronFaunaPalette.CyanEnergy);
             MenuUI.Place(scoreTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
             _scoreboardTitle = MenuUI.Label(scoreCard.transform, "ARENA ROSTER (8/8)", 17, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleRight, FontStyle.Bold);
             MenuUI.Place(_scoreboardTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -36f), new Vector2(-16f, -8f));
 
-            _alive = MenuUI.Label(scoreCard.transform, "", 19, IronFaunaPalette.UiText, TextAnchor.UpperRight, FontStyle.Bold);
+            _alive = MenuUI.Label(scoreCard.transform, "", 18, IronFaunaPalette.UiText, TextAnchor.UpperRight, FontStyle.Bold);
             MenuUI.Place(_alive.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 10f), new Vector2(-16f, -42f));
 
             // 3. Center Match Banner
@@ -832,7 +832,8 @@ namespace IronFauna.Brawl
                 var sb = new System.Text.StringBuilder();
                 foreach (var f in _fighters)
                 {
-                    string tag = $"[{f.weightTag}]";
+                    string shortW = f.weightTag == "HEAVY" ? "HVY" : f.weightTag == "MEDIUM" ? "MED" : f.weightTag == "LIGHT" ? "LGT" : f.weightTag.Replace("MEDIUM", "M").Replace("HEAVY", "H").Replace("LIGHT", "L");
+                    string tag = $"[{shortW}]";
                     if (f.out_) sb.AppendLine($"<color=#8592A3>{f.name} {tag}  ·  OUT</color>");
                     else if (f.team == 1) sb.AppendLine($"<color=#24E5FF>{f.name} {tag}  ·  {Mathf.CeilToInt(f.ragdoll.health)} HP</color>");
                     else if (f.isBoss) sb.AppendLine($"<color=#FF7A1A>{f.name} {tag}  ·  {Mathf.CeilToInt(f.ragdoll.health)} HP</color>");

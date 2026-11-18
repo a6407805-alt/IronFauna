@@ -1,5 +1,6 @@
 using UnityEngine;
 using IronFauna.Clamshell;
+using IronFauna.Core;
 
 namespace IronFauna.Brawl
 {
@@ -25,6 +26,7 @@ namespace IronFauna.Brawl
         public static BreakableProp Create(Transform parent, string name, Vector3 pos, Vector3 size, Color color, float massPerM3, bool anchored, Vector3Int pieces, bool explosive = false)
         {
             var go = ClamshellParts.Spawn(parent, name, ClamshellMeshFactory.BeveledBox(size, Mathf.Min(0.04f, size.x * 0.05f)), pos, Quaternion.identity, color);
+            if (go.TryGetComponent<Renderer>(out var rend)) rend.sharedMaterial = IronFaunaMaterials.GetTerrain(color);
             var col = go.AddComponent<BoxCollider>();
             col.size = size;
             var rb = go.AddComponent<Rigidbody>();
@@ -84,6 +86,7 @@ namespace IronFauna.Brawl
                 Vector3 world = transform.TransformPoint(local);
                 var go = ClamshellParts.Spawn(transform.parent, name + "_Chunk", mesh, transform.parent != null ? transform.parent.InverseTransformPoint(world) : world,
                     transform.parent != null ? Quaternion.Inverse(transform.parent.rotation) * transform.rotation : transform.rotation, color);
+                if (go.TryGetComponent<Renderer>(out var rend)) rend.sharedMaterial = IronFaunaMaterials.GetTerrain(color);
                 var bc = go.AddComponent<BoxCollider>();
                 bc.size = cell * 0.96f;
                 var rb = go.AddComponent<Rigidbody>();
