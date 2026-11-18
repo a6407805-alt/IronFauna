@@ -173,19 +173,25 @@ namespace IronFauna.Boxing
             if (_me.holding)
             {
                 _holdT += dt;
-                if (!_holdActed && _holdT > Random.Range(0.5f, 1.2f))
+                if (!_holdActed && _holdT > Random.Range(0.45f, 1.05f))
                 {
                     _holdActed = true;
                     float r = Random.value;
-                    if (r < 0.35f) _grabT = 0f;                                    // let go = throw
-                    else if (r < 0.7f) _me.intent.punch = PunchType.Uppercut;      // slam
-                    else _me.intent.punch = PunchType.Cross;                       // tear
+                    if (r < 0.28f) _grabT = 0f;                                    // let go = throw
+                    else if (r < 0.58f) _me.intent.punch = PunchType.Uppercut;      // suplex / slam
+                    else if (r < 0.80f) _me.intent.punch = PunchType.Cross;         // standing limb tear
+                    else
+                    {
+                        // Jiu-Jitsu ground drag & joint crank on the floor!
+                        _me.intent.sit = true;
+                        _me.intent.punch = PunchType.Cross;
+                    }
                 }
-                if (_holdActed && _holdT > 2.2f) _grabT = 0f;
+                if (_holdActed && _holdT > 2.2f) { _grabT = 0f; _me.intent.sit = false; }
             }
             else if (_grabT > 0f && _grabT < 0.4f) _grabT = 0f;
             _me.intent.grab = _grabT > 0f;
-            if (_me.intent.grab) _me.intent.move = new Vector2(0f, 1f);
+            if (_me.intent.grab) _me.intent.move = _me.intent.sit ? new Vector2(0f, -1f) : new Vector2(0f, 1f);
 
             // hurt: covers up more often (sticky, so the guard does not flicker)
             if (hurt > 0.5f && !_me.Punching && _combo.Count == 0 && _guardT <= 0f && Random.value < hurt * 0.6f * dt) _guardT = Random.Range(0.5f, 1.1f);

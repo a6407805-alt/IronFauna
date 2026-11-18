@@ -310,8 +310,7 @@ namespace IronFauna.Brawl
             j.connectedBody = s.parent.rb;
             j.autoConfigureConnectedAnchor = false;
             Vector3 anchor = Vector3.zero;
-            if (s == _torso) anchor = s.phys.InverseTransformPoint(mech.visualRoot.TransformPoint(new Vector3(0f, mech.HipHeight + 0.30f, 0f)));
-            else if (s.name.StartsWith("Foot")) anchor = new Vector3(0f, MechClamshellBuilder.AnkleHeight, 0f);
+            if (s.name.StartsWith("Foot")) anchor = new Vector3(0f, MechClamshellBuilder.AnkleHeight, 0f);
             j.anchor = anchor;
             s.connectedAnchorRest = s.parent.phys.InverseTransformPoint(s.phys.TransformPoint(anchor));
             j.connectedAnchor = s.connectedAnchorRest;

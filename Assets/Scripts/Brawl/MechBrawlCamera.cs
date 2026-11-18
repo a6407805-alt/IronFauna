@@ -108,22 +108,22 @@ namespace IronFauna.Brawl
             // don't bury the camera in a hill or a rock: pull it in along the line from the mech
             Vector3 camPos = _pos;
             Vector3 lookPt = _look;
-            Vector3 from = new Vector3(a.x, floor + 2.8f, a.z);
+            Vector3 from = new Vector3(a.x, floor + 2.4f, a.z);
             Vector3 toCam = camPos - from;
             float len = toCam.magnitude;
             if (len > 0.1f)
             {
                 float free = len;
-                foreach (var hit in Physics.SphereCastAll(from, 0.45f, toCam / len, len, ~0, QueryTriggerInteraction.Ignore))
+                foreach (var hit in Physics.SphereCastAll(from, 0.85f, toCam / len, len, ~0, QueryTriggerInteraction.Ignore))
                 {
                     if (hit.distance <= 0f) continue;
                     var rb = hit.collider.attachedRigidbody;
                     if (rb != null && !rb.isKinematic) continue; // ignore mechs and loose physics debris so rubble never yanks the camera
-                    free = Mathf.Min(free, hit.distance);
+                    free = Mathf.Min(free, Mathf.Max(1.8f, hit.distance - 0.55f));
                 }
                 float pullRatio = Mathf.Clamp01(free / len);
-                camPos = from + toCam / len * Mathf.Max(2.2f, free);
-                lookPt = Vector3.Lerp(from + axis * 1.2f, _look, pullRatio);
+                camPos = from + toCam / len * Mathf.Max(2.0f, free);
+                lookPt = Vector3.Lerp(from + axis * 0.9f, _look, pullRatio);
             }
             transform.position = camPos + shake;
             transform.rotation = Quaternion.LookRotation(lookPt - camPos) * Quaternion.Euler(0f, 0f, roll);

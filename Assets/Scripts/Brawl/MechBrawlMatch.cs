@@ -493,9 +493,9 @@ namespace IronFauna.Brawl
             _alive = MenuUI.Label(scoreCard.transform, "", 18, IronFaunaPalette.UiText, TextAnchor.UpperRight, FontStyle.Bold);
             MenuUI.Place(_alive.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 10f), new Vector2(-16f, -42f));
 
-            // 3. Center Match Banner
-            _banner = MenuUI.Label(root, "", 104, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
-            MenuUI.Place(_banner.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -40f), new Vector2(0f, 220f));
+            // 3. Upper-Center Match Callout Banner (positioned above the fighters so it never occludes combat!)
+            _banner = MenuUI.Label(root, "", 68, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
+            MenuUI.Place(_banner.rectTransform, new Vector2(0.24f, 0.72f), new Vector2(0.76f, 0.86f), Vector2.zero, Vector2.zero);
 
             // 4. Bottom-Center Framed Controls Ribbon
             var controlsBar = MenuUI.Panel(root, "ControlsRibbon", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.84f));
