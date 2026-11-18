@@ -44,6 +44,15 @@ namespace IronFauna.Boxing
             SpecialChanged?.Invoke(SelectedSpecial);
         }
 
+        public void SelectMove(PunchType t)
+        {
+            var list = MechBoxer.Specials;
+            for (int i = 0; i < list.Length; i++)
+            {
+                if (list[i] == t) { SpecialIndex = i; return; }
+            }
+        }
+
         private void Awake()
         {
             _boxer = GetComponent<MechBoxer>();

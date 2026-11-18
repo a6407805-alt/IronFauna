@@ -562,10 +562,22 @@ namespace IronFauna.Brawl
             if (_moveLabel == null) return;
             if (_input == null && _fighters.Count > 0 && _fighters[0].ghost != null) _input = _fighters[0].ghost.GetComponent<MechBoxerPlayerInput>();
             if (_input == null) return;
+            var activeGhost = (_fighters.Count > 0 && _fighters[0].out_ && _playerCams.Count > 0 && _playerCams[0].player != null)
+                ? _playerCams[0].player.ghost
+                : (_fighters.Count > 0 ? _fighters[0].ghost : null);
+            if (activeGhost != null && activeGhost.ActiveMove != PunchType.None)
+            {
+                _input.SelectMove(activeGhost.ActiveMove);
+            }
             var list = MechBoxer.Specials;
             int i = _input.SpecialIndex, n = list.Length;
             string prev = MechBoxer.MoveName(list[(i - 1 + n) % n]), cur = MechBoxer.MoveName(list[i]), next = MechBoxer.MoveName(list[(i + 1) % n]);
-            _moveLabel.text = $"<size=20><color=#8592A3>{prev}</color></size>\n<size=38>{cur}</size>\n<size=20><color=#8592A3>{next}</color></size>\n<size=17><color=#A9D4FF>SCROLL PICK ({i + 1}/{n}) · SPACE THROW</color></size>";
+            bool executing = activeGhost != null && activeGhost.Punching;
+            string curStr = executing ? $"<color=#FFC83A>{cur}</color>" : cur;
+            string footer = executing && activeGhost.ActiveMove != PunchType.None
+                ? $"<color=#FFC83A>EXECUTING: {MechBoxer.MoveName(activeGhost.ActiveMove)}</color>"
+                : $"<color=#A9D4FF>SCROLL PICK ({i + 1}/{n}) · SPACE THROW</color>";
+            _moveLabel.text = $"<size=20><color=#8592A3>{prev}</color></size>\n<size=36>{curStr}</size>\n<size=20><color=#8592A3>{next}</color></size>\n<size=17>{footer}</size>";
         }
 
         private RectTransform Bar(Transform root, string label, Vector2 a0, Vector2 a1, float y, Color color)

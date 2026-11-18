@@ -77,18 +77,21 @@ namespace IronFauna.Brawl
             Vector3 cell = new Vector3(size.x / pieces.x, size.y / pieces.y, size.z / pieces.z);
             var parentRb = GetComponent<Rigidbody>();
             float chunkMass = Mathf.Max(1f, parentRb.mass / (pieces.x * pieces.y * pieces.z));
-            Mesh mesh = ClamshellMeshFactory.BeveledBox(cell * 0.96f, Mathf.Min(0.03f, cell.x * 0.08f));
+            bool largeProp = size.x * size.y * size.z > 14f;
+            Vector3 chunkSize = largeProp ? Vector3.Scale(cell, new Vector3(0.55f, 0.38f, 0.55f)) : cell * 0.88f;
+            Mesh mesh = ClamshellMeshFactory.BeveledBox(chunkSize, Mathf.Min(0.03f, chunkSize.x * 0.08f));
             for (int x = 0; x < pieces.x; x++)
             for (int y = 0; y < pieces.y; y++)
             for (int z = 0; z < pieces.z; z++)
             {
+                if (largeProp && ((x + y + z) & 1) == 1) continue; // sparse slabs so collapsed skyscrapers don't flood the street with chest-high cubes
                 Vector3 local = new Vector3((x + 0.5f) * cell.x - size.x * 0.5f, (y + 0.5f) * cell.y - size.y * 0.5f, (z + 0.5f) * cell.z - size.z * 0.5f);
                 Vector3 world = transform.TransformPoint(local);
                 var go = ClamshellParts.Spawn(transform.parent, name + "_Chunk", mesh, transform.parent != null ? transform.parent.InverseTransformPoint(world) : world,
                     transform.parent != null ? Quaternion.Inverse(transform.parent.rotation) * transform.rotation : transform.rotation, color);
                 if (go.TryGetComponent<Renderer>(out var rend)) rend.sharedMaterial = IronFaunaMaterials.GetTerrain(color);
                 var bc = go.AddComponent<BoxCollider>();
-                bc.size = cell * 0.96f;
+                bc.size = chunkSize;
                 var rb = go.AddComponent<Rigidbody>();
                 rb.mass = chunkMass;
                 rb.interpolation = RigidbodyInterpolation.Interpolate;

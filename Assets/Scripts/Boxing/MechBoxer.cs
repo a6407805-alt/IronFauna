@@ -349,6 +349,7 @@ namespace IronFauna.Boxing
         public bool WindingUp => _punch != null && _phase == Phase.Windup;
         public bool StrikeIsHead => _punch != null && _punch.head;
         public bool StrikeIsBody => _punch != null && _punch.body;
+        public PunchType ActiveMove => _punch != null ? _punch.type : PunchType.None;
 
         // ------------------------------------------------------------------ grappling (driven by MechRagdoll)
         /// <summary>Set by the ragdoll while this mech holds something (a mech or a torn-off limb).</summary>
