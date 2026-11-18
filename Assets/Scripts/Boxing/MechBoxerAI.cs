@@ -201,6 +201,21 @@ namespace IronFauna.Boxing
         private void QueueCombo()
         {
             _combo.Clear();
+            var opp = _me != null ? _me.opponent : null;
+            if (opp != null && (opp.LegsLeft == 0 || opp.IsSeated || opp.suppressed) && _me.LegsLeft > 0)
+            {
+                // Against a downed, seated, or legless crawler: use low kicks, axe kicks, or ground-and-pound hooks!
+                PunchType[][] groundCombos =
+                {
+                    new[] { PunchType.LowCalfKick, PunchType.AxeKick },
+                    new[] { PunchType.CapoeiraSweep, PunchType.Uppercut },
+                    new[] { PunchType.Hook, PunchType.Uppercut },
+                    new[] { PunchType.FrontKick, PunchType.AxeKick },
+                };
+                var gc = groundCombos[Random.Range(0, groundCombos.Length)];
+                foreach (var p in gc) _combo.Enqueue(p);
+                return;
+            }
             var c = Combos[Random.Range(0, Combos.Length)];
             foreach (var p in c) _combo.Enqueue(p);
         }

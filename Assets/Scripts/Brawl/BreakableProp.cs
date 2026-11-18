@@ -37,7 +37,7 @@ namespace IronFauna.Brawl
             p.color = color;
             p.pieces = pieces;
             p.explosive = explosive;
-            p.toughness = explosive ? 110f : Mathf.Clamp(rb.mass * 0.42f + 60f, 80f, 240f);   // 2-3 heavy blows or 1 thrown mech/blast collapses building stories & walls
+            p.toughness = explosive ? 110f : Mathf.Clamp(rb.mass * 0.42f + 120f, 160f, 380f);
             return p;
         }
 
@@ -96,7 +96,22 @@ namespace IronFauna.Brawl
                 float near = Mathf.Clamp01(1.5f - away.magnitude / Mathf.Max(0.5f, size.magnitude * 0.5f));
                 rb.linearVelocity = (parentRb.isKinematic ? Vector3.zero : parentRb.linearVelocity) + away.normalized * near * 6f + velocity * 0.15f * near;
                 rb.angularVelocity = Random.insideUnitSphere * 4f;
-                Destroy(go, Random.Range(10f, 14f));
+                Destroy(go, Random.Range(22f, 30f));
+            }
+            // If this was a supporting building story, un-anchor any story resting directly above it so the skyscraper collapses downward!
+            foreach (var col in Physics.OverlapBox(transform.position + Vector3.up * (size.y * 0.85f), new Vector3(size.x * 0.45f, size.y * 0.6f, size.z * 0.45f), transform.rotation, ~0, QueryTriggerInteraction.Ignore))
+            {
+                var aboveProp = col.GetComponentInParent<BreakableProp>();
+                if (aboveProp != null && aboveProp != this && !aboveProp._broken)
+                {
+                    var aboveRb = aboveProp.GetComponent<Rigidbody>();
+                    if (aboveRb != null && aboveRb.isKinematic)
+                    {
+                        aboveRb.isKinematic = false;
+                        aboveRb.AddForce(Vector3.down * 45f, ForceMode.Impulse);
+                        aboveProp.toughness = Mathf.Min(aboveProp.toughness, 95f);
+                    }
+                }
             }
             if (explosive)
             {

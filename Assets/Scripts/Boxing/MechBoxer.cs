@@ -749,9 +749,10 @@ namespace IronFauna.Boxing
             return opponent.HeadPoint() + Vector3.down * spec.aimDrop;
         }
 
-        /// <summary>Where a punch to the head lands (moves when the boxer slips or ducks).</summary>
+        /// <summary>Where a punch to the head lands (moves when the boxer slips, ducks, sits, crawls, or is knocked down on the mat).</summary>
         public Vector3 HeadPoint()
         {
+            if (suppressed || IsKO) return transform.position + Vector3.up * 0.85f;
             if (_b != null && _b.headRoot != null) return _b.headRoot.position + Vector3.up * 0.28f;
             return transform.position + Vector3.up * 4f;
         }
@@ -929,10 +930,12 @@ namespace IronFauna.Boxing
             _slipT = Mathf.Max(0f, _slipT - dt);
             float slip = _slipT > 0f ? Mathf.Sin(Mathf.PI * (1f - _slipT / 0.42f)) : 0f;   // in and back out
             _guardBlend = Mathf.MoveTowards(_guardBlend, intent.guard && _punch == null && !IsKO ? 1f : 0f, dt * 7f);
-            bool wantSit = (intent.sit || LegsLeft == 0) && !IsKO && !suppressed;
-            bool wantCrouch = (intent.crouch || (_punch != null && (_punch.type == PunchType.CapoeiraSweep || _punch.type == PunchType.DoubleLegTakedown))) && !wantSit && !IsKO;
+            bool wantSit = (intent.sit || LegsLeft == 0) && !IsKO;
+            bool oppGrounded = opponent != null && (opponent.LegsLeft == 0 || opponent.IsSeated || opponent.suppressed);
+            bool groundPound = oppGrounded && _punch != null && !_punch.kick && LegsLeft > 0;
+            bool wantCrouch = (intent.crouch || groundPound || (_punch != null && (_punch.type == PunchType.CapoeiraSweep || _punch.type == PunchType.DoubleLegTakedown))) && !wantSit && !IsKO;
             _seatedBlend = Mathf.MoveTowards(_seatedBlend, wantSit ? 1f : 0f, dt * 4.5f);
-            _crouchBlend = Mathf.MoveTowards(_crouchBlend, wantCrouch ? 1f : 0f, dt * 5.5f);
+            _crouchBlend = Mathf.MoveTowards(_crouchBlend, wantCrouch ? 1f : 0f, dt * (groundPound ? 9f : 5.5f));
             if (_gait == null) _gait = GetComponent<IronFauna.Gameplay.MechGaitAnimator>();
             if (_gait != null)
             {
@@ -971,7 +974,7 @@ namespace IronFauna.Boxing
             float stanceYaw = 16f * sgn * _fight;
             float travelLean = Mathf.Clamp(localVel.z * 2.2f, -5f, 6f);
             float sitLean = -14f * _seatedBlend + (_seatedBlend > 0.3f ? Mathf.Sin(_t * 7f) * 8f * speed01 : 0f);
-            float crouchLean = 18f * _crouchBlend;
+            float crouchLean = (groundPound ? 26f : 18f) * _crouchBlend;
             float yawTarget = stanceYaw + pYaw + Mathf.Sin(_t * 2f * Mathf.PI * 0.43f + 1f) * 3f;
             float pitchTarget = Mathf.Lerp(3f, 7f, _fight) + pLean + travelLean + _guardBlend * 6f + slip * 10f + crouchLean + sitLean + koPitch;
             float rollTarget = pRoll - localVel.x * 1.2f - slip * _slipDir * 16f - weave * 25f;

@@ -254,10 +254,10 @@ namespace IronFauna.Brawl
             // 1. Multi-story destructible city buildings right on the intersection corners & avenues (3-4 stacked floors per building!)
             Vector2[] buildingLots =
             {
-                new Vector2(-9.5f, -9.5f), new Vector2(9.5f, -9.5f),
-                new Vector2(-9.5f, 9.5f),  new Vector2(9.5f, 9.5f),
-                new Vector2(0f, -17.5f),   new Vector2(0f, 17.5f),
-                new Vector2(-17.5f, 0f),   new Vector2(17.5f, 0f),
+                new Vector2(-11.5f, -11.5f), new Vector2(11.5f, -11.5f),
+                new Vector2(-11.5f, 11.5f),  new Vector2(11.5f, 11.5f),
+                new Vector2(0f, -18.5f),     new Vector2(0f, 18.5f),
+                new Vector2(-18.5f, 0f),     new Vector2(18.5f, 0f),
             };
             for (int b = 0; b < buildingLots.Length; b++)
             {
@@ -271,9 +271,9 @@ namespace IronFauna.Brawl
                 {
                     Color col = (f % 2 == 0) ? IronFaunaPalette.CityConcrete : IronFaunaPalette.CityGlass;
                     Vector3 center = new Vector3(basePos.x, gy + (f + 0.5f) * floorH, basePos.z);
-                    // Bottom floor is anchored until smashed; upper floors rest on top so they collapse when the base is destroyed!
+                    // All stories start anchored; when a lower floor shatters, upper floors un-anchor and crash down into the street!
                     var floorProp = BreakableProp.Create(arena, $"CityBuilding_F{f + 1}", center,
-                        new Vector3(w, floorH * 0.96f, d), col, 32f, f == 0, new Vector3Int(3, 2, 3));
+                        new Vector3(w, floorH * 0.96f, d), col, 32f, true, new Vector3Int(3, 2, 3));
                     // Lit window ribbon around each story
                     Color neon = (b % 3 == 0) ? IronFaunaPalette.CyanEnergy : (b % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.OrangeJointCore;
                     ClamshellParts.Spawn(floorProp.transform, "WindowBand",
