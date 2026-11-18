@@ -554,7 +554,48 @@ namespace IronFauna.Brawl
 
             if (_poise <= 0f && !IsKO) Knockdown(1.4f + damage * 0.03f);
             if (health <= 0f && !IsKO) KnockOut();
+            EmitHitSparks(point, Mathf.Clamp01(damage / 20f) + (ripped ? 0.8f : 0f));
             Hit?.Invoke(this, attacker, point, damage, power, ripped);
+        }
+
+        private static ParticleSystem _sparks;
+
+        private static void EmitHitSparks(Vector3 at, float intensity)
+        {
+            if (_sparks == null)
+            {
+                Shader sh = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                if (sh == null) return;
+                var go = new GameObject("HitSparksPool") { hideFlags = HideFlags.DontSave };
+                _sparks = go.AddComponent<ParticleSystem>();
+                _sparks.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var main = _sparks.main;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.18f, 0.42f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(5f, 16f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.22f);
+                main.startColor = new ParticleSystem.MinMaxGradient(IronFaunaPalette.OrangeJointCore, IronFaunaPalette.HazardYellow);
+                main.gravityModifier = 1.6f;
+                main.maxParticles = 400;
+                main.playOnAwake = false;
+                var emission = _sparks.emission;
+                emission.rateOverTime = 0f;
+                var shape = _sparks.shape;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 0.18f;
+                var size = _sparks.sizeOverLifetime;
+                size.enabled = true;
+                size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0f));
+                var pr = go.GetComponent<ParticleSystemRenderer>();
+                pr.renderMode = ParticleSystemRenderMode.Stretch;
+                pr.velocityScale = 0.06f;
+                pr.lengthScale = 2.2f;
+                var mat = new Material(sh) { hideFlags = HideFlags.DontSave };
+                mat.SetColor("_BaseColor", IronFaunaPalette.OrangeJointCore);
+                pr.sharedMaterial = mat;
+            }
+            var ep = new ParticleSystem.EmitParams { position = at, applyShapeToPosition = true };
+            _sparks.Emit(ep, Mathf.RoundToInt(Mathf.Lerp(8f, 32f, Mathf.Clamp01(intensity))));
         }
 
         public void Knockdown(float seconds)

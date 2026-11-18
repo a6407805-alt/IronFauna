@@ -25,9 +25,12 @@ namespace IronFauna.Boxing
         public bool allowMouseAndWasd = true;
 
         private MechBoxer _boxer;
+        private MechBoxerAI _idleAi;
         private int _lastSlip = 1;
         private float _scrollAcc;
         private bool _sitToggle;
+        private float _idleTime;
+        public bool autoPilot;
 
         /// <summary>Index into MechBoxer.Specials of the special the scroll wheel has picked.</summary>
         public int SpecialIndex { get; private set; }
@@ -41,7 +44,17 @@ namespace IronFauna.Boxing
             SpecialChanged?.Invoke(SelectedSpecial);
         }
 
-        private void Awake() => _boxer = GetComponent<MechBoxer>();
+        private void Awake()
+        {
+            _boxer = GetComponent<MechBoxer>();
+            _idleAi = GetComponent<MechBoxerAI>();
+            if (_idleAi == null)
+            {
+                _idleAi = gameObject.AddComponent<MechBoxerAI>();
+                _idleAi.skill = 0.72f;
+                _idleAi.enabled = false;
+            }
+        }
 
         private void Start()
         {
@@ -83,9 +96,10 @@ namespace IronFauna.Boxing
                     if (kb.fKey.wasPressedThisFrame) punch = PunchType.FrontKick;
                     if (kb.rKey.wasPressedThisFrame) punch = PunchType.Roundhouse;
                     if (kb.vKey.wasPressedThisFrame) punch = PunchType.LowCalfKick;
+                    if (kb.f1Key.wasPressedThisFrame) autoPilot = !autoPilot;
                     guard |= kb.leftShiftKey.isPressed;
                     slip |= kb.cKey.wasPressedThisFrame;
-                    crouch |= kb.xKey.isPressed || kb.leftAltKey.isPressed;
+                    crouch |= kb.xKey.isPressed; // X only so Alt+Tab never locks crouch on!
                     if (kb.zKey.wasPressedThisFrame) _sitToggle = !_sitToggle;
                     if (kb.spaceKey.wasPressedThisFrame) punch = SelectedSpecial;
                     sprint |= kb.leftCtrlKey.isPressed;
@@ -152,6 +166,25 @@ namespace IronFauna.Boxing
             {
                 slipDir = move.x < -0.3f ? -1 : move.x > 0.3f ? 1 : -_lastSlip;
                 _lastSlip = slipDir;
+            }
+
+            bool anyHumanInput = move.sqrMagnitude > 0.01f || punch != PunchType.None || guard || slip || sprint || grab || crouch || _sitToggle;
+            if (anyHumanInput)
+            {
+                _idleTime = 0f;
+                if (move.sqrMagnitude > 0.01f || punch != PunchType.None) autoPilot = false;
+            }
+            else
+            {
+                _idleTime += Time.unscaledDeltaTime;
+            }
+
+            // If Auto-Pilot (F1) is on or the player has been hands-off for 6s, let the AI spar until any key is pressed!
+            if (_idleAi != null)
+            {
+                bool aiActive = autoPilot || _idleTime > 6f;
+                _idleAi.enabled = aiActive;
+                if (aiActive) return;
             }
 
             var i = _boxer.intent;

@@ -451,6 +451,7 @@ namespace IronFauna.Brawl
             var canvas = MenuUI.CreateCanvas("BrawlHud", 5);
             canvas.transform.SetParent(transform, false);
             Transform root = canvas.transform;
+            _hudRoot = root as RectTransform;
 
             // 1. Top-Left Framed Player Card (Stage Header, Animated Hull + Ghost Bar, Balance Bar, 4 Limb Pills, Posture)
             var playerCard = MenuUI.Panel(root, "PlayerHudCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
@@ -594,6 +595,66 @@ namespace IronFauna.Brawl
             return "MECH";
         }
 
+        private struct FloatingPopup
+        {
+            public RectTransform rt;
+            public Text text;
+            public Vector3 worldPos;
+            public float age;
+            public float duration;
+        }
+
+        private readonly List<FloatingPopup> _popups = new List<FloatingPopup>();
+        private RectTransform _hudRoot;
+
+        private void SpawnPopup(Vector3 worldPos, string label, Color color, int fontSize = 26)
+        {
+            if (_hudRoot == null) return;
+            var txt = MenuUI.Label(_hudRoot, label, fontSize, color, TextAnchor.MiddleCenter, FontStyle.Bold);
+            txt.rectTransform.sizeDelta = new Vector2(360f, 60f);
+            _popups.Add(new FloatingPopup
+            {
+                rt = txt.rectTransform,
+                text = txt,
+                worldPos = worldPos + Vector3.up * 0.6f,
+                age = 0f,
+                duration = 0.85f,
+            });
+        }
+
+        private void TickPopups(float dt)
+        {
+            var cam = _camera != null ? _camera : Camera.main;
+            for (int i = _popups.Count - 1; i >= 0; i--)
+            {
+                var p = _popups[i];
+                p.age += dt;
+                if (p.age >= p.duration || p.rt == null || cam == null)
+                {
+                    if (p.rt != null) Destroy(p.rt.gameObject);
+                    _popups.RemoveAt(i);
+                    continue;
+                }
+                p.worldPos += Vector3.up * (1.8f * dt);
+                Vector3 vp = cam.WorldToViewportPoint(p.worldPos);
+                if (vp.z <= 0f)
+                {
+                    p.text.enabled = false;
+                }
+                else
+                {
+                    p.text.enabled = true;
+                    p.rt.anchorMin = p.rt.anchorMax = new Vector2(vp.x, vp.y);
+                    p.rt.anchoredPosition = Vector2.zero;
+                    float a = 1f - Mathf.Clamp01((p.age - p.duration * 0.45f) / (p.duration * 0.55f));
+                    var c = p.text.color;
+                    c.a = a;
+                    p.text.color = c;
+                }
+                _popups[i] = p;
+            }
+        }
+
         private void OnHit(MechRagdoll victim, MechRagdoll attacker, Vector3 point, float damage, float power, bool ripped)
         {
             var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
@@ -606,7 +667,16 @@ namespace IronFauna.Brawl
                 BoxingFeel.Shake(Mathf.Lerp(0.25f, 0.75f, k) + (ripped ? 0.4f : 0f));
                 BoxingFeel.FovKick = Mathf.Lerp(1.5f, 5f, k);
             }
-            if (ripped && attacker == me) Banner("LIMB TORN", 1.2f);
+            if (ripped)
+            {
+                if (attacker == me) Banner("LIMB TORN", 1.2f);
+                SpawnPopup(point, "LIMB TORN! -" + Mathf.RoundToInt(damage), IronFaunaPalette.CrimsonFront, 32);
+            }
+            else if (damage >= 8f)
+            {
+                Color popCol = damage >= 18f ? IronFaunaPalette.OrangeJointCore : IronFaunaPalette.HazardYellow;
+                SpawnPopup(point, (damage >= 18f ? "CRIT -" : "-") + Mathf.RoundToInt(damage), popCol, damage >= 18f ? 30 : 24);
+            }
             if (!ripped && _announcer != null && attacker != null)
             {
                 _announcer.OnHeavyHit(FighterName(attacker), FighterName(victim), damage);
@@ -711,6 +781,7 @@ namespace IronFauna.Brawl
             }
 
             UpdateMoveLabel();
+            TickPopups(Time.unscaledDeltaTime);
             _targetT -= Time.unscaledDeltaTime;
             if (_targetT <= 0f) { _targetT = 0.4f; Retarget(); }
 
