@@ -51,6 +51,9 @@ namespace IronFauna.Boxing
         public Transform moveReference;
         [Tooltip("Squares up to the opponent inside this range; further out it turns to face where it walks")]
         public float lockOnRange = 9f;
+        [Tooltip("Off: never locks on - faces where it walks; turns into an opponent only while punching or guarding")]
+        public bool lockOn = true;
+        public float punchTurnRange = 4.5f;
         public float sprintSpeed = 5.6f;
         public float stepTime = 0.3f;
         public float minDistance = 2.05f;
@@ -350,8 +353,9 @@ namespace IronFauna.Boxing
             bool sprinting = intent.sprint && m.sqrMagnitude > 0.05f && _punch == null && _guardBlend < 0.5f;
 
             // squared up (fighting stance, always facing the opponent) only when someone is close and we are not running
-            bool engage = opponent != null && !opponent.IsKO && dist < lockOnRange && !sprinting;
-            if (_punch != null || _guardBlend > 0.5f) engage |= opponent != null && dist < lockOnRange * 1.5f;
+            bool engage = lockOn && opponent != null && !opponent.IsKO && dist < lockOnRange && !sprinting;
+            bool busy = _punch != null || _guardBlend > 0.5f || intent.punch != PunchType.None;
+            if (busy) engage |= opponent != null && !opponent.IsKO && dist < (lockOn ? lockOnRange * 1.5f : punchTurnRange);
             _fight = Mathf.MoveTowards(_fight, engage ? 1f : 0f, dt * 2.5f);
 
             // input frame: the camera when given (free movement), otherwise the line to the opponent

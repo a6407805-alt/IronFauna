@@ -33,6 +33,7 @@ namespace IronFauna.Brawl
         [Header("Strength")]
         public float muscle = 1f;             // joint motor multiplier (0 = limp)
         public float balance = 1f;            // pelvis controller multiplier (0 = no help standing)
+        public float footHold = 1f;           // how hard each foot is held on the animation's footstep
 
         public bool IsKO { get; private set; }
         public bool IsDown => _downT > 0f || IsKO;
@@ -72,6 +73,9 @@ namespace IronFauna.Brawl
         private float _recoverT;
         private float _lastHitT;
         private readonly Dictionary<MechRagdoll, int> _struckBy = new Dictionary<MechRagdoll, int>();
+        private readonly Dictionary<Segment, Vector3> _lastTargetPos = new Dictionary<Segment, Vector3>();
+        private readonly Dictionary<Segment, Vector3> _targetVel = new Dictionary<Segment, Vector3>();
+        private readonly Dictionary<Segment, float> _lastTargetT = new Dictionary<Segment, float>();
 
         // ------------------------------------------------------------------ build
         /// <summary>Turns <paramref name="mech"/> into physics segments driven by <paramref name="animated"/>.</summary>
@@ -332,6 +336,33 @@ namespace IronFauna.Brawl
                 p.AddForce(-Physics.gravity * _totalMass * b * 0.92f, ForceMode.Force);
                 PdRotate(p, tp.rotation, 9f * b, 0.9f);
                 PdRotate(_torso.rb, _torso.target.rotation, 5f * b, 0.9f);
+            }
+
+            // feet: pinned where the animation planted them, carried along each step - so the legs walk instead of
+            // being towed by the hips
+            float fb = balance * footHold;
+            foreach (var s in _segs)
+            {
+                if (!s.name.StartsWith("Foot") || s.detached || s.target == null) continue;
+                Vector3 tpos = s.target.position;
+                // the animation moves once per rendered frame, physics steps faster: measure velocity between changes
+                if (!_lastTargetPos.TryGetValue(s, out var last)) { _lastTargetPos[s] = tpos; _lastTargetT[s] = Time.time; _targetVel[s] = Vector3.zero; }
+                else if ((tpos - last).sqrMagnitude > 1e-10f)
+                {
+                    float el = Mathf.Max(1e-3f, Time.time - _lastTargetT[s]);
+                    _targetVel[s] = (tpos - last) / el;
+                    _lastTargetPos[s] = tpos;
+                    _lastTargetT[s] = Time.time;
+                }
+                else if (Time.time - _lastTargetT[s] > 0.1f) _targetVel[s] = Vector3.zero;
+                Vector3 tvel = _targetVel[s];
+                if (fb < 0.01f) continue;
+                float wf = 2f * Mathf.PI * 4.5f;
+                Vector3 fa = wf * wf * (tpos - s.rb.position) + 2f * 1.0f * wf * (tvel - s.rb.linearVelocity);
+                fa = Vector3.ClampMagnitude(fa, 90f);
+                // carry the weight of the whole leg, so a lifted foot really lifts
+                s.rb.AddForce(fa * (s.rb.mass + 22f) * fb, ForceMode.Force);
+                PdRotate(s.rb, s.target.rotation, 6f * fb, 0.9f);
             }
 
             // the ghost never wanders away from the body (knockback, falls, being thrown)

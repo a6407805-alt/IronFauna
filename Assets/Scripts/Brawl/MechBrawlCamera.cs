@@ -23,6 +23,8 @@ namespace IronFauna.Brawl
         private bool _snapped;
         private float _yaw;
         public float mouseSensitivity = 0.12f;
+        [Tooltip("Off: the camera never frames the opponent; the mouse / right stick always orbits it")]
+        public bool lockOn = false;
 
         private void Awake() => _cam = GetComponent<Camera>();
 
@@ -36,7 +38,7 @@ namespace IronFauna.Brawl
             Vector3 a = player.Position;
             a.y = 0f;
             // frame the locked-on opponent while squared up; otherwise sit behind where the mech is heading
-            bool framing = target != null && player.ghost.FightBlend > 0.4f;
+            bool framing = lockOn && target != null && player.ghost.FightBlend > 0.4f;
             Vector3 axis;
             float sep;
             Vector3 b;

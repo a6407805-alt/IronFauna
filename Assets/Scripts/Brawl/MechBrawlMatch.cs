@@ -119,7 +119,11 @@ namespace IronFauna.Brawl
             f.ghost = f.ghostGo.AddComponent<MechBoxer>();
             f.ghost.ringHalfSize = ArenaHalf + 30f;      // the arena edge is real: no invisible walls
             f.ghost.minDistance = 2.3f;
-            if (player) f.ghostGo.AddComponent<MechBoxerPlayerInput>();
+            if (player)
+            {
+                f.ghostGo.AddComponent<MechBoxerPlayerInput>();
+                f.ghost.lockOn = false;     // free movement: faces where you steer, turns into a target only to hit it
+            }
             else
             {
                 var ai = f.ghostGo.AddComponent<MechBoxerAI>();
