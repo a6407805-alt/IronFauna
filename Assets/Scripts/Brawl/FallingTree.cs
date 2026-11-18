@@ -116,13 +116,13 @@ namespace IronFauna.Brawl
             if (!_fallen)
             {
                 bool hitByMech = c.rigidbody != null && c.rigidbody.GetComponent<MechRagdollPart>() != null;
-                if (!hitByMech && c.relativeVelocity.magnitude < 6f) return;
+                if (!hitByMech && c.relativeVelocity.magnitude < 5f) return;
                 float hit = c.impulse.magnitude;
                 if (hitByMech)
                 {
-                    hit = Mathf.Max(hit, c.relativeVelocity.magnitude * 30f);
+                    hit = Mathf.Max(hit, 24f + c.relativeVelocity.magnitude * 28f);
                 }
-                if (hit < 35f) return;
+                if (hit < 20f) return;
                 _damage += hit;
                 if (_damage >= toughness)
                 {

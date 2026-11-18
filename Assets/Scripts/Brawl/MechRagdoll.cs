@@ -593,16 +593,25 @@ namespace IronFauna.Brawl
                 float limbDmg = damage * (seg.limb != LimbId.None ? (headShot ? 0.9f : 1.35f) : 0.65f) * tearMult;
                 _limbHealth[targetLimb] -= limbDmg;
                 float lh = _limbHealth[targetLimb];
-                // armor cracks off as the limb weakens
-                if (lh < 38f) ShedArmor(seg, dir, 1);
-                if (lh < 18f) ShedArmor(seg, dir, 2);
+                Segment armorSeg = seg.limb == targetLimb ? seg : null;
+                if (armorSeg == null)
+                {
+                    foreach (var s in _segs) if (s.limb == targetLimb && s.armor.Count > 0) { armorSeg = s; break; }
+                }
+                // armor cracks off the damaged limb as it weakens; torso clamshell stays intact until critical hull (<28% HP)
+                if (armorSeg != null)
+                {
+                    if (lh < 38f) ShedArmor(armorSeg, dir, 1);
+                    if (lh < 18f) ShedArmor(armorSeg, dir, 2);
+                }
+                if (health < maxHealth * 0.28f && (seg == _torso || seg == _pelvis)) ShedArmor(seg, dir, 1);
                 if (lh <= 0f)
                 {
                     // Decapitation only finishes a fighter who is already below 35% hull integrity; otherwise it sheds head armor & knocks down!
                     if (targetLimb == LimbId.Head && health > maxHealth * 0.35f)
                     {
                         _limbHealth[targetLimb] = 16f;
-                        ShedArmor(seg, dir, 2);
+                        if (armorSeg != null) ShedArmor(armorSeg, dir, 2);
                         Knockdown(2.0f);
                     }
                     else
@@ -612,7 +621,7 @@ namespace IronFauna.Brawl
                     }
                 }
             }
-            else if (health < maxHealth * 0.6f) ShedArmor(seg, dir, 1);
+            else if (health < maxHealth * 0.28f) ShedArmor(seg, dir, 1);
 
             if (_poise <= 0f && !IsKO) Knockdown(1.4f + damage * 0.03f);
             if (health <= 0f && !IsKO) KnockOut();
