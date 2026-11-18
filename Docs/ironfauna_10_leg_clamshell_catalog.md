@@ -87,7 +87,7 @@
 
 Every upper-body bone uses the exact same **two-half clamshell + side toggle-latch + 45° joint bevel** construction:
 - **Torso / Core Spine:** Clamps around the central vertical spine between the **Neck Hub**, **Dual Shoulder Hubs**, and **Waist Hub**.
-- **Upper Arm Bone:** Identical collar diameter to the Calf/Thigh bone — in fact, if you standardize Upper Arm & Forearm bone lengths/diameters to match Calf/Thigh, **arm and leg clamshells can even be cross-compatible on Quadruped vs. Humanoid builds!**
+- **Upper Arm Bone:** Identical collar diameter to the Calf/Thigh bone.
 
 | # | Set Name | Torso Front / Rear Halves | Upper Arm Front / Rear Halves | Forearm Front / Rear Halves |
 | :--- | :--- | :--- | :--- | :--- |

@@ -6,7 +6,7 @@ using IronFauna.Core;
 namespace IronFauna.Clamshell
 {
     /// <summary>
-    /// Assembles an IronFauna mech (humanoid or quadruped) from procedural clamshell meshes:
+    /// Assembles an IronFauna fighting mech (humanoid) from procedural clamshell meshes:
     /// - Bare gunmetal skeleton with fully exposed rotary joint hubs (glowing orange knee/elbow/neck cores)
     /// - Two-half clamshells (front + back) clamped onto one bone each, joined by toggle latches
     /// - 45° beveled shell ends and joint-side detail bands, so legs fold into all 5 poses with no overlap
@@ -19,7 +19,6 @@ namespace IronFauna.Clamshell
         public const float AnkleHeight = 0.26f;
 
         [Header("Chassis & Stance Configuration")]
-        public bool isQuadrupedChassis = false;
         public LegPosePreset legPose = LegPosePreset.Pose1_HumanLeg;
         [Tooltip("Index into IronFaunaPalette.PaintSchemes")]
         public int paintScheme = 0;
@@ -65,10 +64,10 @@ namespace IronFauna.Clamshell
         [Tooltip("Half-width where the clavicle struts leave the spine (humanoid).")]
         public float collarWidth = 0.30f;
 
-        // ---- Animation pivots, refreshed on every rebuild (driven by MechRobotOperator) ----
+        // ---- Animation pivots, refreshed on every rebuild (driven by MechGaitAnimator + MechBoxer) ----
         /// <summary>Root of the generated mech (child of this transform).</summary>
         public Transform visualRoot => _visualRoot;
-        /// <summary>Upper body pivot: torso, arms, head (humanoid) or body shell and head (quadruped).</summary>
+        /// <summary>Upper body pivot: torso, arms and head.</summary>
         [System.NonSerialized] public Transform bodyRoot;
         /// <summary>Head yaw pivot at the neck hub.</summary>
         [System.NonSerialized] public Transform headRoot;
@@ -78,7 +77,7 @@ namespace IronFauna.Clamshell
         /// <summary>Leg swing pivots at hip height, left (-X) and right (+X) side.</summary>
         [System.NonSerialized] public List<Transform> leftSideLegs = new List<Transform>();
         [System.NonSerialized] public List<Transform> rightSideLegs = new List<Transform>();
-        /// <summary>Projectile spawn point (right hand, or the dorsal hub on a quadruped).</summary>
+        /// <summary>Point just ahead of the right fist.</summary>
         [System.NonSerialized] public Transform weaponMuzzle;
         /// <summary>
         /// One bendable leg: the thigh pivot sits on the hip, the calf pivot on the knee, and the foot is free so it
@@ -130,7 +129,7 @@ namespace IronFauna.Clamshell
         public float HipHeight { get; private set; }
         /// <summary>Height of the neck hub after the last rebuild.</summary>
         public float NeckHeight { get; private set; }
-        /// <summary>Height of the shoulder line (humanoid) or spine (quadruped) after the last rebuild.</summary>
+        /// <summary>Height of the shoulder line after the last rebuild.</summary>
         public float ChestHeight { get; private set; }
 
         private const float JointGap = 0.06f;
@@ -237,7 +236,6 @@ namespace IronFauna.Clamshell
         public void ApplyLoadout(MechLoadout loadout)
         {
             if (loadout == null) return;
-            isQuadrupedChassis = loadout.quadruped;
             legPose = loadout.legPose;
             paintScheme = loadout.paintScheme;
             torsoWeight = loadout.torsoWeight;
@@ -253,7 +251,6 @@ namespace IronFauna.Clamshell
         {
             var loadout = new MechLoadout
             {
-                quadruped = isQuadrupedChassis,
                 legPose = legPose,
                 paintScheme = paintScheme,
                 torsoWeight = torsoWeight,
@@ -291,8 +288,7 @@ namespace IronFauna.Clamshell
             float hipHeight = AnkleHeight + extension * (thighLength + calfLength);
             HipHeight = hipHeight;
 
-            if (!isQuadrupedChassis) BuildHumanoidChassis(kneeForward, hipHeight);
-            else BuildQuadrupedChassis(kneeForward, hipHeight);
+            BuildHumanoidChassis(kneeForward, hipHeight);
             BuildAnimationPivots(hipHeight);
         }
 
@@ -305,7 +301,7 @@ namespace IronFauna.Clamshell
 
         /// <summary>
         /// Groups the built parts under pivots the motion code can move: one swing pivot per leg at hip height,
-        /// an upper-body pivot (the height MechRobotOperator expects), a head pivot at the neck, and the arm roots.
+        /// an upper-body pivot, a head pivot at the neck, and the arm roots.
         /// </summary>
         private void BuildAnimationPivots(float hipHeight)
         {
@@ -314,14 +310,14 @@ namespace IronFauna.Clamshell
             var children = new List<Transform>();
             foreach (Transform child in _visualRoot) children.Add(child);
 
-            float bodyY = isQuadrupedChassis ? hipHeight + 0.15f : hipHeight + 0.82f;
+            float bodyY = hipHeight + 0.82f;
             bodyRoot = ClamshellParts.Empty(_visualRoot, "BodyPivot", new Vector3(0f, bodyY, 0f), Quaternion.identity);
             headRoot = null;
             Vector3 neckPos = Vector3.zero;
             foreach (var child in children)
             {
                 string n = child.name;
-                if (n.StartsWith("Leg_") || n.StartsWith("FrontLeg_") || n.StartsWith("RearLeg_"))
+                if (n.StartsWith("Leg_"))
                 {
                     Vector3 p = child.localPosition;
                     var pivot = ClamshellParts.Empty(_visualRoot, n + "_SwingPivot", new Vector3(p.x, hipHeight, p.z), Quaternion.identity);
@@ -329,7 +325,7 @@ namespace IronFauna.Clamshell
                     (p.x < 0f ? leftSideLegs : rightSideLegs).Add(pivot);
                     continue;
                 }
-                if (n == "NeckHub" || n == "QuadNeckHub") neckPos = child.localPosition;
+                if (n == "NeckHub") neckPos = child.localPosition;
                 child.SetParent(bodyRoot, true);
             }
 
@@ -337,7 +333,7 @@ namespace IronFauna.Clamshell
             foreach (var child in children)
             {
                 string n = child.name;
-                if (n.StartsWith("Head") || n.StartsWith("NeckHub") || n.StartsWith("QuadNeckHub") || n.StartsWith("AnimalHead") || n.StartsWith("BeastOptic"))
+                if (n.StartsWith("Head") || n.StartsWith("NeckHub"))
                 {
                     child.SetParent(headRoot, true);
                 }
@@ -364,8 +360,8 @@ namespace IronFauna.Clamshell
                 {
                     if (pivot == null || pivot.childCount == 0) continue;
                     float roll = side * 5f;                                   // feet wider than the hips
-                    float yawOut = isQuadrupedChassis ? 0f : side * 9f;       // toes out
-                    float pitch = isQuadrupedChassis ? 0f : side * 3f;        // left foot leads, right foot trails
+                    float yawOut = side * 9f;       // toes out
+                    float pitch = side * 3f;        // left foot leads, right foot trails
                     pivot.localRotation = Quaternion.Euler(pitch, yawOut, roll);
 
                     Transform legRoot = pivot.GetChild(0);
@@ -378,8 +374,8 @@ namespace IronFauna.Clamshell
                 }
             }
             _visualRoot.localPosition = new Vector3(0f, -lift, 0f);
-            if (bodyRoot != null) bodyRoot.localRotation = Quaternion.Euler(2f, isQuadrupedChassis ? 0f : 5f, 0f);
-            if (headRoot != null) headRoot.localRotation = Quaternion.Euler(isQuadrupedChassis ? 6f : 4f, isQuadrupedChassis ? 10f : -14f, 0f);
+            if (bodyRoot != null) bodyRoot.localRotation = Quaternion.Euler(2f, 5f, 0f);
+            if (headRoot != null) headRoot.localRotation = Quaternion.Euler(4f, -14f, 0f);
         }
 
         /// <summary>
@@ -487,110 +483,6 @@ namespace IronFauna.Clamshell
                 ClamshellOnBone(_visualRoot, "Shoulder" + suffix, clavicleStart, shoulderHub, 0.20f, 0.21f, Vector3.up, ShoulderDims.For(_torso),
                     shoulderFrontSet, shoulderBackSet, -0.35f, 0.35f, out _, out _);
                 BuildArmAssembly("Arm" + suffix, shoulderHub, side);
-            }
-        }
-
-        private void BuildQuadrupedChassis(bool kneeForward, float hipHeight)
-        {
-            float legX = _torso.legX;
-            const float legZ = 0.85f;
-            // Quadruped knees always point away from the body: knees pointing inward cross under the
-            // spine in the deeper stances and the front and rear leg armor collide. The stance still sets the height.
-            BuildLegAssembly("FrontLeg_L", new Vector3(-legX, 0f, legZ), true, hipHeight);
-            BuildLegAssembly("FrontLeg_R", new Vector3(legX, 0f, legZ), true, hipHeight);
-            BuildLegAssembly("RearLeg_L", new Vector3(-legX, 0f, -legZ), false, hipHeight);
-            BuildLegAssembly("RearLeg_R", new Vector3(legX, 0f, -legZ), false, hipHeight);
-
-            float spineY = hipHeight + 0.15f;
-            ChestHeight = spineY;
-            const float bodyHalfLen = 1.0f;
-            float bodyW = 0.90f * _torso.armorWidth;
-            const float bodyH = 0.70f;
-
-            // Animal torso skeleton: arched spine with vertebrae and cable tracks, ribs, shoulder and hip girdles,
-            // and a bulkhead ring at the armor seam that carries the dorsal and flank weapon sockets.
-            Vector3 hipLine = new Vector3(0f, hipHeight, 0f);
-            bool torsoSkeleton = Skel(_visualRoot, "TorsoSkeleton", $"Skel_TorsoAnimal_{torsoWeight}", hipLine, Quaternion.identity, Vector3.one) != null;
-            if (torsoSkeleton)
-            {
-                MechFrameSpec.HardpointSizes(torsoWeight, out var sideSize, out var mainSize, out _);
-                float top = 0.15f + bodyH * 0.5f + 0.02f;
-                AddHardpoint("Dorsal", hipLine + new Vector3(0f, top + 0.135f, 0f), mainSize, Vector3.up);
-                AddHardpoint("FlankL", hipLine + new Vector3(-(bodyW * 0.5f + 0.115f), 0.15f, 0f), sideSize, Vector3.left);
-                AddHardpoint("FlankR", hipLine + new Vector3(bodyW * 0.5f + 0.115f, 0.15f, 0f), sideSize, Vector3.right);
-                AddHardpoint("Tail", hipLine + new Vector3(0f, 0.21f, -1.165f), HardpointSize.Small, Vector3.back);
-            }
-            else
-            {
-                Strut(_visualRoot, "FrontHipBar", new Vector3(-legX, hipHeight, legZ), new Vector3(legX, hipHeight, legZ), 0.16f);
-                Strut(_visualRoot, "RearHipBar", new Vector3(-legX, hipHeight, -legZ), new Vector3(legX, hipHeight, -legZ), 0.16f);
-                Strut(_visualRoot, "HorizontalSpine", new Vector3(0f, spineY, -1.05f), new Vector3(0f, spineY, 1.05f), 0.36f);
-                Hub(_visualRoot, "DorsalWeaponHub", new Vector3(0f, spineY + bodyH * 0.5f + 0.04f, 0f), jointRadius, true);
-            }
-            ClamshellParts.Empty(_visualRoot, "WeaponMuzzle", new Vector3(0f, spineY + bodyH * 0.5f + 0.2f, 0.4f), Quaternion.identity);
-
-            // Thorax (front half) + haunch (back half): split along the spine, seam over the dorsal hub.
-            var bodyMesh = ClamshellMeshFactory.LengthwiseHalf(bodyHalfLen, bodyW, bodyH, 0.22f, 0.55f);
-            Quaternion facingFwd = Quaternion.LookRotation(Vector3.up, Vector3.forward); // local Y forward, local Z up
-            Quaternion facingBack = Quaternion.LookRotation(Vector3.up, Vector3.back);
-            var bodySize = new Vector3(bodyW, bodyHalfLen, bodyH);
-            Vector3 thoraxPos = new Vector3(0f, spineY, bodyHalfLen * 0.5f);
-            Vector3 haunchPos = new Vector3(0f, spineY, -bodyHalfLen * 0.5f);
-            var bodyFrame = new ClamshellFeatureKit.Frame
-            {
-                width = bodyW, length = bodyHalfLen, depth = 0.17f, outer = bodyH * 0.5f, sign = 1f,
-                bandLo = -0.30f, bandHi = 0.32f, shellColor = _front,
-            };
-            if (showArmor && TrySpawnLengthwise(_visualRoot, $"ThoraxFrontHalf_{bodyFrontSet}", $"QuadBodyFront_{bodyFrontSet}", bodySize, thoraxPos, facingFwd, _front, _torso.armorWidth) == null)
-            {
-                var thorax = ClamshellParts.Spawn(_visualRoot, $"ThoraxFrontHalf_{bodyFrontSet}", bodyMesh, thoraxPos, facingFwd, _front);
-                ClamshellFeatureKit.Build(thorax.transform, bodyFrontSet, true, bodyFrame);
-            }
-            if (showArmor && TrySpawnLengthwise(_visualRoot, $"HaunchBackHalf_{bodyBackSet}", $"QuadBodyBack_{bodyBackSet}", bodySize, haunchPos, facingBack, _rear, _torso.armorWidth) == null)
-            {
-                var haunch = ClamshellParts.Spawn(_visualRoot, $"HaunchBackHalf_{bodyBackSet}", bodyMesh, haunchPos, facingBack, _rear);
-                bodyFrame.shellColor = _rear;
-                ClamshellFeatureKit.Build(haunch.transform, bodyBackSet, false, bodyFrame);
-            }
-
-            // Neck hub + animal head: skull (back half) and snout (front half), split along the head.
-            Vector3 neck = new Vector3(0f, spineY + 0.18f, 1.12f);
-            Hub(_visualRoot, "QuadNeckHub", neck, jointRadius * 0.9f, false);
-            NeckHeight = neck.y;
-            Skel(_visualRoot, "AnimalHeadSkeleton", "Skel_HeadAnimal", neck, Quaternion.identity, Vector3.one);
-            if (showArmor) BuildAnimalHeadShells(neck, facingFwd, facingBack);
-        }
-
-        private void BuildAnimalHeadShells(Vector3 neck, Quaternion facingFwd, Quaternion facingBack)
-        {
-            var skullMesh = ClamshellMeshFactory.LengthwiseHalf(0.24f, 0.42f, 0.34f, 0.08f, 0.6f);
-            var snoutMesh = ClamshellMeshFactory.LengthwiseHalf(0.24f, 0.36f, 0.28f, 0.10f, 0.45f);
-            Vector3 skullPos = neck + new Vector3(0f, 0.04f, 0.32f);
-            Vector3 snoutPos = neck + new Vector3(0f, 0.02f, 0.56f);
-            if (TrySpawnLengthwise(_visualRoot, $"AnimalHead_BackHalf_{headBackSet}", $"AnimalHeadBack_{headBackSet}",
-                    new Vector3(0.42f, 0.24f, 0.34f), skullPos, facingBack, _rear) == null)
-            {
-                var skull = ClamshellParts.Spawn(_visualRoot, $"AnimalHead_BackHalf_{headBackSet}", skullMesh, skullPos, facingBack, _rear);
-                ClamshellFeatureKit.Build(skull.transform, headBackSet, false, new ClamshellFeatureKit.Frame
-                {
-                    width = 0.42f, length = 0.24f, depth = 0.12f, outer = 0.17f, sign = 1f, bandLo = -0.35f, bandHi = 0.25f, shellColor = _rear,
-                });
-            }
-            // Hand-modeled snouts carry their own eyes.
-            if (TrySpawnLengthwise(_visualRoot, $"AnimalHead_FrontHalf_{headFrontSet}", $"AnimalHeadFront_{headFrontSet}",
-                    new Vector3(0.36f, 0.24f, 0.28f), snoutPos, facingFwd, _front) != null)
-            {
-                return;
-            }
-            var snout = ClamshellParts.Spawn(_visualRoot, $"AnimalHead_FrontHalf_{headFrontSet}", snoutMesh, snoutPos, facingFwd, _front);
-            ClamshellFeatureKit.Build(snout.transform, headFrontSet, true, new ClamshellFeatureKit.Frame
-            {
-                width = 0.36f, length = 0.24f, depth = 0.10f, outer = 0.14f, sign = 1f, bandLo = -0.15f, bandHi = 0.35f, shellColor = _front,
-            });
-            var eye = ClamshellMeshFactory.BeveledBox(new Vector3(0.07f, 0.05f, 0.05f), 0.01f);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                ClamshellParts.Spawn(_visualRoot, "BeastOptic", eye, neck + new Vector3(side * 0.15f, 0.12f, 0.47f), Quaternion.identity, IronFaunaPalette.CyanEnergy, true);
             }
         }
 
@@ -831,7 +723,7 @@ namespace IronFauna.Clamshell
         }
 
         /// <summary>
-        /// Spawns the hand-modeled lengthwise part <paramref name="resource"/> (feet, quadruped body, animal head) in a
+        /// Spawns the hand-modeled lengthwise part <paramref name="resource"/> (feet) in a
         /// box of <paramref name="size"/> (X width, Y length toward the tip, Z height) centred at the spawn point.
         /// Returns null when there is no model, so the caller builds the procedural half instead.
         /// <paramref name="widthScale"/> widens or narrows the model for Light and Heavy frames.

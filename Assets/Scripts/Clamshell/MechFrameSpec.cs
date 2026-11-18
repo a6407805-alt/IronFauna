@@ -34,18 +34,17 @@ namespace IronFauna.Clamshell
         public float hipX;         // humanoid: half the hip-track width
         public float shoulderX;    // humanoid: shoulder joint offset from the spine
         public float collar;       // humanoid: where the pauldron bone leaves the torso
-        public float legX;         // quadruped: half the leg spacing across the body
 
         public static MechFrameSpec Get(MechWeightClass weight)
         {
             switch (weight)
             {
                 case MechWeightClass.Light:
-                    return new MechFrameSpec { weight = weight, frame = 0.82f, armorWidth = 0.88f, armorDepth = 0.85f, seamOffset = 0.90f, jointRadius = 0.90f, hipX = 0.43f, shoulderX = 0.86f, collar = 0.27f, legX = 0.66f };
+                    return new MechFrameSpec { weight = weight, frame = 0.82f, armorWidth = 0.88f, armorDepth = 0.85f, seamOffset = 0.90f, jointRadius = 0.90f, hipX = 0.43f, shoulderX = 0.86f, collar = 0.27f };
                 case MechWeightClass.Heavy:
-                    return new MechFrameSpec { weight = weight, frame = 1.20f, armorWidth = 1.14f, armorDepth = 1.15f, seamOffset = 1.12f, jointRadius = 1.12f, hipX = 0.55f, shoulderX = 1.07f, collar = 0.38f, legX = 0.80f };
+                    return new MechFrameSpec { weight = weight, frame = 1.20f, armorWidth = 1.14f, armorDepth = 1.15f, seamOffset = 1.12f, jointRadius = 1.12f, hipX = 0.55f, shoulderX = 1.07f, collar = 0.38f };
                 default:
-                    return new MechFrameSpec { weight = MechWeightClass.Medium, frame = 1f, armorWidth = 1f, armorDepth = 1f, seamOffset = 1f, jointRadius = 1f, hipX = 0.48f, shoulderX = 0.95f, collar = 0.30f, legX = 0.72f };
+                    return new MechFrameSpec { weight = MechWeightClass.Medium, frame = 1f, armorWidth = 1f, armorDepth = 1f, seamOffset = 1f, jointRadius = 1f, hipX = 0.48f, shoulderX = 0.95f, collar = 0.30f };
             }
         }
 
@@ -54,7 +53,7 @@ namespace IronFauna.Clamshell
             return (MechWeightClass)((((int)weight + delta) % 3 + 3) % 3);
         }
 
-        /// <summary>Socket size of the side mounts and of the main (centre / dorsal) mount for a torso class.</summary>
+        /// <summary>Socket size of the side mounts and of the main (centre) mount for a torso class.</summary>
         public static void HardpointSizes(MechWeightClass torso, out HardpointSize side, out HardpointSize main, out HardpointSize aux)
         {
             switch (torso)

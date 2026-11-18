@@ -12,7 +12,6 @@ namespace IronFauna.Clamshell
     {
         public const int SlotCount = 18; // matches ClamshellSlot
 
-        public bool quadruped;
         public LegPosePreset legPose = LegPosePreset.Pose1_HumanLeg;
         public int paintScheme;
         public MechWeightClass torsoWeight = MechWeightClass.Medium;
@@ -39,31 +38,21 @@ namespace IronFauna.Clamshell
             return copy;
         }
 
-        /// <summary>True if this slot exists on the chassis (quadrupeds have no arms).</summary>
-        public static bool SlotUsed(ClamshellSlot slot, bool quadruped)
+        /// <summary>How many physical copies of a slot a mech carries (two arms, two legs, one body and head).</summary>
+        public static int SlotMultiplicity(ClamshellSlot slot)
         {
-            if (!quadruped) return true;
-            return slot < ClamshellSlot.ShoulderFront || slot > ClamshellSlot.HandBack;
-        }
-
-        /// <summary>How many physical copies of a slot a chassis carries (two arms, two or four legs).</summary>
-        public static int SlotMultiplicity(ClamshellSlot slot, bool quadruped)
-        {
-            if (!SlotUsed(slot, quadruped)) return 0;
             bool leg = slot <= ClamshellSlot.FootBack;
             bool arm = slot >= ClamshellSlot.ShoulderFront && slot <= ClamshellSlot.HandBack;
-            if (leg) return quadruped ? 4 : 2;
-            if (arm) return 2;
-            return 1;
+            return leg || arm ? 2 : 1;
         }
 
         public ClamshellCatalog.PartStats ComputeStats()
         {
-            var total = new ClamshellCatalog.PartStats(100, quadruped ? 115 : 100, 100, 100, 0);
+            var total = new ClamshellCatalog.PartStats(100, 100, 100, 100, 0);
             for (int i = 0; i < SlotCount; i++)
             {
                 var slot = (ClamshellSlot)i;
-                int copies = SlotMultiplicity(slot, quadruped);
+                int copies = SlotMultiplicity(slot);
                 var s = ClamshellCatalog.Stats(Get(slot));
                 for (int c = 0; c < copies; c++) total += s;
             }

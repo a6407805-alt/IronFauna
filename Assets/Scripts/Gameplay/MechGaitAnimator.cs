@@ -6,18 +6,17 @@ using IronFauna.Core;
 namespace IronFauna.Gameplay
 {
     /// <summary>
-    /// Procedural walk cycle with planted feet, for any clamshell mech (humanoid or quadruped, player or enemy).
+    /// Procedural walk cycle with planted feet for a fighting mech (drives the hips and legs of each brawl
+    /// fighter's animation ghost; MechBoxer poses the upper body on top).
     ///
     /// Weight comes from what a heavy walking machine does, not from slowing a light one down:
     ///  - feet are planted in the world and never slide; each leg bends with two-bone IK to reach its foot;
-    ///  - a gait clock steps the legs in a fixed rhythm (biped alternation, quadruped trot or 4-beat walk) with a
+    ///  - a gait clock alternates the legs in a fixed rhythm with a
     ///    long stance and a short, lifted swing; the foot rolls heel-up at lift-off and toe-up before it lands;
     ///  - each footfall drives the body down into a damped spring, so the frame sinks and rebounds on every stomp;
     ///  - the hips sway over the standing leg, the torso counter-twists, the arms counter-swing;
-    ///  - standing still, the feet settle with a few shuffle steps; turning in place steps the feet around;
-    ///  - boosting, the legs fold into a glide stance with the feet just off the deck; airborne, they hang.
-    /// Runs in LateUpdate before the pilot camera, on top of MechRobotOperator (which keeps lean, bank, head
-    /// tracking and weapons).
+    ///  - standing still, the feet settle with a few shuffle steps; turning in place steps the feet around.
+    /// Speed comes from how the transform moves. Runs in LateUpdate before MechBoxer and the brawl camera.
     /// </summary>
     [DefaultExecutionOrder(-50)]
     [RequireComponent(typeof(MechClamshellBuilder))]
@@ -31,7 +30,7 @@ namespace IronFauna.Gameplay
             public float liftHeight;     // m, top of the swing arc
             public float stompImpulse;   // m/s pushed into the body spring on each footfall
             public float bodyFrequency;  // Hz of the body spring (lower = heavier, slower rebound)
-            public float stompShake;     // camera trauma per footfall (pilot only)
+            public float stompShake;     // footfall strength reported to listeners
         }
 
         [Header("Gait by leg weight class")]
@@ -56,6 +55,7 @@ namespace IronFauna.Gameplay
 
         [Header("Dust")]
         public bool footfallDust = true;
+        public float dustScale = 0.7f;
 
         private class LegState
         {
@@ -74,7 +74,6 @@ namespace IronFauna.Gameplay
         }
 
         private MechClamshellBuilder _builder;
-        private MechPilotController _pilot;
         private readonly List<LegState> _legs = new List<LegState>();
         private int _version = -1;
         private float _phase;
@@ -99,13 +98,6 @@ namespace IronFauna.Gameplay
             _lastPos = transform.position;
         }
 
-        private void Start()
-        {
-            _pilot = GetComponent<MechPilotController>();
-            var op = GetComponent<MechRobotOperator>();
-            if (op != null) op.externalGait = true;
-        }
-
         private GaitProfile Profile => _builder.legWeight == MechWeightClass.Light ? light : _builder.legWeight == MechWeightClass.Heavy ? heavy : medium;
 
         private void Init()
@@ -116,20 +108,14 @@ namespace IronFauna.Gameplay
             _builder.visualRoot.localPosition = Vector3.zero;
             _bodyY = _bodyVy = _swayX = _reachDrop = 0f;
 
-            _biped = !_builder.isQuadrupedChassis;
-            bool heavyQuad = !_biped && _builder.legWeight == MechWeightClass.Heavy;
-            _footfallsPerCycle = heavyQuad ? 4 : 2;
+            _biped = true;
+            _footfallsPerCycle = 2;
             foreach (var rig in _builder.legRigs)
             {
                 if (rig.root == null || rig.foot == null) continue;
                 var leg = new LegState { rig = rig };
-                string n = rig.root.name;
-                bool left = n.EndsWith("_L");
-                if (_biped) leg.offset = left ? 0f : 0.5f;
-                else if (heavyQuad)  // 4-beat lateral-sequence walk: LH, LF, RH, RF
-                    leg.offset = n.StartsWith("Rear") ? (left ? 0f : 0.5f) : (left ? 0.25f : 0.75f);
-                else                 // trot: diagonal pairs together
-                    leg.offset = (n.StartsWith("Front") == left) ? 0f : 0.5f;
+                bool left = rig.root.name.EndsWith("_L");
+                leg.offset = left ? 0f : 0.5f;
 
                 leg.restRootLocal = transform.InverseTransformPoint(rig.foot.position);
                 leg.plant = leg.footPos = rig.foot.position;
@@ -158,22 +144,11 @@ namespace IronFauna.Gameplay
             GaitProfile g = Profile;
 
             // ---------------- motion state
-            Vector3 vel;
             bool grounded = true, boosting = false;
             float walkSpeed = 3f;
-            if (_pilot != null)
-            {
-                vel = _pilot.Velocity;
-                grounded = _pilot.Grounded;
-                boosting = _pilot.Boosting;
-                walkSpeed = _pilot.Current.walkSpeed;
-            }
-            else
-            {
-                Vector3 raw = (transform.position - _lastPos) / dt;
-                _velocity = Vector3.Lerp(_velocity, raw, 1f - Mathf.Exp(-10f * dt));
-                vel = _velocity;
-            }
+            Vector3 raw = (transform.position - _lastPos) / dt;
+            _velocity = Vector3.Lerp(_velocity, raw, 1f - Mathf.Exp(-10f * dt));
+            Vector3 vel = _velocity;
             _lastPos = transform.position;
             vel.y = 0f;
             float speed = vel.magnitude;
@@ -414,7 +389,6 @@ namespace IronFauna.Gameplay
         private void Stomp(Vector3 at, float strength, GaitProfile g)
         {
             _bodyVy -= g.stompImpulse * strength;
-            if (_pilot != null) _pilot.PendingImpact = Mathf.Max(_pilot.PendingImpact, g.stompShake * strength);
             if (footfallDust) Dust(at, strength);
             Footfall?.Invoke(at, strength);
         }
@@ -469,7 +443,7 @@ namespace IronFauna.Gameplay
                 renderer.sharedMaterial = mat;
             }
             var emit = new ParticleSystem.EmitParams { position = at + Vector3.up * 0.05f, applyShapeToPosition = true };
-            float scale = _pilot != null ? 1f : 0.5f;   // the player's mech kicks up the most
+            float scale = dustScale;
             _dust.Emit(emit, Mathf.RoundToInt(Mathf.Lerp(3f, 10f, strength) * scale));
         }
 

@@ -10,7 +10,8 @@ using UnityEngine.InputSystem;
 namespace IronFauna.Menu
 {
     /// <summary>
-    /// Title screen + garage, built entirely at runtime on top of a 3D mech showcase stage.
+    /// Title screen + garage for the mech brawler, built entirely at runtime on top of a 3D mech showcase stage.
+    /// FIGHT starts a brawl (IronFauna.Brawl.MechBrawlMatch) in this scene; Escape in the brawl reloads it.
     /// Drop this on one GameObject in an otherwise empty scene (IronFauna > Setup Menu Scene does it for you).
     /// </summary>
     public class IronFaunaMenuRoot : MonoBehaviour
@@ -55,11 +56,6 @@ namespace IronFauna.Menu
             },
         };
 
-        private static readonly string[] PoseNames =
-        {
-            "Human leg", "Chicken bend forward", "Reverse extended", "Chicken bend back", "Reverse critical fold",
-        };
-
         private MechShowcaseStage _stage;
         private MechLoadout _loadout;
 
@@ -69,15 +65,12 @@ namespace IronFauna.Menu
         private readonly Dictionary<Tab, GameObject> _tabPages = new Dictionary<Tab, GameObject>();
         private readonly Dictionary<Tab, Image> _tabButtons = new Dictionary<Tab, Image>();
         private readonly List<KeyValuePair<ClamshellSlot, MenuUI.Cycler>> _slotCyclers = new List<KeyValuePair<ClamshellSlot, MenuUI.Cycler>>();
-        private MenuUI.Cycler _chassisCycler;
-        private MenuUI.Cycler _poseCycler;
         private MenuUI.Cycler _paintCycler;
         private MenuUI.Cycler _torsoWeightCycler;
         private MenuUI.Cycler _legWeightCycler;
         private MenuUI.Cycler _viewCycler;
         private bool _skeletonView;
         private MenuUI.Cycler _fullSetCycler;
-        private Text _armsNote;
         private Text _headerInfo;
         private Text _selectedTitle;
         private Text _selectedPerk;
@@ -92,6 +85,7 @@ namespace IronFauna.Menu
         private void Start()
         {
             _loadout = MechLoadoutStore.Load();
+            _loadout.legPose = LegPosePreset.Pose1_HumanLeg;   // fighters stand on human legs
 
             _stage = new GameObject("MechShowcaseStage").AddComponent<MechShowcaseStage>();
             _stage.Build();
@@ -101,9 +95,7 @@ namespace IronFauna.Menu
             BuildTitle();
             BuildGarage();
 
-            bool garage = startInGarage || IronFaunaGameFlow.OpenGarageOnMenuLoad;
-            IronFaunaGameFlow.OpenGarageOnMenuLoad = false;
-            if (garage) ShowGarage(); else ShowTitle();
+            if (startInGarage) ShowGarage(); else ShowTitle();
         }
 
         private void Update()
@@ -134,7 +126,7 @@ namespace IronFauna.Menu
         }
 
         /// <summary>Mech brawl (active ragdolls): hides the menu and turntable and builds the arena in this scene
-        /// (Esc reloads the menu). The earlier boxing ring is still available as IronFauna.Boxing.MechBoxingMatch.</summary>
+        /// (Esc reloads the menu).</summary>
         private void StartBrawl()
         {
             _titleCanvas.SetActive(false);
@@ -186,20 +178,28 @@ namespace IronFauna.Menu
             var bar = MenuUI.Panel(column.transform, "TitleBar", IronFaunaPalette.UiSelect);
             MenuUI.Place(bar.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -380f), new Vector2(560f, -368f));
 
-            var tagline = MenuUI.Label(column.transform, "YOU ARE THE TOWER AND THE DEFENDER", 26, IronFaunaPalette.UiAccent, TextAnchor.UpperLeft, FontStyle.Bold);
+            var tagline = MenuUI.Label(column.transform, "BUILD IT. BREAK THEM. TEAR THEM APART.", 26, IronFaunaPalette.UiAccent, TextAnchor.UpperLeft, FontStyle.Bold);
             MenuUI.Place(tagline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(84f, -440f), new Vector2(-40f, -396f));
 
             var buttons = MenuUI.NewRect(column.transform, "TitleButtons");
             MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -800f), new Vector2(520f, -500f));
             MenuUI.VStack(buttons.gameObject, 18f, 0);
 
-            AddTitleButton(buttons, "BRAWL", StartBrawl);
+            AddTitleButton(buttons, "FIGHT", StartBrawl);
             AddTitleButton(buttons, "GARAGE", ShowGarage);
-            AddTitleButton(buttons, "DEPLOY", () => IronFaunaGameFlow.Deploy(_loadout));
-            AddTitleButton(buttons, "QUIT", IronFaunaGameFlow.Quit);
+            AddTitleButton(buttons, "QUIT", Quit);
 
             _titleFooter = MenuUI.Label(column.transform, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft);
             MenuUI.Place(_titleFooter.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(84f, 40f), new Vector2(-40f, 80f));
+        }
+
+        private static void Quit()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private static void AddTitleButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
@@ -269,8 +269,8 @@ namespace IronFauna.Menu
             MenuUI.Size(statsTitle, 40f);
             AddStat(statsStack, "Armor");
             AddStat(statsStack, "Speed");
-            AddStat(statsStack, "Firepower");
-            AddStat(statsStack, "Cooling");
+            AddStat(statsStack, "Power");
+            AddStat(statsStack, "Stamina");
             var gap = MenuUI.NewRect(statsStack, "Gap");
             MenuUI.Size(gap, 12f);
             _selectedTitle = MenuUI.Label(statsStack, "SELECTED PART", 22, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -287,7 +287,7 @@ namespace IronFauna.Menu
             AddBarButton(bottom, "RANDOMIZE", Randomize, IronFaunaPalette.UiButton);
             AddBarButton(bottom, "RESET", ResetLoadout, IronFaunaPalette.UiButton);
             AddBarButton(bottom, "SAVE", Save, IronFaunaPalette.UiButton);
-            AddBarButton(bottom, "DEPLOY", () => IronFaunaGameFlow.Deploy(_loadout), IronFaunaPalette.CrimsonFront);
+            AddBarButton(bottom, "FIGHT", () => { Save(); StartBrawl(); }, IronFaunaPalette.CrimsonFront);
 
             _saveStatus = MenuUI.Label(root, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerRight);
             MenuUI.Place(_saveStatus.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-1180f, 108f), new Vector2(-32f, 140f));
@@ -320,8 +320,6 @@ namespace IronFauna.Menu
         private void BuildFramePage(Transform pages)
         {
             var page = NewPage(pages, Tab.Frame);
-            _chassisCycler = MenuUI.CreateCycler(page.transform, "Chassis", ToggleChassis, ToggleChassis);
-            _poseCycler = MenuUI.CreateCycler(page.transform, "Stance", () => CyclePose(-1), () => CyclePose(1));
             _paintCycler = MenuUI.CreateCycler(page.transform, "Paint", () => CyclePaint(-1), () => CyclePaint(1));
             _torsoWeightCycler = MenuUI.CreateCycler(page.transform, "Torso weight", () => CycleTorsoWeight(-1), () => CycleTorsoWeight(1));
             _legWeightCycler = MenuUI.CreateCycler(page.transform, "Leg weight", () => CycleLegWeight(-1), () => CycleLegWeight(1));
@@ -335,11 +333,6 @@ namespace IronFauna.Menu
         private void BuildSlotPage(Transform pages, Tab tab, SlotRow[] rows)
         {
             var page = NewPage(pages, tab);
-            if (tab == Tab.Arms)
-            {
-                _armsNote = MenuUI.Label(page.transform, "QUADRUPED CHASSIS HAS NO ARMS", 20, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
-                MenuUI.Size(_armsNote, 36f);
-            }
             foreach (var row in rows)
             {
                 ClamshellSlot slot = row.slot;
@@ -389,8 +382,8 @@ namespace IronFauna.Menu
         private void CycleFullSet(int delta)
         {
             _fullSet = ClamshellCatalog.Cycle(_fullSet, delta);
-            _fullSetCycler.Value.text = ClamshellCatalog.SetName(_fullSet, false).ToUpperInvariant();
-            _selectedTitle.text = ClamshellCatalog.SetName(_fullSet, _loadout.quadruped).ToUpperInvariant() + " SET";
+            _fullSetCycler.Value.text = ClamshellCatalog.SetName(_fullSet).ToUpperInvariant();
+            _selectedTitle.text = ClamshellCatalog.SetName(_fullSet).ToUpperInvariant() + " SET";
             _selectedPerk.text = ClamshellCatalog.Perk(_fullSet);
         }
 
@@ -405,21 +398,6 @@ namespace IronFauna.Menu
                 foreach (var row in rows) _loadout.Set(row.slot, _fullSet);
             }
             Changed();
-        }
-
-        private void ToggleChassis()
-        {
-            _loadout.quadruped = !_loadout.quadruped;
-            Changed();
-            FrameCameraForTab();
-        }
-
-        private void CyclePose(int delta)
-        {
-            int count = PoseNames.Length;
-            _loadout.legPose = (LegPosePreset)((((int)_loadout.legPose + delta) % count + count) % count);
-            Changed();
-            FrameCameraForTab();
         }
 
         private void CycleTorsoWeight(int delta)
@@ -459,9 +437,7 @@ namespace IronFauna.Menu
 
         private void ResetLoadout()
         {
-            bool quad = _loadout.quadruped;
             _loadout = MechLoadout.Default();
-            _loadout.quadruped = quad;
             _skeletonView = false;
             Changed();
         }
@@ -489,7 +465,7 @@ namespace IronFauna.Menu
 
         private void ShowSelected(ClamshellSlot slot, ClamshellSetArchetype set)
         {
-            _selectedTitle.text = ClamshellCatalog.PartName(slot, set, _loadout.quadruped).ToUpperInvariant();
+            _selectedTitle.text = ClamshellCatalog.PartName(slot, set).ToUpperInvariant();
             _selectedPerk.text = ClamshellCatalog.Perk(set);
         }
 
@@ -500,31 +476,21 @@ namespace IronFauna.Menu
         private void RefreshAll()
         {
             if (_garageCanvas == null) return;
-            bool quad = _loadout.quadruped;
-
-            _chassisCycler.Value.text = quad ? "QUADRUPED BEAST" : "HUMANOID";
-            _poseCycler.Value.text = PoseNames[Mathf.Clamp((int)_loadout.legPose, 0, PoseNames.Length - 1)].ToUpperInvariant();
             _paintCycler.Value.text = IronFaunaPalette.GetPaint(_loadout.paintScheme).name.ToUpperInvariant();
             _torsoWeightCycler.Value.text = _loadout.torsoWeight.ToString().ToUpperInvariant();
             _legWeightCycler.Value.text = _loadout.legWeight.ToString().ToUpperInvariant();
             _viewCycler.Value.text = _skeletonView ? "SKELETON ONLY" : "ARMORED";
-            _fullSetCycler.Value.text = ClamshellCatalog.SetName(_fullSet, false).ToUpperInvariant();
+            _fullSetCycler.Value.text = ClamshellCatalog.SetName(_fullSet).ToUpperInvariant();
 
-            foreach (var kv in _slotCyclers)
-            {
-                bool used = MechLoadout.SlotUsed(kv.Key, quad);
-                kv.Value.SetInteractable(used);
-                kv.Value.Value.text = used ? ClamshellCatalog.PartName(kv.Key, _loadout.Get(kv.Key), quad).ToUpperInvariant() : "—";
-            }
-            if (_armsNote != null) _armsNote.gameObject.SetActive(quad);
+            foreach (var kv in _slotCyclers) kv.Value.Value.text = ClamshellCatalog.PartName(kv.Key, _loadout.Get(kv.Key)).ToUpperInvariant();
 
             var stats = _loadout.ComputeStats();
             SetStat("Armor", stats.armor, 330f);
             SetStat("Speed", stats.speed, 240f);
-            SetStat("Firepower", stats.firepower, 240f);
-            SetStat("Cooling", stats.cooling, 240f);
+            SetStat("Power", stats.firepower, 240f);
+            SetStat("Stamina", stats.cooling, 240f);
 
-            _headerInfo.text = $"{(quad ? "QUADRUPED" : "HUMANOID")}   //   {IronFaunaPalette.GetPaint(_loadout.paintScheme).name.ToUpperInvariant()}   //   {stats.cost} CR";
+            _headerInfo.text = $"{_loadout.torsoWeight.ToString().ToUpperInvariant()} FRAME   //   {IronFaunaPalette.GetPaint(_loadout.paintScheme).name.ToUpperInvariant()}   //   {stats.cost} CR";
             _saveStatus.text = _dirty ? "UNSAVED CHANGES" : "LOADOUT SAVED";
         }
 

@@ -12,7 +12,7 @@ namespace IronFauna.Clamshell
         FootFront,
         FootBack,
 
-        // Body (2 slots — Humanoid or Quadruped)
+        // Body (2 slots)
         BodyFront,
         BodyBack,
 
@@ -26,7 +26,7 @@ namespace IronFauna.Clamshell
         HandFront,
         HandBack,
 
-        // Head (2 slots — Humanoid or Animal)
+        // Head (2 slots)
         HeadFront,
         HeadBack
     }
@@ -61,7 +61,6 @@ namespace IronFauna.Clamshell
         public string displayName = "Ironclad Front Shell";
         public ClamshellSlot slot = ClamshellSlot.ThighFront;
         public ClamshellSetArchetype setArchetype = ClamshellSetArchetype.Set01_Ironclad;
-        public bool isAnimalVariant = false;
 
         [Header("Optional Custom Blender Prefab (Uses Procedural Clamshell if Null)")]
         public GameObject customPartPrefab;

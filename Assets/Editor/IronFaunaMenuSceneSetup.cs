@@ -12,8 +12,8 @@ using IronFauna.Menu;
 namespace IronFauna.EditorTools
 {
     /// <summary>
-    /// Creates Assets/Scenes/MainMenu.unity (title + garage) and puts it first in Build Settings,
-    /// ahead of the arena (SampleScene). Runs once automatically when the project opens without a
+    /// Creates Assets/Scenes/MainMenu.unity (title, garage, and the brawl that runs inside it) and makes it the
+    /// only scene in Build Settings. Runs once automatically when the project opens without a
     /// MainMenu scene, and can be re-run from the IronFauna menu.
     /// Also rebuilds procedural mechs in open scenes, since their meshes are not saved into scene files.
     /// </summary>
@@ -21,7 +21,6 @@ namespace IronFauna.EditorTools
     public static class IronFaunaMenuSceneSetup
     {
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
-        public const string ArenaScenePath = "Assets/Scenes/SampleScene.unity";
         private const string VolumeProfilePath = "Assets/Settings/IronFaunaGlobalVolumeProfile.asset";
         private const string AutoRunKey = "IronFauna.MenuSceneSetup.AutoRan";
 
@@ -51,7 +50,7 @@ namespace IronFauna.EditorTools
         {
             CreateMenuScene();
             EnsureBuildSettings();
-            Debug.Log("[IronFauna] MainMenu scene created and Build Settings updated (MainMenu first, then the arena).");
+            Debug.Log("[IronFauna] MainMenu scene created and Build Settings updated.");
         }
 
         [MenuItem("IronFauna/Rebuild Mechs In Open Scenes")]
@@ -163,15 +162,8 @@ namespace IronFauna.EditorTools
         {
             if (!System.IO.File.Exists(MenuScenePath)) return;
 
-            var scenes = EditorBuildSettings.scenes.ToList();
-            scenes.RemoveAll(s => s.path == MenuScenePath);
-            var ordered = new List<EditorBuildSettingsScene> { new EditorBuildSettingsScene(MenuScenePath, true) };
-            if (!scenes.Any(s => s.path == ArenaScenePath) && System.IO.File.Exists(ArenaScenePath))
-            {
-                scenes.Insert(0, new EditorBuildSettingsScene(ArenaScenePath, true));
-            }
-            ordered.AddRange(scenes);
-            EditorBuildSettings.scenes = ordered.ToArray();
+            // the whole game runs in the menu scene: drop everything else (the old tower-defence arena)
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MenuScenePath, true) };
         }
     }
 }

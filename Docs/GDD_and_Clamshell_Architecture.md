@@ -1,24 +1,34 @@
-# IronFauna — Master GDD & 220-Part Universal Clamshell Reference
+# IronFauna — Game Design Summary & Clamshell Reference
 
-This folder contains the design and engineering documentation for **IronFauna** (Unity 6 URP, 3rd-person biomechanical/humanoid mech combat + grid tower defense hybrid).
+**IronFauna** is a physics mech brawler (Unity 6 URP): Gang Beasts-style active-ragdoll robots beat each other up
+with MMA moves, grapple, throw and slam each other and tear each other apart limb from limb. Every strike is a
+readable, committed move with real weight (For Honor / Dark Souls feel). Targets: 8-player online and local co-op,
+destructible arenas, destructible fighters. The garage builds each fighter from interchangeable clamshell armor.
 
-## 1. Art Bible (Three-Line Spec)
-1. **Style Statement:** Borderlands × Zoids hard-surface cel-shaded industrial mecha — flat-faced machined steel clamshell plates, sharp 45° chamfers, bold dark-ink outlines, two-band toon lighting on a tan blueprint-grid arena.
-2. **Palette (`IronFaunaPalette.cs`):**
-   - `FloorTan`: `#C8B89A` · `GunmetalFrame`: `#3A3F46` · `CrimsonFront`: `#C8282E` · `MaroonRear`: `#6E1E26` · `OffWhitePanel`: `#F0ECE1` · `HazardYellow`: `#E6B800` · `ShadowSlate`: `#1E2229` · `OrangeJointCore`: `#FF7A1A` · `CyanEnergy`: `#24E5FF`
-3. **Mood:** Warm industrial key light (`#FFF0D6`, 42° elevation) across the tan blueprint arena with cool slate shadow bounce (`#4A586E`) and HDR bloom on exposed `#FF7A1A` orange rotary joint hubs and `#24E5FF` cyan optics/radiators.
+## 1. Look
+- Realistic hard-surface mecha: physically based metal and coated paint, exposed skeleton with glowing joint cores.
+- Palette (`IronFaunaPalette.cs`): `CrimsonFront` `#C8282E` · `MaroonRear` `#6E1E26` · `GunmetalFrame` `#3A3F46` ·
+  `OffWhitePanel` `#F0ECE1` · `HazardYellow` `#E6B800` · `OrangeJointCore` `#FF7A1A` · `CyanEnergy` `#24E5FF`.
+- Brawls take place on a rocky hill island under an overcast sky.
 
-## 2. Universal Clamshell Construction Rules (No Weight Classes)
-- **Single-Bone Clamping:** Every armor piece splits into **two clamshell halves** (`Front Half` in Crimson Red `#C8282E`, `Rear Half` in Darker Maroon `#6E1E26`) that clamp onto **one bone only** with mechanical toggle latches across the seam.
-- **100% Exposed Rotary Joint Hubs:** Armor stops short of every circular joint hub (`Hip`, glowing-orange `Knee`, `Ankle`, `Neck`, `Shoulder`, `Elbow`, `Wrist`, `Waist`) with `45°` beveled clearance chamfers so limbs can fold into both **Human Forward-Bend** and **Chicken Reverse-Joint** stances without plates colliding.
-- **Universal Seam & Collar Envelope:** All 10 sets share identical base collar widths, `45°` bevel angles, and toggle-latch coordinates across **220 interchangeable halves**:
-  - **Legs (60 parts):** 10 Sets × 6 Slots (`Thigh Front`, `Thigh Back`, `Calf Front`, `Calf Back`, `Foot Front/Toe`, `Foot Back/Heel`)
-  - **Bodies (40 parts):** 10 Humanoid Upright Sets (`Chest Front`, `Backplate Rear`) + 10 Quadruped Animal Sets (`Thorax Front`, `Haunch Rear`) — standalone limbless cores
-  - **Arms (80 parts):** 10 Sets × 8 Slots (`Shoulder Front/Back`, `Upper Arm Front/Back`, `Lower Arm Front/Back`, `Hand Front/Back`)
-  - **Heads (40 parts):** 10 Humanoid Sets (*Halo: Reach × Gundam × Armored Core* inspired `Visor Front` + `Cranium Rear`) + 10 Animal/Biomech Sets (`Snout Front` + `Mane/Crest Rear`)
+## 2. Clamshell Construction Rules
+- **Single-bone clamping:** every armor piece is two halves (front in crimson, back in maroon) clamped onto one bone,
+  locked by toggle latches across a seam that runs down the sides.
+- **Exposed joint hubs:** armor stops short of every joint (hip, knee, ankle, neck, shoulder, elbow, wrist, waist)
+  with 45° clearance bevels.
+- **180 interchangeable halves** in 10 sets (Ironclad … Aegis):
+  - Legs (60): thigh, calf, toe and heel, front and back.
+  - Body (20): chest front + backplate.
+  - Arms (80): shoulder, upper arm, forearm, hand, front and back.
+  - Heads (20): visor front + cranium back.
+- Weight classes (Light / Medium / Heavy) for torso and legs change the skeleton, the armor envelope and the stats.
 
-## 3. Core Game Loop & Milestone 1 Plan
-- **M1-A (Gray-Box + Clamshell Prototype):** Flat arena scene with central Objective + HP bar, third-person Mech Controller (move, aim, shoot + Universal Clamshell procedural skeleton & adjustable knee pivot), Enemy NavMesh walker pathfinding to Objective, Kill → Credit counter.
-- **M1-B (Grid Defense System):** Build grid around Objective, Wall placement (`30` credits, `NavMeshObstacle` dynamic carving), Build phase timer between waves, Auto-Turret (`150` credits, targets nearest enemy).
-- **M1-C (Hangar & Between-Wave Shop):** Weapon/Clamshell customization + between-wave shop (mech upgrade vs. grid defense tension).
-- **M1-D (First Playtest Build):** 5–10 wave Survival run.
+## 3. Fighting
+- Strikes: jab, cross, hook, uppercut, front kick, roundhouse, plus 12 scroll-selected specials (spinning backfist,
+  superman punch, haymaker, spinning elbow, side kick, axe kick, spinning hook kick, flying knee, headbutt,
+  shoulder charge …).
+- Grapples: grab, drag, throw, slam, tear limbs off and swing them as clubs.
+- Damage is physical: per-limb health, armor plates crack off, limbs tear away; balance breaks cause knockdowns.
+- Ring-outs: the island has cliffs.
+
+See `CLAUDE.md` (section 9) for the code map.

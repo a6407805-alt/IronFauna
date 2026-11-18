@@ -6,7 +6,7 @@ IronFauna - all ten armor sets in the second-generation (aerodynamic, angular) s
 
 Builds every armor part (220): Set01 from aero_ironclad.py; sets 02-10 as the same dart + hood base with each
 set's signature feature (from clamshell_sets.py: front_sig / back_sig / eyes / head_back) mounted on a flat deck
-on the hood; one pointed toe and heel for every set; quadruped bodies and animal heads on a faceted fuselage shell.
+on the hood; one pointed toe and heel for every set.
 """
 import os
 import sys
@@ -148,34 +148,6 @@ def head(S, front):
     return p
 
 
-# ------------------------------------------------------------------------------- quadruped shells
-def fuselage(p, W, L, H, role="Shell", tip_len=0.22, tip=0.55, seam=1.0, tip_x=None, ch_frac=0.18):
-    """Replaces the boxy lengthwise shell: faceted fuselage - flat spine deck, canted shoulders, tucked belly -
-    drawn down to a narrow nose. Same signature as SetStyle.lw_shell so every animal detail still fits."""
-    hw, hh = W / 2, H / 2
-    sec = [(-hw * 0.55, -hh), (hw * 0.55, -hh), (hw, -hh * 0.35), (hw, hh * 0.3), (hw * 0.62, hh), (-hw * 0.62, hh), (-hw, hh * 0.3), (-hw, -hh * 0.35)]
-    tx = tip if tip_x is None else tip_x
-    st = [(-L / 2, seam, seam), (-L / 2 + L * 0.25, 1.0, 1.0), (L / 2 - tip_len * 1.6, 0.92, 0.94), (L / 2, tx * 0.7, tip * 0.8)]
-    return p.loft(sec, st, role, offset=(0, -hh, 0))
-
-
-cs.SetStyle.lw_shell = staticmethod(fuselage)
-
-
-def _volt_body(self, p, W, L, H, front):
-    """Volt-Viper on the fuselage: segment bands follow the faceted section instead of boxing it in."""
-    for i in range(5):
-        z = -L * 0.3 + i * L * 0.15
-        hw, hh = W / 2 * 1.03, H / 2 * 1.03
-        sec = [(-hw * 0.55, -hh), (hw * 0.55, -hh), (hw, -hh * 0.35), (hw, hh * 0.3), (hw * 0.62, hh), (-hw * 0.62, hh), (-hw, hh * 0.3), (-hw, -hh * 0.35)]
-        p.loft(sec, [(z - 0.015, 1, 1), (z + 0.015, 1, 1)], "Dark", offset=(0, -H / 2, 0))
-    for i in range(4):
-        p.prism(0.06 if i % 2 == 0 else 0.045, 0.06, H * 0.98, "Copper" if i % 2 == 0 else "Dark", axis="z", sides=10, z0=L * 0.05 + i * 0.065)
-
-
-cs.Voltaic.animal_body = _volt_body
-
-
 # ------------------------------------------------------------------------------- build
 def set_parts(S):
     out = {}
@@ -196,8 +168,6 @@ if __name__ == "__main__":
     for S in cs.STYLES:
         tag = f"Set{S.idx:02d}_{S.name}"
         parts = A.parts() if S.idx == 1 else set_parts(S)
-        for slot in ("QuadBodyFront", "QuadBodyBack", "AnimalHeadFront", "AnimalHeadBack"):
-            parts[slot] = cs.build_lw_part(S, slot)
         for slot, part in parts.items():
             obj = part.to_object(f"{slot}_{tag}")
             if export:

@@ -1,6 +1,6 @@
 """
-IronFauna - every clamshell set (01-10) in Blender: limbs, body, head, hands, feet, plus the
-quadruped body and animal head for the matching animal set.
+IronFauna - every clamshell set (01-10) in Blender: limbs, body, head, hands and feet.
+(Library for aero_sets.py, which builds the current parts.)
 
   blender -b -P clamshell_sets.py -- --out <dir> [--sets 2,3] [--blend]
   python clamshell_sets.py --out <dir>            (with the pip `bpy` module)
@@ -8,8 +8,8 @@ quadruped body and animal head for the matching animal set.
 Plate parts follow the Ironclad convention (see ironclad.py): X = width, Z = along the bone,
 plate on the -Y side with its inner face at Y = 0. Unity fits them into the slot envelope.
 
-Lengthwise parts (feet, quadruped body, animal head) are authored at true size in metres:
-X = width (centred), Z = length (centred, +Z = the free tip: toe, heel, nose, rump, back of skull),
+Lengthwise parts (feet) are authored at true size in metres:
+X = width (centred), Z = length (centred, +Z = the free tip: toe, heel),
 height grows toward -Y from Y = 0 (the bottom). Unity scales them uniformly from their length.
 Keep every detail inside the Z range of the base shell.
 """
@@ -101,6 +101,7 @@ def slats(p, w, L, h, base, n, z0, role_a="Dark", role_b=None, x0=0.0):
 
 
 # =============================================================================== part context
+
 class Ctx:
     """w/L/d: plate size; zc/zl: detail band centre/length along the bone; hb: detail height budget."""
 
@@ -123,6 +124,7 @@ def limb_ctx(kind, front):
 
 
 # =============================================================================== base set style
+
 class SetStyle:
     idx = 1
     ch = 0.4          # plate edge chamfer (fraction of min(w/2, d))
@@ -276,10 +278,7 @@ class SetStyle:
         c = self.foot_shell(p, W, L, H, False)
         p.hazard_band(c.ww, c.zl * 0.5, 0.02, H * 0.98, z0=c.zc, n=5)
 
-    # ---------------------------------------------------------------- quadruped (lengthwise, centred section)
-    BODY = (0.90, 1.0, 0.70)
-    SKULL = (0.42, 0.24, 0.34)
-    SNOUT = (0.36, 0.24, 0.28)
+    # ---------------------------------------------------------------- lengthwise shell (feet)
 
     @staticmethod
     def lw_shell(p, W, L, H, role="Shell", tip_len=0.22, tip=0.55, seam=1.0, tip_x=None, ch_frac=0.18):
@@ -291,30 +290,8 @@ class SetStyle:
         st = [(-L / 2, seam, seam), (L / 2 - tip_len, 1.0, 1.0), (L / 2, tx, tip)]
         return p.loft(sec, st, role, offset=(0, -hh, 0))
 
-    def quad_body(self, p, front):
-        W, L, H = self.BODY
-        self.lw_shell(p, W, L, H, tip_len=0.22, tip=0.55)
-        # dorsal armor saddle (kept off the seam: the dorsal weapon hub sits there)
-        p.plate(W * 0.6, L * 0.5, 0.06, H * 0.97, bevel=0.05, end_w=0.7, z0=L * 0.08, bulge=1.0, ch=0.03)
-        for sx in (-1, 1):  # flank seam lines
-            p.block(0.03, L * 0.6, H * 0.08, H * 0.5 - H * 0.04, "Dark", ch=0.004, x0=sx * (W / 2 + 0.005), z0=0.0)
-        self.animal_body(p, W, L, H, front)
-
-    def animal_body(self, p, W, L, H, front):
-        pass
-
-    def animal_head(self, p, snout):
-        W, L, H = self.SNOUT if snout else self.SKULL
-        self.lw_shell(p, W, L, H, tip_len=0.1, tip=0.5 if snout else 0.7)
-        self.animal_head_detail(p, W, L, H, snout)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:
-            for sx in (-1, 1):
-                p.block(0.06, 0.05, 0.03, H * 0.72, "Glow", ch=0.006, x0=sx * W * 0.3, z0=-L * 0.3)
-
-
 # =============================================================================== sets
+
 class Bastion(SetStyle):
     """ERA reactive bricks / reserve ammo drum + recoil anchor."""
     idx, ch, bulge, end_w, layer_frac = 2, 0.24, 1.0, 0.7, 0.45
@@ -350,23 +327,6 @@ class Bastion(SetStyle):
     def toe_tip(self, p, W, L, H):
         p.block(W * 0.86, L * 0.1, H * 0.5, 0.0, "Frame", ch=0.01, z0=L * 0.4)
 
-    def animal_body(self, p, W, L, H, front):  # Ceratops: dorsal plate row + armored flanks
-        for i in range(4):
-            z = -L * 0.1 + i * L * 0.12
-            spike(p, 0.07, 0.16 - i * 0.015, H, "Shell", z0=z, lean=-0.05, sides=4, tip=0.2)
-        for sx in (-1, 1):
-            p.block(0.05, L * 0.55, H * 0.4, H * 0.18, "Frame", ch=0.01, x0=sx * (W / 2 + 0.01), z0=L * 0.08)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:  # nose horn + brow horns
-            spike(p, 0.04, 0.18, H * 0.9, "Panel", z0=L * 0.3, lean=0.06, tip=0.08)
-            for sx in (-1, 1):
-                spike(p, 0.03, 0.2, H * 0.95, "Panel", x0=sx * W * 0.28, z0=-L * 0.3, lean=0.1, tip=0.08)
-                p.block(0.05, 0.04, 0.03, H * 0.7, "Glow", ch=0.006, x0=sx * W * 0.36, z0=-L * 0.1)
-        else:  # frill
-            p.plate(W * 1.3, L * 0.5, 0.05, H * 0.6, bevel=0.03, end_w=0.6, z0=L * 0.2, bulge=1.0, ch=0.02, role="Shell")
-            fin(p, W * 1.1, L * 0.4, 0.14, H, "Shell", z0=L * 0.25, rake=0.4, rising=1)
-
 
 class Overclock(SetStyle):
     """Cut-out cyan conduit frames / angled heat-sink louvers."""
@@ -400,22 +360,6 @@ class Overclock(SetStyle):
 
     def toe_tip(self, p, W, L, H):
         p.block(W * 0.5, L * 0.05, 0.03, H * 0.42, "Glow", ch=0.004, z0=L * 0.46)
-
-    def animal_body(self, p, W, L, H, front):  # Gepard: sleek ridge + flank stripes + glow spine
-        p.wedge_ridge(0.08, L * 0.6, 0.06, H * 1.0, "Frame", z0=L * 0.12)
-        for sx in (-1, 1):
-            for i in range(4):
-                p.block(0.02, 0.05, H * 0.35, H * 0.4, "Dark", ch=0.003, x0=sx * (W / 2 + 0.004), z0=-L * 0.2 + i * L * 0.16)
-        p.block(0.04, L * 0.5, 0.02, H * 1.02, "Glow", ch=0.004, x0=W * 0.18, z0=L * 0.06)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:
-            for sx in (-1, 1):
-                p.block(0.06, 0.04, 0.03, H * 0.72, "Glow", ch=0.006, x0=sx * W * 0.3, z0=-L * 0.3)
-                p.block(0.015, L * 0.5, 0.02, H * 0.55, "Dark", ch=0.003, x0=sx * (W / 2 - 0.02), z0=0.0)
-        else:
-            for sx in (-1, 1):
-                spike(p, 0.04, 0.09, H * 0.95, "Shell", x0=sx * W * 0.3, z0=0.0, lean=0.03, sides=3)
 
 
 class Ripjaw(SetStyle):
@@ -453,22 +397,6 @@ class Ripjaw(SetStyle):
         for i in (-1, 0, 1):
             ramp(p, W * 0.12, L * 0.22, H * 0.45, 0.0, "Frame", x0=i * W * 0.3, z0=L * 0.38, lo=0.35, rising=-1)
 
-    def animal_body(self, p, W, L, H, front):  # Lupus: raked hackle fins
-        for i in range(5):
-            fin(p, 0.025, 0.14, 0.13 - i * 0.012, H * 0.98, "Shell", x0=0.0, z0=L * 0.32 - i * L * 0.12, rake=0.15, rising=-1)
-        for sx in (-1, 1):
-            for i in range(3):
-                ramp(p, 0.04, 0.1, 0.06, H * 0.55, "Frame", x0=sx * (W / 2 + 0.01), z0=-L * 0.1 + i * 0.13, lo=0.1, rising=-1)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:
-            for sx in (-1, 1):
-                p.block(0.06, 0.04, 0.03, H * 0.7, "Glow", ch=0.006, x0=sx * W * 0.3, z0=-L * 0.32)
-                p.block(0.022, 0.03, 0.05, 0.0, "Panel", ch=0.004, x0=sx * W * 0.25, z0=L * 0.46)
-        else:
-            for sx in (-1, 1):  # tall ears
-                spike(p, 0.05, 0.16, H * 0.95, "Shell", x0=sx * W * 0.3, z0=-L * 0.1, lean=0.05, sides=3, tip=0.1)
-
 
 class Afterburn(SetStyle):
     """Ram-air intake scoops / vectored rectangular nozzles."""
@@ -499,24 +427,6 @@ class Afterburn(SetStyle):
     def toe_tip(self, p, W, L, H):
         for sx in (-1, 1):
             ramp(p, W * 0.3, L * 0.3, H * 0.3, H * 0.7, "Shell", x0=sx * W * 0.22, z0=L * 0.15, lo=0.1, rising=-1)
-
-    def animal_body(self, p, W, L, H, front):  # Aquila: folded wing blades / tail fan
-        for sx in (-1, 1):
-            if front:
-                ramp(p, 0.06, L * 0.85, 0.14, H * 0.55, "Shell", x0=sx * (W / 2 + 0.02), z0=-L * 0.02, lo=0.3, rising=1)
-                p.block(0.03, L * 0.7, 0.05, H * 0.6, "Panel", ch=0.004, x0=sx * (W / 2 + 0.05), z0=0.0)
-            else:
-                for i in range(3):
-                    fin(p, 0.02, L * 0.3, 0.1 + i * 0.02, H * 0.95, "Shell", x0=sx * (0.08 + i * 0.1), z0=L * 0.3, rake=0.3)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:  # hooked beak
-            p.plate(W * 0.6, L * 0.6, 0.05, H * 0.75, bevel=0.04, end_w=0.3, z0=L * 0.15, bulge=1.0, ch=0.02, role="Hazard")
-            for sx in (-1, 1):
-                p.block(0.06, 0.04, 0.03, H * 0.75, "Glow", ch=0.006, x0=sx * W * 0.34, z0=-L * 0.32)
-        else:
-            for i in range(3):
-                fin(p, 0.02, L * 0.7, 0.12 - i * 0.02, H * 0.95, "Shell", x0=(i - 1) * 0.07, z0=L * 0.1, rake=0.3)
 
 
 class Voltaic(SetStyle):
@@ -556,21 +466,6 @@ class Voltaic(SetStyle):
     def toe_tip(self, p, W, L, H):
         p.prism(H * 0.18, W * 0.7, H * 0.25, "Copper", axis="x", sides=10, z0=L * 0.36)
 
-    def animal_body(self, p, W, L, H, front):  # Volt-Viper: segment bands + spinal coils
-        for i in range(5):
-            p.block(W * 1.02, 0.03, H * 1.02, -H * 0.01, "Dark", ch=0.006, z0=-L * 0.3 + i * L * 0.15)
-        for i in range(4):
-            p.prism(0.06 if i % 2 == 0 else 0.045, 0.06, H * 0.98, "Copper" if i % 2 == 0 else "Dark", axis="z", sides=10, z0=L * 0.05 + i * 0.065)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:
-            for sx in (-1, 1):
-                p.block(0.07, 0.03, 0.025, H * 0.74, "Glow", ch=0.005, x0=sx * W * 0.3, z0=-L * 0.32)
-                p.block(0.022, 0.03, 0.05, 0.0, "Panel", ch=0.004, x0=sx * W * 0.2, z0=L * 0.46)
-        else:  # copper hood
-            for sx in (-1, 1):
-                p.block(0.04, L * 0.8, H * 0.7, H * 0.2, "Copper", ch=0.008, x0=sx * (W / 2 + 0.03), z0=0.0)
-
 
 class Salvo(SetStyle):
     """Flush micro-missile doors / chaff and flare dispensers."""
@@ -609,24 +504,6 @@ class Salvo(SetStyle):
     def toe_tip(self, p, W, L, H):
         p.block(W * 0.4, L * 0.12, H * 0.2, H * 0.6, "Panel", ch=0.004, z0=L * 0.28)
 
-    def animal_body(self, p, W, L, H, front):  # Stalker: dorsal missile pods + spines
-        for sx in (-1, 1):
-            p.block(0.18, L * 0.34, 0.1, H, "Frame", ch=0.01, x0=sx * 0.2, z0=L * 0.12)
-            for i in range(2):
-                for j in range(2):
-                    p.block(0.06, 0.08, 0.02, H + 0.1, "Panel", ch=0.003, x0=sx * 0.2 + (j - 0.5) * 0.08, z0=L * 0.12 + (i - 0.5) * 0.12)
-        spike(p, 0.03, 0.1, H * 0.98, "Shell", z0=L * 0.3, lean=-0.05, sides=3)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:  # mandibles + eye cluster
-            for sx in (-1, 1):
-                ramp(p, 0.05, L * 0.6, 0.06, H * 0.05, "Frame", x0=sx * W * 0.3, z0=L * 0.2, lo=0.3, rising=-1)
-                for k in range(2):
-                    p.block(0.035, 0.03, 0.02, H * 0.78, "Glow", ch=0.004, x0=sx * W * (0.18 + k * 0.14), z0=-L * 0.3)
-        else:
-            for sx in (-1, 1):
-                fin(p, 0.015, L * 0.6, 0.14, H * 0.95, "Frame", x0=sx * W * 0.2, z0=0.0, rake=0.2)
-
 
 class Goliath(SetStyle):
     """Pneumatic pile-driver rams / counterweight ballast tanks."""
@@ -661,22 +538,6 @@ class Goliath(SetStyle):
     def toe_tip(self, p, W, L, H):
         p.block(W * 0.96, L * 0.18, H * 0.62, 0.0, "Frame", ch=0.014, z0=L * 0.36)
 
-    def animal_body(self, p, W, L, H, front):  # Ursus (front hump) / Tusk-style skirts
-        if front:
-            p.plate(W * 0.7, L * 0.45, 0.14, H * 0.98, bevel=0.1, end_w=0.7, z0=L * 0.12, bulge=1.0, ch=0.04)
-        for sx in (-1, 1):
-            p.block(0.06, L * 0.7, H * 0.45, H * 0.05, "Frame", ch=0.01, x0=sx * (W / 2 + 0.02), z0=0.0)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:  # blunt snout + tusks
-            p.block(W * 0.5, L * 0.2, H * 0.3, H * 0.4, "Dark", ch=0.01, z0=L * 0.38)
-            for sx in (-1, 1):
-                ramp(p, 0.04, L * 0.7, 0.05, 0.0, "Panel", x0=sx * W * 0.42, z0=L * 0.12, lo=0.4, rising=-1)
-                p.block(0.06, 0.04, 0.03, H * 0.72, "Glow", ch=0.006, x0=sx * W * 0.3, z0=-L * 0.3)
-        else:  # round ears
-            for sx in (-1, 1):
-                p.prism(0.05, 0.05, H * 0.95, "Shell", axis="y", sides=8, x0=sx * W * 0.32, z0=0.0)
-
 
 class Mantis(SetStyle):
     """Faceted radar-deflecting prisms / baffled ECM shrouds."""
@@ -705,21 +566,6 @@ class Mantis(SetStyle):
 
     def toe_tip(self, p, W, L, H):
         facet(p, W * 0.4, L * 0.3, H * 0.3, H * 0.7, "Frame", z0=L * 0.12)
-
-    def animal_body(self, p, W, L, H, front):  # Stalker-style faceting
-        facet(p, W * 0.5, L * 0.6, 0.1, H * 0.98, "Shell", z0=L * 0.1)
-        for sx in (-1, 1):
-            facet(p, 0.1, L * 0.4, 0.07, H * 0.85, "Frame", x0=sx * W * 0.38, z0=L * 0.1)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:
-            facet(p, W * 0.6, L * 0.8, 0.06, H * 0.95, "Frame", z0=0.0)
-            for sx in (-1, 1):
-                for k in range(2):
-                    p.block(0.035, 0.03, 0.02, H * 0.72, "Glow", ch=0.004, x0=sx * W * (0.2 + k * 0.12), z0=-L * 0.3)
-        else:
-            for sx in (-1, 1):
-                fin(p, 0.015, L * 0.5, 0.18, H * 0.95, "Frame", x0=sx * W * 0.25, z0=L * 0.1, rake=0.15)
 
 
 class Aegis(SetStyle):
@@ -754,47 +600,13 @@ class Aegis(SetStyle):
     def toe_tip(self, p, W, L, H):
         p.block(W * 0.6, L * 0.04, 0.02, H * 0.45, "Glow", ch=0.003, z0=L * 0.46)
 
-    def animal_body(self, p, W, L, H, front):  # Testudo: hex shell plates
-        for i, (x, z) in enumerate([(-0.2, -0.05), (0.2, -0.05), (0.0, 0.17), (-0.22, 0.32), (0.22, 0.32)]):
-            p.prism(0.12, 0.06, H * 0.96, "Shell" if i % 2 == 0 else "Frame", axis="y", sides=6, x0=x, z0=z * L)
-            p.prism(0.05, 0.07, H * 0.96, "Glow" if i == 2 else "Dark", axis="y", sides=6, x0=x, z0=z * L)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:  # blunt beak
-            p.block(W * 0.6, L * 0.3, H * 0.45, H * 0.15, "Hazard", ch=0.012, z0=L * 0.32)
-            for sx in (-1, 1):
-                p.block(0.06, 0.04, 0.03, H * 0.72, "Glow", ch=0.006, x0=sx * W * 0.3, z0=-L * 0.3)
-        else:
-            p.prism(0.1, 0.05, H * 0.96, "Shell", axis="y", sides=6)
-
 
 class Ironclad(SetStyle):
-    """Set01: limbs/body/head/hands come from ironclad.py; this adds feet and the Leo-Frame quadruped."""
+    """Set01: limbs/body/head/hands come from ironclad.py; this adds the feet."""
     idx = 1
 
     def toe_tip(self, p, W, L, H):
         p.hazard_band(W * 0.6, L * 0.08, 0.02, H * 0.5, z0=L * 0.3, n=5)
-
-    def animal_body(self, p, W, L, H, front):  # Leo-Frame: mane collar / haunch plates
-        if front:
-            for i in range(5):
-                a = (i - 2) * 0.32
-                spike(p, 0.07, 0.16, H * 0.92, "Shell", x0=math.sin(a) * W * 0.4, z0=L * 0.3, lean=-0.08, lean_x=math.sin(a) * 0.1, sides=4, tip=0.25)
-            p.block(W * 0.12, L * 0.6, 0.03, H * 1.03, "Panel", ch=0.004, x0=W * 0.2, z0=0.0)
-        else:
-            for sx in (-1, 1):
-                p.block(0.05, L * 0.5, H * 0.5, H * 0.2, "Frame", ch=0.01, x0=sx * (W / 2 + 0.01), z0=L * 0.1)
-
-    def animal_head_detail(self, p, W, L, H, snout):
-        if snout:
-            p.block(W * 0.7, L * 0.3, H * 0.3, 0.0, "Frame", ch=0.01, z0=L * 0.3)  # jaw
-            for sx in (-1, 1):
-                p.block(0.06, 0.04, 0.03, H * 0.72, "Glow", ch=0.006, x0=sx * W * 0.3, z0=-L * 0.3)
-                p.block(0.022, 0.03, 0.05, 0.0, "Panel", ch=0.004, x0=sx * W * 0.2, z0=L * 0.46)
-        else:  # mane fins
-            for i in range(5):
-                fin(p, 0.02, L * 0.8, 0.1, H * (0.6 + 0.1 * (2 - abs(i - 2))), "Shell", x0=(i - 2) * W * 0.2, z0=0.0, rake=0.3, rising=1)
-
 
 STYLES = [Ironclad(), Bastion(), Overclock(), Ripjaw(), Afterburn(), Voltaic(), Salvo(), Goliath(), Mantis(), Aegis()]
 
@@ -821,7 +633,7 @@ def build_plate_part(style, slot):
 
 
 PLATE_SLOTS = list(ic.PARTS.keys())
-LW_SLOTS = ["FootFront", "FootBack", "QuadBodyFront", "QuadBodyBack", "AnimalHeadFront", "AnimalHeadBack"]
+LW_SLOTS = ["FootFront", "FootBack"]
 
 
 def build_lw_part(style, slot):
@@ -830,14 +642,6 @@ def build_lw_part(style, slot):
         style.foot_toe(p)
     elif slot == "FootBack":
         style.foot_heel(p)
-    elif slot == "QuadBodyFront":
-        style.quad_body(p, True)
-    elif slot == "QuadBodyBack":
-        style.quad_body(p, False)
-    elif slot == "AnimalHeadFront":
-        style.animal_head(p, True)
-    elif slot == "AnimalHeadBack":
-        style.animal_head(p, False)
     return p
 
 

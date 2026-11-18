@@ -3,7 +3,7 @@ using UnityEngine;
 namespace IronFauna.Clamshell
 {
     /// <summary>
-    /// A weapon mounting socket on the skeleton (back pylons, lower spine, dorsal, flank, tail).
+    /// A weapon mounting socket on the skeleton (back pylons, lower spine).
     /// Created by <see cref="MechClamshellBuilder"/> on every rebuild; weapons parent themselves here.
     /// </summary>
     public class MechHardpoint : MonoBehaviour

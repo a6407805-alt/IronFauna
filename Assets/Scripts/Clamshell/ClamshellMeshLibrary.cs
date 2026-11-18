@@ -59,7 +59,7 @@ namespace IronFauna.Clamshell
         }
 
         /// <summary>
-        /// Lengthwise parts (feet, quadruped body, animal head) are modeled at true size: X width, Z length with
+        /// Lengthwise parts (feet) are modeled at true size: X width, Z length with
         /// +Z the free tip, height toward -Y from Y = 0. Loaded by name (e.g. "FootFront_Set02_Bastion") and scaled
         /// uniformly so the model's length matches <paramref name="target"/> (local Y), centred on X and seated on
         /// the target's bottom (min Z). Details may stick out sideways or upward. <paramref name="widthScale"/>

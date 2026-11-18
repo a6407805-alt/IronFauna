@@ -40,12 +40,6 @@ namespace IronFauna.Clamshell
             "Voltaic", "Salvo", "Goliath", "Mantis", "Aegis",
         };
 
-        private static readonly string[] AnimalSetNames =
-        {
-            "Leo-Frame", "Ceratops", "Gepard", "Lupus", "Aquila",
-            "Volt-Viper", "Ursus", "Tusk", "Stalker", "Testudo",
-        };
-
         // Humanoid head names from Docs/ironfauna_head_clamshell_catalog.md.
         private static readonly string[] HumanoidHeadNames =
         {
@@ -82,19 +76,16 @@ namespace IronFauna.Clamshell
             new PartStats(4, -1, 0, 2, 75),  // Aegis
         };
 
-        public static string SetName(ClamshellSetArchetype set, bool animal)
+        public static string SetName(ClamshellSetArchetype set)
         {
-            int i = Index(set);
-            return animal ? AnimalSetNames[i] : HumanoidSetNames[i];
+            return HumanoidSetNames[Index(set)];
         }
 
-        /// <summary>Name shown for a specific slot (heads and bodies have their own names per chassis).</summary>
-        public static string PartName(ClamshellSlot slot, ClamshellSetArchetype set, bool quadruped)
+        /// <summary>Name shown for a specific slot (heads have their own names).</summary>
+        public static string PartName(ClamshellSlot slot, ClamshellSetArchetype set)
         {
             int i = Index(set);
             bool isHead = slot == ClamshellSlot.HeadFront || slot == ClamshellSlot.HeadBack;
-            bool isBody = slot == ClamshellSlot.BodyFront || slot == ClamshellSlot.BodyBack;
-            if (quadruped && (isHead || isBody)) return AnimalSetNames[i];
             if (isHead) return HumanoidHeadNames[i];
             return HumanoidSetNames[i];
         }

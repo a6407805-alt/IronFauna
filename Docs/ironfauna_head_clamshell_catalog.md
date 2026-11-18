@@ -1,12 +1,10 @@
-# IronFauna — 40-Part Universal Head Clamshell Catalog (10 Humanoid Sets + 10 Animal Sets)
+# IronFauna — 20-Part Head Clamshell Catalog (10 Humanoid Sets)
 
 > [!IMPORTANT]
-> **100% Cross-Compatible Head Clamshell Envelope:** Every Humanoid Head and every Animal Head clamps onto the exact same **bare gunmetal sensor-skull core** above an **uncovered glowing-orange Neck Hub**. Because the **vertical coronal seam, toggle-latch coordinates, and `45°` neck-collar bevels** are identical across all 40 halves, you can latch **any Animal Snout Front Half directly to any Humanoid Sensor Back Half** (e.g., *Lupus* Wolf Jaws Front + *Overclock* Radiator Fins Back, or *Ironclad* T-Visor Front + *Leo-Frame* Armored Mane Back) and mount it on either a Humanoid or Quadruped body ($20 \times 20 = 400$ valid head combinations).
 
 ````carousel
 ![10 Humanoid Clamshell Head Sets — Halo: Reach × Gundam × Armored Core Fusion (Front & Profile Side Views over Uncovered Orange Neck Hub)](C:/Users/ahren/.gemini/antigravity/brain/4363865f-84b8-4200-b60c-28073e82ee4a/ironfauna_head_sets_blueprint_1794792739293.jpg)
 <!-- slide -->
-![10 Animal / Biomech Clamshell Head Sets (01 Leo-Frame through 10 Testudo — Front Snout Half + Rear Mane/Crest Half over Uncovered Orange Neck Hub)](C:/Users/ahren/.gemini/antigravity/brain/4363865f-84b8-4200-b60c-28073e82ee4a/ironfauna_animal_clamshell_heads_blueprint_1794790216929.jpg)
 ````
 
 ---
@@ -23,7 +21,7 @@
 
 ## 2. 10 Humanoid Head Clamshell Sets — *Halo: Reach × Gundam × Armored Core* Fusion (10 Fronts + 10 Backs)
 
-Every Humanoid Front Half blends **Halo: Reach** tactical visors/up-armor plates/rebreathers, **Gundam** V-fin crests/dual-eye sensors/chin blocks, and **Armored Core** asymmetrical multi-lens pods—all clamping to the exact same Universal Cranial Seam as the Animal Heads:
+Every Humanoid Front Half blends **Halo: Reach** tactical visors/up-armor plates/rebreathers, **Gundam** V-fin crests/dual-eye sensors/chin blocks, and **Armored Core** asymmetrical multi-lens pods—all clamping to the exact same Universal Cranial Seam:
 
 | # | Head Set Name | Design Inspiration | Humanoid Front Half (Visor / Faceplate — Crimson) | Humanoid Back Half (Cranium / Crest / Sensors — Maroon) | Sensor / HUD Passive |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -40,19 +38,3 @@ Every Humanoid Front Half blends **Halo: Reach** tactical visors/up-armor plates
 
 ---
 
-## 3. 10 Animal / Biomech Head Clamshell Sets (10 Front Halves + 10 Back Halves)
-
-Every Animal Front Half (Snout/Maw) includes an articulated gunmetal lower-jaw hinge inside the front clamshell, while the Rear Half houses the mane, ears, frill, or sensor crest.
-
-| # | Beast Head Name | Animal Front Half (Snout / Maw / Beak — Crimson) | Animal Back Half (Mane / Crest / Ears — Maroon) | Beast Sensor / Combat Passive |
-| :--- | :--- | :--- | :--- | :--- |
-| **01** | **Leo-Frame** *(Lion)* | Angular machined lion snout with steel fangs & glowing cyan visor slit | Splayed 6-blade flat chamfered maroon/crimson armored lion-mane collar | Intimidating roar pulse + wide peripheral threat radar |
-| **02** | **Ceratops** *(Rhino/Triceratops)* | Heavy ERA-bolted nasal horn & twin brow-horn battering snout | Wide flared hexagonal armored frill-shield protecting the neck joint | Blocks frontal incoming fire to the upper torso while charging |
-| **03** | **Gepard** *(Cheetah)* | Streamlined predator snout with glowing cyan tear-duct cooling conduits | Twin swept cyan radiator heat-sink ear-fins & rear exhaust gills | High-speed motion tracker + vents excess core heat during sprints |
-| **04** | **Lupus** *(Wolf)* | Long angular wolf jaws lined with serrated steel biting teeth & cyan eyes | Twin tall swept-back directional radar-ear fins on the rear skull | Acoustic pack-hunter sonar detects hidden enemies across the map |
-| **05** | **Aquila** *(Falcon/Raptor)* | Razor-sharp hooked machined-steel raptor beak with telescopic optic | Swept aero-strake feather-crest & dorsal ram-air intake scoop | Long-range sniper zoom optics + aerial dive-attack damage bonus |
-| **06** | **Volt-Viper** *(Cobra/Shark)* | Wide flat viper/hammerhead maw with twin copper arc-injector fangs | Flared cobra-hood lateral arc-capacitor wings on the rear cranium | Bite or close-range pulse inflicts continuous electrical DoT |
-| **07** | **Ursus** *(Bear)* | Broad boxy grizzly snout with dual heavy target-designator lenses | Rounded-chamfer ear pods housing micro-flare launchers & radar dishes | Boosts accuracy & target-sharing for all nearby grid auto-turrets |
-| **08** | **Tusk** *(War-Boar)* | Reinforced battering-ram snout with twin upward-angled steel wedge tusks | Massive hydraulic neck-piston housing & counterweight rear skull | Gore attack flips light enemies and shatters enemy shields |
-| **09** | **Stalker** *(Panther)* | Low-profile faceted stealth panther muzzle with 4 compound cyan optics | Silent baffled rear skull with twin backward-swept ECM sensor horns | Critical damage multiplier when attacking enemies from behind/flanks |
-| **10** | **Testudo** *(Snapping Turtle)* | Heavy beveled snapping-beak jaw with slotted cyan hard-light emitter rails | Dome-shaped field-inverter rear cranium projecting a forward barrier cone | Projects a directional cone shield when bracing |

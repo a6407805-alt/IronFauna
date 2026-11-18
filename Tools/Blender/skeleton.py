@@ -10,11 +10,10 @@ Unlike armor, skeleton pieces are modeled at true size and are NOT fitted: Unity
 Authoring frame (Blender): X = side, -Y = the mech's front, Z = up, metres, origin = the piece's pivot.
 Unity reads this as (x, y, z) = (-X, Z, -Y), so the front stays the front.
   Skel_TorsoHumanoid_<Class>  origin = waist joint centre
-  Skel_TorsoAnimal_<Class>    origin = centre of the hip line (ground projection of the body centre, at hip height)
   Skel_<Thigh|Calf|UpperArm|LowerArm>_<Class>  Z along the bone, origin mid-bone, -Z end = the `from` joint
   Skel_Hand                   Z along the hand, origin at the wrist
   Skel_Foot_<Class>           origin on the ground under the ankle
-  Skel_Head / Skel_HeadAnimal origin = neck joint centre
+  Skel_Head                   origin = neck joint centre
   Skel_Joint / Skel_JointCore unit radius, axis X (Unity scales it by the joint radius)
 
 Clearance rule: wherever armor clamps on, the skeleton stays inside the slot between the two halves
@@ -41,14 +40,13 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 # Weight classes. Keep in sync with Assets/Scripts/Clamshell/MechFrameSpec.cs.
 #   ft frame thickness, aw/ad armor width/depth, ai seam offset, jr joint radius,
-#   hipX / shX / collar humanoid half-widths, legX quadruped leg half-spacing, sock hardpoint socket radius.
+#   hipX / shX / collar humanoid half-widths, sock hardpoint socket radius.
 CLASSES = {
-    "Light": dict(ft=0.82, aw=0.88, ad=0.85, ai=0.90, jr=0.90, hipX=0.43, shX=0.86, collar=0.27, legX=0.66, sock=0.060),
-    "Medium": dict(ft=1.00, aw=1.00, ad=1.00, ai=1.00, jr=1.00, hipX=0.48, shX=0.95, collar=0.30, legX=0.72, sock=0.080),
-    "Heavy": dict(ft=1.20, aw=1.14, ad=1.15, ai=1.12, jr=1.12, hipX=0.55, shX=1.07, collar=0.38, legX=0.80, sock=0.105),
+    "Light": dict(ft=0.82, aw=0.88, ad=0.85, ai=0.90, jr=0.90, hipX=0.43, shX=0.86, collar=0.27, sock=0.060),
+    "Medium": dict(ft=1.00, aw=1.00, ad=1.00, ai=1.00, jr=1.00, hipX=0.48, shX=0.95, collar=0.30, sock=0.080),
+    "Heavy": dict(ft=1.20, aw=1.14, ad=1.15, ai=1.12, jr=1.12, hipX=0.55, shX=1.07, collar=0.38, sock=0.105),
 }
 JOINT_GAP = 0.06
-LEG_Z = 0.85  # quadruped leg half-spacing front/back
 
 
 # =============================================================================== primitives (absolute coords)
@@ -329,22 +327,6 @@ def build_head():
     return p
 
 
-def build_head_animal():
-    """Beast skull frame: braincase, upper and lower jaw with teeth. Origin = neck joint; +forward is -Y."""
-    p = Part()
-    bar(p, U(0, 0.0, 0.0), U(0, 0.04, 0.2), 0.11, "Frame")                        # neck stem
-    cyl(p, U(0, 0.02, 0.17), 0.12, 0.03, "y", "Dark", 14)                         # collar ring
-    ubox(p, (0, 0.05, 0.32), (0.24, 0.2, 0.2), "Frame", ch=0.03)                  # braincase
-    ubox(p, (0, 0.07, 0.55), (0.17, 0.1, 0.24), "Frame", ch=0.02)                 # upper jaw
-    ubox(p, (0, -0.05, 0.5), (0.14, 0.045, 0.3), "Dark", ch=0.012)                # lower jaw
-    for sx in (-1, 1):
-        cyl(p, U(sx * 0.1, -0.02, 0.38), 0.035, 0.03, "x", "Dark", 8)             # jaw hinge
-        piston(p, U(sx * 0.105, 0.08, 0.3), U(sx * 0.085, -0.04, 0.46), 0.011)    # jaw closer
-        cyl(p, U(sx * 0.105, 0.09, 0.425), 0.022, 0.016, "x", "Glow", 8)          # optics
-        for k in range(3):                                                        # teeth
-            ubox(p, (sx * 0.06, 0.005, 0.5 + k * 0.05), (0.02, 0.035, 0.022), "Panel", ch=0.003)
-    return p
-
 
 # =============================================================================== humanoid torso
 def build_torso_humanoid(cls):
@@ -451,83 +433,6 @@ def humanoid_hardpoints(cls):
             ("BackCentre", (0, 0.44, 1.52), sizes[1]), ("LowerSpine", (0, 0.39, 0.12), "Small" if cls == "Light" else "Medium")]
 
 
-# =============================================================================== animal torso
-def build_torso_animal(cls):
-    C = CLASSES[cls]
-    ft, aw, sk, legX = C["ft"], C["aw"], C["sock"], C["legX"]
-    BW, BH, SY = 0.90 * aw, 0.70, 0.15      # body armor width / height, spine height above the hip line
-    p = Part()
-
-    def arch(f):
-        return SY + 0.11 * (1 - (f / 1.02) ** 2)
-
-    # --- arched spine: articulated vertebrae with dorsal processes ------------------------------------
-    n = 10
-    fs = [-1.0 + i * 2.0 / n for i in range(n + 1)]
-    for a, b in zip(fs, fs[1:]):
-        fa, fb = a + 0.018, b - 0.018
-        bar(p, U(0, arch(fa), fa), U(0, arch(fb), fb), 0.17 * ft, "Frame")
-        m = (a + b) / 2
-        ubox(p, (0, arch(m) + 0.085 * ft + 0.025, m), (0.04, 0.06, 0.09), "Frame", ch=0.008)          # dorsal process
-        ubox(p, (0, arch(m), m), (0.17 * ft + 0.09, 0.05, 0.06), "Dark", ch=0.008)                    # transverse lugs
-    for f in fs[1:-1]:
-        cyl(p, U(0, arch(f), f), 0.062 * ft, 0.05, "y", "Dark", 10)                                    # discs
-    for sx in (-1, 1):                                                                                # heavy cable tracks
-        cable(p, [U(sx * (0.085 * ft + 0.075), arch(f) - 0.035, f) for f in fs], 0.026, clamp_every=2)
-
-    # --- ribs ---------------------------------------------------------------------------------------------
-    rib_fs = (-0.7, -0.45, -0.22, 0.22, 0.45, 0.7) if cls != "Light" else (-0.6, -0.25, 0.25, 0.6)
-    for f in rib_fs:
-        ubox(p, (0, arch(f) - 0.03, f), (BW - 0.18, 0.05, 0.05), "Frame", ch=0.01)
-        for sx in (-1, 1):
-            ubox(p, (sx * (BW / 2 - 0.11), arch(f) - 0.17, f), (0.04, 0.28, 0.05), "Dark", ch=0.008)
-    ubox(p, (0, -0.09, 0.0), (0.16 * ft, 0.06, 1.5), "Dark", ch=0.012)                                 # belly keel
-    cyl(p, U(0, SY - 0.06, 0.45), 0.13 * ft, 0.3, "y", "Frame", 12)                                    # reactor
-    cyl(p, U(0, SY - 0.06, 0.45), 0.08 * ft, 0.34, "y", "Glow", 10)
-
-    # --- shoulder and hip girdles -------------------------------------------------------------------------
-    for sz in (-1, 1):
-        f = sz * LEG_Z
-        ubox(p, (0, 0, f), (2 * legX - 0.2, 0.15 * ft, 0.15 * ft), "Frame", ch=0.02)                   # cross bar
-        ubox(p, (0, 0.13, f), (0.46, 0.28, 0.1), "Frame", ch=0.03)                                     # girdle bulkhead
-        for sx in (-1, 1):
-            ubox(p, (sx * (legX - 0.135), 0, f), (0.07, 0.2 * ft, 0.2 * ft), "Dark", ch=0.016)         # carriage
-            if cls == "Heavy":
-                bar(p, U(sx * 0.2, 0.22, f), U(sx * 0.34, 0.03, f), 0.06, "Frame")
-
-    # --- mid bulkhead ring at the armor seam: dorsal + flank hardpoints ------------------------------------
-    top, bot, side = SY + BH / 2 + 0.02, SY - BH / 2 - 0.02, BW / 2 + 0.02
-    c = min(BW, BH) * 0.18 + 0.01
-    ubox(p, (0, top, 0), (BW - 2 * c + 0.04, 0.05, 0.08), "Frame", ch=0.012)
-    ubox(p, (0, bot, 0), (BW - 2 * c + 0.04, 0.05, 0.08), "Frame", ch=0.012)
-    for sx in (-1, 1):
-        ubox(p, (sx * side, SY, 0), (0.05, BH - 2 * c + 0.04, 0.08), "Frame", ch=0.012)
-        for sy in (-1, 1):
-            y_edge = top if sy > 0 else bot
-            bar(p, U(sx * (BW / 2 - c), y_edge, 0), U(sx * side, SY + sy * (BH / 2 - c), 0), 0.06, "Dark")
-        socket(p, U(sx * (side + 0.02), SY, 0), sk, "+x" if sx > 0 else "-x")                          # flank mounts
-    ubox(p, (0, top + 0.035, 0), (0.26, 0.05, 0.2), "Frame", ch=0.014)                                 # dorsal pedestal
-    socket(p, U(0, top + 0.06, 0), sk * 1.3, "+z")                                                     # dorsal mount
-    for sf in (-1, 1):                                                                                 # dorsal recoil buffers
-        piston(p, U(0.09 * sf, top + 0.045, 0.09 * sf), U(0.2 * sf, top + 0.005, 0.02 * sf), 0.016, split=0.5, eye_axis=(0, 1, 0))
-
-    # --- neck boom + tail mount -----------------------------------------------------------------------------
-    bar(p, U(0, arch(0.96), 0.96), U(0, SY + 0.18, 1.1), 0.15 * ft, "Frame")
-    cyl(p, U(0, SY + 0.14, 1.045), 0.15, 0.03, "y", "Dark", 14)                                        # neck collar
-    bar(p, U(0, arch(-0.98), -0.98), U(0, SY + 0.06, -1.09), 0.1 * ft, "Frame")
-    socket(p, U(0, SY + 0.06, -1.09), sk * 0.85, "+y")                                                 # tail mount
-    return p
-
-
-def animal_hardpoints(cls):
-    """Socket mouths (Unity-style x, up, fwd from the hip-line origin) with their weapon size class."""
-    C = CLASSES[cls]
-    BW, top = 0.90 * C["aw"], 0.15 + 0.35 + 0.02
-    sizes = {"Light": ("Small", "Medium"), "Medium": ("Medium", "Large"), "Heavy": ("Large", "Large")}[cls]
-    return [("Dorsal", (0, top + 0.135, 0), sizes[1]), ("FlankL", (-(BW / 2 + 0.115), 0.15, 0), sizes[0]),
-            ("FlankR", (BW / 2 + 0.115, 0.15, 0), sizes[0]), ("Tail", (0, 0.21, -1.165), "Small")]
-
-
 # =============================================================================== export
 def export(obj, path):
     bpy.ops.object.select_all(action="DESELECT")
@@ -568,11 +473,9 @@ def build_all(do_export=True):
     add("Skel_JointCore", build_joint(True))
     add("Skel_Hand", build_hand())
     add("Skel_Head", build_head())
-    add("Skel_HeadAnimal", build_head_animal())
     add("Skel_JointGuard", build_joint_guard())
     for cls in CLASSES:
         add(f"Skel_TorsoHumanoid_{cls}", build_torso_humanoid(cls))
-        add(f"Skel_TorsoAnimal_{cls}", build_torso_animal(cls))
         add(f"Skel_Foot_{cls}", build_foot(cls))
         for spec in limb_specs(cls):
             add(f"Skel_{spec[0]}_{cls}", build_limb(cls, *spec[1:]))

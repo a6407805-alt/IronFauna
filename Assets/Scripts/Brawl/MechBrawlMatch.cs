@@ -93,7 +93,6 @@ namespace IronFauna.Brawl
                 pos.y = MechBoxer.TryGround(pos + Vector3.up * 20f, out float gy) ? gy : ArenaTop;
                 float yaw = ang * Mathf.Rad2Deg + 180f;
                 var l = _loadout.Clone();
-                l.quadruped = false;
                 l.legPose = LegPosePreset.Pose1_HumanLeg;
                 if (i > 0)
                 {
@@ -121,9 +120,13 @@ namespace IronFauna.Brawl
             gb.legPose = LegPosePreset.Pose1_HumanLeg;
             gb.RebuildMech();
             // legs: the Deploy walk cycle (planted feet, individual steps, stomps); the boxer poses the upper body
-            f.ghostGo.AddComponent<IronFauna.Gameplay.MechGaitAnimator>();
+            var gait = f.ghostGo.AddComponent<IronFauna.Gameplay.MechGaitAnimator>();
+            if (player)
+            {
+                gait.dustScale = 1f;
+                gait.Footfall += (at, strength) => BoxingFeel.Shake(0.05f * strength);
+            }
             f.ghost = f.ghostGo.AddComponent<MechBoxer>();
-            f.ghost.externalLegs = true;
             f.ghost.followGround = true;
             f.ghost.ringHalfSize = ArenaHalf + 30f;      // the arena edge is real: no invisible walls
             f.ghost.minDistance = 2.3f;
@@ -153,7 +156,6 @@ namespace IronFauna.Brawl
             f.ragdoll.KnockedOut += who => { if (who == _fighters[0].ragdoll) Banner("K.O.", 2.5f); };
             f.ragdoll.GrappleEvent += OnGrapple;
             f.ghost.PunchThrown += (who, power) => { if (player) BoxingSfx.Whoosh(power); };
-            if (player) f.ghost.Footfall += (at, strength) => BoxingFeel.Shake(0.05f * strength);
             return f;
         }
 

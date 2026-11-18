@@ -91,7 +91,7 @@ namespace IronFauna.Clamshell
         }
 
         /// <summary>
-        /// A lengthwise clamshell half (quadruped thorax/haunch, animal snout/skull, toe/heel):
+        /// A lengthwise clamshell half (toe / heel):
         /// flat seam face at y = -length/2, tapered 45° bevel at the outer end y = +length/2.
         /// The section is a chamfered rectangle centred on the local origin (X width, Z height).
         /// </summary>
