@@ -140,6 +140,7 @@ namespace IronFauna.Brawl
             f.ragdoll.ArmorShed += (who, at) => BoxingSfx.Clank(0.3f);
             f.ragdoll.KnockedOut += who => { if (who == _fighters[0].ragdoll) Banner("K.O.", 2.5f); };
             f.ghost.PunchThrown += (who, power) => { if (player) BoxingSfx.Whoosh(power); };
+            if (player) f.ghost.Footfall += (at, strength) => BoxingFeel.Shake(0.05f * strength);
             return f;
         }
 
@@ -202,7 +203,7 @@ namespace IronFauna.Brawl
             _banner = MenuUI.Label(root, "", 140, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(_banner.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -40f), new Vector2(0f, 260f));
             var help = MenuUI.Label(root,
-                "WASD MOVE   ·   LMB JAB   ·   RMB CROSS   ·   Q HOOK   ·   E UPPERCUT   ·   SHIFT GUARD   ·   SPACE SLIP   ·   ESC EXIT",
+                "WASD MOVE   ·   CTRL SPRINT   ·   LMB JAB   ·   RMB CROSS   ·   Q HOOK   ·   E UPPERCUT   ·   SHIFT GUARD   ·   SPACE SLIP   ·   ESC EXIT",
                 22, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(help.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 30f), new Vector2(0f, 80f));
         }

@@ -10,8 +10,9 @@ namespace IronFauna.Boxing
     /// <summary>
     /// A mech that boxes: procedural, physically-flavoured animation on a MechClamshellBuilder rig.
     ///  - Never still: a floaty bounce on the balls of the feet (heels up), weave, guard pumping in rhythm.
-    ///  - Footwork: the body glides, feet re-plant during the airborne half of each bounce, the foot on the side of
-    ///    travel leads, and the mech always squares up to its opponent.
+    ///  - Footwork: individual steps - each foot stays planted until the body has moved or turned away from it, then
+    ///    swings to where it is needed; the mech squares up to an opponent in range and otherwise walks/sprints
+    ///    freely (camera-relative when moveReference is set).
     ///  - Punches (jab, cross, hook, uppercut): wind-up that loads the hips, a fast strike driven by torso rotation,
     ///    a lunge and weight transfer onto the front foot, rear-heel pivot, then a slower recovery. Two-bone arm IK.
     ///  - Impact: the attacker's fist recoils, the defender's head and torso snap on springs and slide back.
@@ -28,6 +29,7 @@ namespace IronFauna.Boxing
             public PunchType punch;    // pressed this frame (buffered)
             public bool guard;         // held: high guard
             public int slip;           // pressed this frame: -1 slip left, +1 slip right
+            public bool sprint;        // held: run (open stance, no squaring up)
         }
 
         [NonSerialized] public Intent intent;
@@ -45,6 +47,12 @@ namespace IronFauna.Boxing
         public float braking = 9f;
         public float turnRate = 260f;
         public float ringHalfSize = 6.2f;
+        [Tooltip("When set, intent.move is read in this transform's yaw frame (the camera) instead of relative to the opponent")]
+        public Transform moveReference;
+        [Tooltip("Squares up to the opponent inside this range; further out it turns to face where it walks")]
+        public float lockOnRange = 9f;
+        public float sprintSpeed = 5.6f;
+        public float stepTime = 0.3f;
         public float minDistance = 2.05f;
 
         public float health = 100f;
@@ -55,6 +63,10 @@ namespace IronFauna.Boxing
         /// <summary>0..1 during a wind-up (the AI reads it to react).</summary>
         public bool Telegraphing => _punch != null && _phase == Phase.Windup;
         public Vector3 Velocity => _vel;
+        /// <summary>0 = roaming (walks where it is steered), 1 = squared up to the opponent in a fighting stance.</summary>
+        public float FightBlend => _fight;
+        /// <summary>A foot just landed (world position, 0..1 strength).</summary>
+        public event Action<Vector3, float> Footfall;
 
         /// <summary>Physics brawler: the ragdoll's collisions deal the damage, so the distance check is skipped.</summary>
         [NonSerialized] public bool physicsDriven;
@@ -138,10 +150,17 @@ namespace IronFauna.Boxing
         {
             public MechClamshellBuilder.LegRig rig;
             public bool lead;
-            public Vector3 stance;          // local offset from the root
-            public float yaw;               // toe-out (deg)
+            public Vector3 stance;          // fighting stance: local offset from the root
+            public float yaw;               // fighting stance toe-out (deg)
+            public Vector3 walkStance;      // roaming stance (feet side by side)
+            public float walkYaw;
             public Vector3 pos;             // planted world position (sole centre)
+            public float worldYaw;          // planted heading (deg)
             public float lift;              // current lift height
+            public bool swinging;
+            public float swingT, swingDur;
+            public Vector3 from, to;
+            public float fromYaw, toYaw;
             public float heel;              // heel raise (deg)
             public float pivot;             // extra yaw (rear-heel pivot on a cross)
             public Vector3 restThighDir, restCalfDir, restHinge;
@@ -181,6 +200,8 @@ namespace IronFauna.Boxing
         private float _bufferT;
 
         private float _slipT, _slipDir;
+        private float _fight = 1f;
+        private int _lastStepFoot = -1;
         private float _guardBlend;
 
         // Hit reaction springs (defender).
@@ -231,7 +252,10 @@ namespace IronFauna.Boxing
                     stance = new Vector3(x * 0.92f + (lead ? 0.06f : -0.06f) * -leadSide, 0f, lead ? 0.62f : -0.58f),
                     yaw = (lead ? 12f : 38f) * -leadSide,
                 };
+                f.walkStance = new Vector3(x, 0f, lead ? 0.12f : -0.12f);
+                f.walkYaw = 6f * (left ? -1f : 1f);
                 f.pos = transform.TransformPoint(f.stance);
+                f.worldYaw = transform.eulerAngles.y + f.yaw;
                 Vector3 dirHA = (rig.ankle - rig.hip).normalized;
                 Vector3 bend = Vector3.ProjectOnPlane(rig.knee - rig.hip, dirHA).normalized;
                 f.restHinge = Vector3.Cross(bend, dirHA).normalized;
@@ -317,27 +341,48 @@ namespace IronFauna.Boxing
         // ------------------------------------------------------------------ locomotion
         private void Move(float dt)
         {
-            Vector3 toOpp = opponent != null ? opponent.transform.position - transform.position : transform.forward;
+            Vector3 toOpp = opponent != null ? opponent.transform.position - transform.position : Vector3.zero;
             toOpp.y = 0f;
-            float dist = toOpp.magnitude;
-            Vector3 fwd = dist > 0.01f ? toOpp / dist : transform.forward;
-            Vector3 right = Vector3.Cross(Vector3.up, fwd);
+            float dist = opponent != null ? toOpp.magnitude : float.MaxValue;
+            Vector3 oppFwd = dist > 0.01f && dist < float.MaxValue ? toOpp / dist : transform.forward;
 
             Vector2 m = IsKO || suppressed ? Vector2.zero : Vector2.ClampMagnitude(intent.move, 1f);
+            bool sprinting = intent.sprint && m.sqrMagnitude > 0.05f && _punch == null && _guardBlend < 0.5f;
+
+            // squared up (fighting stance, always facing the opponent) only when someone is close and we are not running
+            bool engage = opponent != null && !opponent.IsKO && dist < lockOnRange && !sprinting;
+            if (_punch != null || _guardBlend > 0.5f) engage |= opponent != null && dist < lockOnRange * 1.5f;
+            _fight = Mathf.MoveTowards(_fight, engage ? 1f : 0f, dt * 2.5f);
+
+            // input frame: the camera when given (free movement), otherwise the line to the opponent
+            Vector3 fwd, right;
+            if (moveReference != null)
+            {
+                fwd = Vector3.ProjectOnPlane(moveReference.forward, Vector3.up);
+                if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.ProjectOnPlane(moveReference.up, Vector3.up);
+                fwd.Normalize();
+            }
+            else fwd = oppFwd;
+            right = Vector3.Cross(Vector3.up, fwd);
+
             float slow = (_punch != null ? 0.35f : 1f) * (_stagger > 0f ? 0.3f : 1f) * (_guardBlend > 0.5f ? 0.7f : 1f);
-            Vector3 want = (right * m.x * 0.92f + fwd * m.y * (m.y < 0f ? 0.85f : 1f)) * maxSpeed * slow;
+            float top = sprinting ? sprintSpeed : maxSpeed;
+            Vector3 wish = right * m.x + fwd * m.y;
+            // backing off while squared up is slower than stepping in
+            if (_fight > 0.5f && Vector3.Dot(wish, oppFwd) < 0f) wish *= 0.85f;
+            Vector3 want = wish * top * slow;
             float rate = want.sqrMagnitude > _vel.sqrMagnitude ? acceleration : braking;
             if (IsKO) rate = 3f;
             _vel = Vector3.MoveTowards(_vel, want, rate * dt);
 
             Vector3 p = transform.position + _vel * dt;
-            if (opponent != null)
+            if (opponent != null && !opponent.IsKO)
             {
                 Vector3 d = p - opponent.transform.position;
                 d.y = 0f;
                 if (d.magnitude < minDistance)
                 {
-                    Vector3 push = d.sqrMagnitude > 1e-4f ? d.normalized : -fwd;
+                    Vector3 push = d.sqrMagnitude > 1e-4f ? d.normalized : -oppFwd;
                     p = opponent.transform.position + push * minDistance;
                     _vel -= Vector3.Project(_vel, -push) * (Vector3.Dot(_vel, -push) > 0f ? 1f : 0f);
                 }
@@ -346,10 +391,14 @@ namespace IronFauna.Boxing
             p.z = Mathf.Clamp(p.z, -ringHalfSize, ringHalfSize);
             transform.position = p;
 
-            if (!IsKO && dist > 0.01f)
+            if (!IsKO)
             {
-                float target = Quaternion.LookRotation(fwd).eulerAngles.y;
-                float yaw = Mathf.MoveTowardsAngle(transform.eulerAngles.y, target, turnRate * dt);
+                Vector3 face = transform.forward;
+                if (_fight > 0.5f && dist > 0.01f) face = oppFwd;
+                else if (_vel.sqrMagnitude > 0.2f) face = _vel.normalized;
+                float target = Quaternion.LookRotation(face).eulerAngles.y;
+                float rate2 = turnRate * (_fight > 0.5f ? 1f : 0.7f) * (sprinting ? 0.6f : 1f);
+                float yaw = Mathf.MoveTowardsAngle(transform.eulerAngles.y, target, rate2 * dt);
                 transform.rotation = Quaternion.Euler(0f, yaw, 0f);
             }
             _stagger = Mathf.Max(0f, _stagger - dt);
@@ -556,8 +605,9 @@ namespace IronFauna.Boxing
 
             PunchDrive(out float pYaw, out float pLean, out float pRoll, out float pDip, out float pLunge, out float plant);
 
-            // ---------------- bounce: never stops (slower and heavier while punching, gone when knocked out)
-            float wantBounce = IsKO ? 0f : (_punch != null ? 0.15f : (_guardBlend > 0.5f ? 0.6f : 1f));
+            // ---------------- bounce: a springy knee-bob on the balls of the feet in a fighting stance (the feet stay
+            // planted - they move one at a time in FeetStep); fades while walking free, punching or knocked out
+            float wantBounce = IsKO ? 0f : (_punch != null ? 0.15f : (_guardBlend > 0.5f ? 0.45f : 0.7f)) * _fight * Mathf.Lerp(1f, 0.45f, speed01);
             _bounceWeight = Mathf.MoveTowards(_bounceWeight, wantBounce, dt * 4f);
             _hop += dt * bounceHz * Mathf.Lerp(0.85f, 1.15f, speed01);
             if (_hop >= 1f) _hop -= 1f;
@@ -592,10 +642,10 @@ namespace IronFauna.Boxing
             _b.visualRoot.localRotation = Quaternion.identity;
 
             // ---------------- torso: stance turn + punch drive + travel lean + weave/slip roll + hit jolt
-            float stanceYaw = 16f * sgn;
+            float stanceYaw = 16f * sgn * _fight;
             float travelLean = Mathf.Clamp(localVel.z * 2.2f, -5f, 6f);
             float yawTarget = stanceYaw + pYaw + Mathf.Sin(_t * 2f * Mathf.PI * 0.43f + 1f) * 3f;
-            float pitchTarget = 7f + pLean + travelLean + _guardBlend * 6f + slip * 10f + koPitch;
+            float pitchTarget = Mathf.Lerp(3f, 7f, _fight) + pLean + travelLean + _guardBlend * 6f + slip * 10f + koPitch;
             float rollTarget = pRoll - localVel.x * 1.2f - slip * _slipDir * 16f - weave * 25f;
             float torsoHz = _punch != null && (_phase == Phase.Strike || _phase == Phase.Hold) ? 9f : 4.5f;
             Spring(ref _yaw, ref _yawVel, yawTarget, torsoHz, 0.62f, dt);
@@ -622,34 +672,101 @@ namespace IronFauna.Boxing
             foreach (var a in _arms) ArmPose(a, dt, hopShape, sgn);
         }
 
+        /// <summary>
+        /// Individual steps: each foot stays planted until the body has moved or turned away from it, then lifts,
+        /// swings on an arc to where it is needed (led by the velocity) and lands with a little weight drop.
+        /// One foot at a time (the next may start as the last one comes down), alternating, so the legs read as
+        /// two separate legs carrying a heavy body.
+        /// </summary>
         private void FeetStep(float dt, float plant, Vector3 localVel, float sgn)
         {
+            float speed = _vel.magnitude;
+            float run01 = Mathf.Clamp01((speed - maxSpeed) / Mathf.Max(0.1f, sprintSpeed - maxSpeed));
+            float dur = Mathf.Lerp(stepTime, stepTime * 0.62f, run01) * (_fight > 0.5f ? 0.9f : 1f);
+            float lead = Mathf.Lerp(0.18f, 0.32f, run01);
+
+            // targets for each foot
+            int n = _feet.Count;
+            var targets = new Vector3[n];
+            var yaws = new float[n];
+            float rootYaw = transform.eulerAngles.y;
+            for (int i = 0; i < n; i++)
+            {
+                var f = _feet[i];
+                Vector3 local = Vector3.Lerp(f.walkStance, f.stance, _fight);
+                Vector3 t = transform.TransformPoint(local) + _vel * lead;
+                if (_punch != null && f.lead == _punch.lead) t += transform.forward * _shift.z * 0.4f;
+                t.y = transform.position.y;
+                targets[i] = t;
+                yaws[i] = rootYaw + Mathf.Lerp(f.walkYaw, f.yaw, _fight);
+            }
+
+            // advance swings
+            bool anySwinging = false;
+            float latestSwing = 1f;
+            for (int i = 0; i < n; i++)
+            {
+                var f = _feet[i];
+                if (!f.swinging) continue;
+                f.swingT += dt / Mathf.Max(0.05f, f.swingDur);
+                // keep chasing the moving target while in the air
+                f.to = Vector3.Lerp(f.to, targets[i], 1f - Mathf.Exp(-8f * dt));
+                f.toYaw = Mathf.LerpAngle(f.toYaw, yaws[i], 1f - Mathf.Exp(-8f * dt));
+                float k = Mathf.Clamp01(f.swingT);
+                float e = k * k * (3f - 2f * k);
+                f.pos = Vector3.Lerp(f.from, f.to, e);
+                f.worldYaw = Mathf.LerpAngle(f.fromYaw, f.toYaw, e);
+                float arc = Mathf.Lerp(0.16f, 0.32f, run01) * Mathf.Clamp01(Vector3.Distance(f.from, f.to) / 0.6f + 0.35f);
+                f.lift = Mathf.Sin(Mathf.PI * k) * arc;
+                if (k >= 1f)
+                {
+                    f.swinging = false;
+                    f.lift = 0f;
+                    float strength = Mathf.Clamp01(0.35f + speed * 0.12f);
+                    _bodyVy -= 0.35f * strength;                       // weight lands on it
+                    Footfall?.Invoke(f.pos, strength);
+                }
+                else
+                {
+                    anySwinging = true;
+                    latestSwing = Mathf.Min(latestSwing, k);
+                }
+            }
+
+            // start a step: the foot furthest from where it should be, alternating when both need to go
+            bool canStep = !IsKO && (!anySwinging || latestSwing > 0.72f);
+            if (canStep)
+            {
+                float idleSlack = speed < 0.3f ? 0.22f : 0.12f;
+                int best = -1;
+                float bestErr = 0f;
+                for (int i = 0; i < n; i++)
+                {
+                    var f = _feet[i];
+                    if (f.swinging) continue;
+                    float err = Vector3.Distance(f.pos, targets[i]) + Mathf.Abs(Mathf.DeltaAngle(f.worldYaw, yaws[i])) / 90f * 0.6f;
+                    if (i == _lastStepFoot && n > 1) err *= 0.6f;      // prefer the other foot
+                    if (err > idleSlack && err > bestErr) { bestErr = err; best = i; }
+                }
+                if (best >= 0)
+                {
+                    var f = _feet[best];
+                    f.swinging = true;
+                    f.swingT = 0f;
+                    f.swingDur = dur;
+                    f.from = f.pos;
+                    f.to = targets[best];
+                    f.fromYaw = f.worldYaw;
+                    f.toYaw = yaws[best];
+                    _lastStepFoot = best;
+                }
+            }
+
             foreach (var f in _feet)
             {
-                // Feet leave the deck in the airborne half of the bounce; the foot on the side of travel goes first.
-                float travelSide = Vector3.Dot(new Vector3(localVel.x, 0f, localVel.z), new Vector3(f.stance.x, 0f, f.stance.z).normalized);
-                float early = Mathf.Clamp(travelSide * 0.05f, -0.08f, 0.08f);
-                float h = _hop + early;
-                if (h < 0f) h += 1f;
-                bool airborne = h > 0.03f && h < 0.53f && _bounceWeight > 0.3f && !IsKO;
-
-                Vector3 target = transform.TransformPoint(f.stance + new Vector3(localVel.x, 0f, localVel.z) * 0.16f);
-                // on a punch the front foot steps in with the lunge and the rear foot drives (pivots on the ball)
-                if (_punch != null && f.lead == _punch.lead) target += transform.forward * _shift.z * 0.4f;
-                target.y = transform.position.y;
-
-                float far = Vector3.Distance(f.pos, target);
-                if (airborne || far > 0.85f)
-                {
-                    f.pos = Vector3.Lerp(f.pos, target, 1f - Mathf.Exp(-(airborne ? 16f : 9f) * dt));
-                }
-                float liftWant = airborne ? Mathf.Sin(Mathf.PI * (h - 0.03f) / 0.5f) * 0.11f * _bounceWeight : 0f;
-                if (far > 0.85f && !airborne) liftWant = 0.12f;
-                f.lift = Mathf.Lerp(f.lift, liftWant, 1f - Mathf.Exp(-20f * dt));
-
-                // on the balls of the feet: heels up, more on push-off and on the driving rear foot of a punch
+                // on the balls of the feet in a fighting stance; flat-footed when roaming; push-off on the rear foot
                 bool drive = _punch != null && f.lead != _punch.lead;
-                float heelWant = IsKO ? 0f : 14f + (airborne ? 8f : 0f) + (drive ? 20f * plant : 0f);
+                float heelWant = IsKO ? 0f : Mathf.Lerp(4f, 14f, _fight) + (f.swinging ? 10f : 0f) + (drive ? 20f * plant : 0f);
                 f.heel = Mathf.Lerp(f.heel, heelWant, 1f - Mathf.Exp(-14f * dt));
                 // rear-hand punches turn the rear heel out (toes toward the target); a lead hook pivots the lead foot
                 float pivotWant = 0f;
@@ -663,7 +780,7 @@ namespace IronFauna.Boxing
         {
             var rig = f.rig;
             const float toe = 0.34f;          // ball of the foot, ahead of the ankle
-            Quaternion yaw = Quaternion.Euler(0f, transform.eulerAngles.y + f.yaw + f.pivot, 0f);
+            Quaternion yaw = Quaternion.Euler(0f, f.worldYaw + f.pivot, 0f);
             Quaternion rot = yaw * Quaternion.Euler(-f.heel, 0f, 0f);
             // the foot pivots on its ball: keep the ball where the stance puts it, lift the heel
             Vector3 ball = f.pos + yaw * new Vector3(0f, 0f, toe) + Vector3.up * f.lift;

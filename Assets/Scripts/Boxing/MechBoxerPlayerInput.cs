@@ -5,7 +5,8 @@ namespace IronFauna.Boxing
 {
     /// <summary>
     /// Keyboard + mouse (and gamepad) controls for a MechBoxer.
-    ///   WASD / left stick  move (W = in, S = out, A/D = circle)
+    ///   WASD / left stick  move, relative to the camera (free roam; squares up when an opponent is close)
+    ///   Ctrl / L3 (hold)    sprint
     ///   LMB / X  jab        RMB / Y  cross
     ///   Q / B    hook       E / A    uppercut
     ///   Shift / LB (hold)   high guard
@@ -18,6 +19,11 @@ namespace IronFauna.Boxing
         private int _lastSlip = 1;
 
         private void Awake() => _boxer = GetComponent<MechBoxer>();
+
+        private void Start()
+        {
+            if (_boxer.moveReference == null && Camera.main != null) _boxer.moveReference = Camera.main.transform;
+        }
 
         private void Update()
         {
@@ -37,6 +43,7 @@ namespace IronFauna.Boxing
             PunchType punch = PunchType.None;
             bool guard = false;
             bool slip = false;
+            bool sprint = false;
             if (mouse != null)
             {
                 if (mouse.leftButton.wasPressedThisFrame) punch = PunchType.Jab;
@@ -48,6 +55,7 @@ namespace IronFauna.Boxing
                 if (kb.eKey.wasPressedThisFrame) punch = PunchType.Uppercut;
                 guard |= kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
                 slip |= kb.spaceKey.wasPressedThisFrame;
+                sprint |= kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
             }
             if (pad != null)
             {
@@ -57,6 +65,7 @@ namespace IronFauna.Boxing
                 if (pad.buttonSouth.wasPressedThisFrame) punch = PunchType.Uppercut;
                 guard |= pad.leftShoulder.isPressed || pad.leftTrigger.ReadValue() > 0.4f;
                 slip |= pad.rightShoulder.wasPressedThisFrame;
+                sprint |= pad.leftStickButton.isPressed;
             }
 
             int slipDir = 0;
@@ -70,6 +79,7 @@ namespace IronFauna.Boxing
             i.move = move;
             if (punch != PunchType.None) i.punch = punch;
             i.guard = guard;
+            i.sprint = sprint;
             if (slipDir != 0) i.slip = slipDir;
             _boxer.intent = i;
         }
