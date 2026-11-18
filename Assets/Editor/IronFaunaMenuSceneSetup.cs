@@ -67,7 +67,7 @@ namespace IronFauna.EditorTools
         public static void StartBrawlInPlayMode()
         {
             if (!EditorApplication.isPlaying) return;
-            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>();
+            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>(FindObjectsInactive.Include);
             if (menu != null) menu.StartBrawl();
         }
 
@@ -75,8 +75,40 @@ namespace IronFauna.EditorTools
         public static void StartCampaignInPlayMode()
         {
             if (!EditorApplication.isPlaying) return;
-            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>();
+            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>(FindObjectsInactive.Include);
             if (menu != null) menu.StartCampaign();
+        }
+
+        [MenuItem("IronFauna/Start City Map (Play Mode)")]
+        public static void StartCityMapInPlayMode()
+        {
+            if (!EditorApplication.isPlaying) return;
+            var match = Object.FindAnyObjectByType<IronFauna.Brawl.MechBrawlMatch>();
+            if (match != null)
+            {
+                match.config.mode = IronFauna.Brawl.BrawlGameMode.FreeForAll;
+                match.config.stage = IronFauna.Brawl.BrawlStageId.NeoMetroCity;
+                IronFauna.Brawl.MechBrawlMatch.Begin(IronFauna.Clamshell.MechLoadoutStore.Load(), Camera.main, match.config);
+                return;
+            }
+            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>(FindObjectsInactive.Include);
+            if (menu != null) menu.StartStage(IronFauna.Brawl.BrawlStageId.NeoMetroCity);
+        }
+
+        [MenuItem("IronFauna/Start Forest Map (Play Mode)")]
+        public static void StartForestMapInPlayMode()
+        {
+            if (!EditorApplication.isPlaying) return;
+            var match = Object.FindAnyObjectByType<IronFauna.Brawl.MechBrawlMatch>();
+            if (match != null)
+            {
+                match.config.mode = IronFauna.Brawl.BrawlGameMode.FreeForAll;
+                match.config.stage = IronFauna.Brawl.BrawlStageId.RedwoodForest;
+                IronFauna.Brawl.MechBrawlMatch.Begin(IronFauna.Clamshell.MechLoadoutStore.Load(), Camera.main, match.config);
+                return;
+            }
+            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>(FindObjectsInactive.Include);
+            if (menu != null) menu.StartStage(IronFauna.Brawl.BrawlStageId.RedwoodForest);
         }
 
         private const string ToonShaderName = "IronFauna/Toon";

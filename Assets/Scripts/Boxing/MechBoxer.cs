@@ -639,7 +639,7 @@ namespace IronFauna.Boxing
         public static bool TryGround(Vector3 p, out float y)
         {
             y = float.NegativeInfinity;
-            foreach (var hit in Physics.RaycastAll(p + Vector3.up * 4f, Vector3.down, 12f, ~0, QueryTriggerInteraction.Ignore))
+            foreach (var hit in Physics.RaycastAll(new Vector3(p.x, p.y + 30f, p.z), Vector3.down, 65f, ~0, QueryTriggerInteraction.Ignore))
             {
                 if (hit.collider.attachedRigidbody != null) continue;
                 if (hit.point.y > y) y = hit.point.y;
@@ -1100,7 +1100,6 @@ namespace IronFauna.Boxing
         private void SolveLegAt(Foot f, Vector3 footPos, Quaternion rot, Vector3 kneeDir)
         {
             var rig = f.rig;
-            if (rig.foot != null) rig.foot.SetPositionAndRotation(footPos, rot);
             Vector3 ankleWorld = footPos + rot * Vector3.up * MechClamshellBuilder.AnkleHeight;
             Vector3 a = rig.root.InverseTransformPoint(ankleWorld);
             Vector3 h = rig.hip;
@@ -1116,6 +1115,11 @@ namespace IronFauna.Boxing
             bend = bend.sqrMagnitude > 1e-6f ? bend.normalized : Vector3.forward;
             Vector3 knee = h + dir * along + bend * height;
             Vector3 ankle = h + dir * dist;
+            if (rig.foot != null)
+            {
+                Vector3 clampedFootWorld = rig.root.TransformPoint(ankle) - rot * Vector3.up * MechClamshellBuilder.AnkleHeight;
+                rig.foot.SetPositionAndRotation(clampedFootWorld, rot);
+            }
             Vector3 hinge = Vector3.Cross(bend, dir).normalized;
             Quaternion r1 = Quaternion.LookRotation((knee - h).normalized, hinge) * Quaternion.Inverse(Quaternion.LookRotation(f.restThighDir, f.restHinge));
             rig.thigh.localRotation = r1;

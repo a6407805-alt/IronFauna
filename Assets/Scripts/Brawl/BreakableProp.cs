@@ -18,6 +18,9 @@ namespace IronFauna.Brawl
 
         private float _damage;
         private bool _broken;
+        private float _spawnTime;
+
+        private void Awake() => _spawnTime = Time.time;
 
         public static BreakableProp Create(Transform parent, string name, Vector3 pos, Vector3 size, Color color, float massPerM3, bool anchored, Vector3Int pieces, bool explosive = false)
         {
@@ -47,13 +50,18 @@ namespace IronFauna.Brawl
 
         private void OnCollisionEnter(Collision c)
         {
-            if (_broken) return;
+            if (_broken || Time.time - _spawnTime < 0.8f) return;
             float hit = c.impulse.magnitude;
-            if (c.rigidbody != null && c.rigidbody.GetComponent<MechRagdollPart>() != null)
+            bool hitByMech = c.rigidbody != null && c.rigidbody.GetComponent<MechRagdollPart>() != null;
+            if (hitByMech)
             {
                 hit = Mathf.Max(hit, c.relativeVelocity.magnitude * 26f);
             }
-            if (hit < 30f) return;
+            else if (c.relativeVelocity.magnitude < 4.5f)
+            {
+                return; // resting stacked building floors ignore gentle settling contacts
+            }
+            if (hit < 35f) return;
             _damage += hit;
             if (_damage >= toughness) Shatter(c.contactCount > 0 ? c.GetContact(0).point : transform.position, c.relativeVelocity);
         }

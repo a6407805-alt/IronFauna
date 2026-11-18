@@ -401,8 +401,6 @@ namespace IronFauna.Gameplay
         private void SolveLeg(LegState leg)
         {
             var rig = leg.rig;
-            if (rig.foot != null) rig.foot.SetPositionAndRotation(leg.footPos, leg.footRot);
-
             Vector3 ankleWorld = leg.footPos + leg.footRot * Vector3.up * MechClamshellBuilder.AnkleHeight;
             Vector3 a = rig.root.InverseTransformPoint(ankleWorld);
             Vector3 h = rig.hip;
@@ -418,6 +416,13 @@ namespace IronFauna.Gameplay
             bend = bend.sqrMagnitude > 1e-6f ? bend.normalized : Vector3.forward;
             Vector3 knee = h + dir * along + bend * height;
             Vector3 ankle = h + dir * dist;
+
+            // Keep the foot locked to the clamped ankle joint so it never separates on steep hills
+            if (rig.foot != null)
+            {
+                Vector3 clampedFootWorld = rig.root.TransformPoint(ankle) - leg.footRot * Vector3.up * MechClamshellBuilder.AnkleHeight;
+                rig.foot.SetPositionAndRotation(clampedFootWorld, leg.footRot);
+            }
 
             Vector3 hinge = Vector3.Cross(bend, dir).normalized;
             Vector3 thighDir = (knee - h).normalized;

@@ -12,16 +12,19 @@ namespace IronFauna.Brawl
         OrbitalDish = 2,
         ScrapyardColosseum = 3,
         GlacierTrench = 4,
+        NeoMetroCity = 5,
+        RedwoodForest = 6,
     }
 
     /// <summary>
     /// Procedural multi-stage brawl builder: generates terrain, lighting colors, and destructible environment cover
-    /// for 5 distinct arenas (Basalt Mesa, Foundry Crucible, Orbital Dish, Scrapyard Colosseum, Glacier Trench).
+    /// for 7 distinct arenas (Basalt Mesa, Foundry Crucible, Orbital Dish, Scrapyard Colosseum, Glacier Trench,
+    /// Neo-Metro City, Redwood Timberland).
     /// All static terrain colliders work seamlessly with MechBoxer.followGround and the walk cycle's foot probes.
     /// </summary>
     public static class BrawlTerrain
     {
-        public const int StageCount = 5;
+        public const int StageCount = 7;
 
         public static string StageName(BrawlStageId stage)
         {
@@ -31,6 +34,8 @@ namespace IronFauna.Brawl
                 case BrawlStageId.OrbitalDish: return "ORBITAL DISH";
                 case BrawlStageId.ScrapyardColosseum: return "SCRAPYARD COLOSSEUM";
                 case BrawlStageId.GlacierTrench: return "GLACIER TRENCH";
+                case BrawlStageId.NeoMetroCity: return "NEO-METRO CITY";
+                case BrawlStageId.RedwoodForest: return "REDWOOD TIMBERLAND";
                 default: return "BASALT MESA";
             }
         }
@@ -66,6 +71,20 @@ namespace IronFauna.Brawl
                     rimColor = IronFaunaPalette.AmbientSkyCool;
                     skyColor = IronFaunaPalette.GlacierSky;
                     sunColor = IronFaunaPalette.OffWhitePanel;
+                    break;
+                case BrawlStageId.NeoMetroCity:
+                    groundColor = IronFaunaPalette.CityAsphalt;
+                    rockColor = IronFaunaPalette.CityConcrete;
+                    rimColor = IronFaunaPalette.DarkIron;
+                    skyColor = IronFaunaPalette.CitySky;
+                    sunColor = IronFaunaPalette.KeyLightWarm;
+                    break;
+                case BrawlStageId.RedwoodForest:
+                    groundColor = IronFaunaPalette.ForestMoss;
+                    rockColor = IronFaunaPalette.TerrainRock;
+                    rimColor = IronFaunaPalette.ForestBark;
+                    skyColor = IronFaunaPalette.ForestSky;
+                    sunColor = IronFaunaPalette.SunWarm;
                     break;
                 default:
                     groundColor = IronFaunaPalette.TerrainDirt;
@@ -153,11 +172,22 @@ namespace IronFauna.Brawl
             return root;
         }
 
-        /// <summary>Spawns stage-specific destructible structures, walls, pillars, containers and explosive cells.</summary>
+        /// <summary>Spawns stage-specific destructible structures, walls, pillars, buildings, falling trees and explosive cells.</summary>
         public static void PopulateDestructibles(Transform arena, BrawlStageId stage, int seed)
         {
             var rng = new System.Random(seed);
             StageColors(stage, out _, out Color rockCol, out Color rimCol, out _, out _);
+
+            if (stage == BrawlStageId.NeoMetroCity)
+            {
+                PopulateCityDestructibles(arena, rng);
+                return;
+            }
+            if (stage == BrawlStageId.RedwoodForest)
+            {
+                PopulateForestDestructibles(arena, rng);
+                return;
+            }
 
             // 1. Perimeter / mid-ring destructible pillars & towers
             int pillarCount = stage == BrawlStageId.ScrapyardColosseum ? 10 : 8;
@@ -219,6 +249,89 @@ namespace IronFauna.Brawl
             }
         }
 
+        private static void PopulateCityDestructibles(Transform arena, System.Random rng)
+        {
+            // 1. Multi-story destructible city buildings around the avenues (3 stacked floors per building!)
+            Vector2[] buildingLots =
+            {
+                new Vector2(-14f, -14f), new Vector2(14f, -14f),
+                new Vector2(-14f, 14f),  new Vector2(14f, 14f),
+                new Vector2(0f, -19f),   new Vector2(0f, 19f),
+                new Vector2(-19f, 0f),   new Vector2(19f, 0f),
+            };
+            for (int b = 0; b < buildingLots.Length; b++)
+            {
+                Vector3 basePos = new Vector3(buildingLots[b].x, 0f, buildingLots[b].y);
+                if (!IronFauna.Boxing.MechBoxer.TryGround(basePos + Vector3.up * 25f, out float gy)) continue;
+                float w = Mathf.Lerp(4.4f, 5.8f, (float)rng.NextDouble());
+                float d = Mathf.Lerp(4.4f, 5.8f, (float)rng.NextDouble());
+                float floorH = 3.2f;
+                int stories = 3 + (b % 2);
+                for (int f = 0; f < stories; f++)
+                {
+                    Color col = (f % 2 == 0) ? IronFaunaPalette.CityConcrete : IronFaunaPalette.CityGlass;
+                    Vector3 center = new Vector3(basePos.x, gy + (f + 0.5f) * floorH, basePos.z);
+                    // Bottom floor is anchored until smashed; upper floors rest on top so they collapse when the base is destroyed!
+                    BreakableProp.Create(arena, $"CityBuilding_F{f + 1}", center,
+                        new Vector3(w, floorH * 0.96f, d), col, 95f, f == 0, new Vector3Int(3, 2, 3));
+                }
+            }
+
+            // 2. Streetlights & neon billboards along the cross-streets
+            for (int i = 0; i < 8; i++)
+            {
+                float ang = i / 8f * Mathf.PI * 2f + 0.2f;
+                Vector3 p = new Vector3(Mathf.Cos(ang) * 9.5f, 0f, Mathf.Sin(ang) * 9.5f);
+                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                BreakableProp.Create(arena, "Streetlight", new Vector3(p.x, gy + 3.2f, p.z),
+                    new Vector3(0.55f, 6.4f, 0.55f), IronFaunaPalette.GunmetalFrame, 120f, true, new Vector3Int(1, 4, 1));
+            }
+
+            // 3. Parked street cars / vehicles (explosive when smashed or when a mech is slammed onto them!)
+            for (int i = 0; i < 10; i++)
+            {
+                Vector3 p = new Vector3(Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()), 0f, Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()));
+                if (p.magnitude < 5f) p = p.normalized * 6.5f;
+                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                Color carCol = (i % 3 == 0) ? IronFaunaPalette.CrimsonFront : (i % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.CobaltFront;
+                var car = BreakableProp.Create(arena, "StreetCar", new Vector3(p.x, gy + 0.75f, p.z),
+                    new Vector3(2.1f, 1.35f, 4.0f), carCol, 85f, false, new Vector3Int(2, 2, 3), true);
+                car.transform.rotation = Quaternion.Euler(0f, (i % 2 == 0) ? 0f : 90f, 0f);
+            }
+        }
+
+        private static void PopulateForestDestructibles(Transform arena, System.Random rng)
+        {
+            // 1. 18 tall Redwood / Pine trees that crack at the stump and fall over ("TIMBER!") when hit!
+            var treePositions = new List<Vector3>();
+            for (int i = 0; i < 18; i++)
+            {
+                float ang = i / 18f * Mathf.PI * 2f + (float)rng.NextDouble() * 0.28f;
+                float dist = Mathf.Lerp(7.5f, 24f, (float)rng.NextDouble());
+                Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
+                bool tooClose = false;
+                foreach (var q in treePositions) if ((q - p).sqrMagnitude < 18f) { tooClose = true; break; }
+                if (tooClose) continue;
+                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                treePositions.Add(p);
+                float h = Mathf.Lerp(10.5f, 15.5f, (float)rng.NextDouble());
+                float rad = Mathf.Lerp(0.55f, 0.80f, (float)rng.NextDouble());
+                FallingTree.Create(arena, new Vector3(p.x, gy, p.z), h, rad, rng.Next());
+            }
+
+            // 2. Breakable forest boulders & fallen log barricades
+            for (int i = 0; i < 8; i++)
+            {
+                float ang = i / 8f * Mathf.PI * 2f + 0.4f;
+                float dist = Mathf.Lerp(9f, 18f, (float)rng.NextDouble());
+                Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
+                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                var log = BreakableProp.Create(arena, "FallenTimberLog", new Vector3(p.x, gy + 0.7f, p.z),
+                    new Vector3(1.3f, 1.3f, 4.8f), IronFaunaPalette.ForestBark, 110f, false, new Vector3Int(2, 2, 4));
+                log.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 180f, 0f);
+            }
+        }
+
         /// <summary>Ground height of the island at (x, z) for the given stage.</summary>
         public static float Height(float x, float z, float top, float radius, float ox = 0f, float oz = 0f, BrawlStageId stage = BrawlStageId.BasaltMesa)
         {
@@ -261,6 +374,20 @@ namespace IronFauna.Brawl
                     h = fbm * 3.0f - ridgeDrop * ridgeDrop * 5.5f;
                     h += 5.5f * Mathf.Exp(-((x - 15f) * (x - 15f) + z * z) / (2f * 6.5f * 6.5f));
                     h += 4.8f * Mathf.Exp(-((x + 15f) * (x + 15f) + z * z) / (2f * 6.5f * 6.5f));
+                    break;
+                }
+                case BrawlStageId.NeoMetroCity:
+                {
+                    // Flat urban street grid with slightly raised city block sidewalks
+                    bool avenue = Mathf.Abs(x) < 6.5f || Mathf.Abs(z) < 6.5f;
+                    h = (avenue ? 0f : 0.35f) + fbm * 0.15f;
+                    break;
+                }
+                case BrawlStageId.RedwoodForest:
+                {
+                    // Gentle rolling woodland clearing with soft knolls around the perimeter
+                    float edgeRise = Mathf.Clamp01((r - 0.25f) / 0.55f);
+                    h = fbm * 2.6f + edgeRise * 2.2f;
                     break;
                 }
                 default:

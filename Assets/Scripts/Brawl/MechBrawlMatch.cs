@@ -50,16 +50,20 @@ namespace IronFauna.Brawl
         {
             "ACT I · SCRAPYARD QUALIFIERS",
             "ACT II · BASALT MESA AMBUSH",
-            "ACT III · GLACIER TRENCH SIEGE",
-            "ACT IV · FOUNDRY HEAVYWEIGHTS",
-            "ACT V · ORBITAL DISH GRAND CHAMPION",
+            "ACT III · REDWOOD TIMBERLAND",
+            "ACT IV · GLACIER TRENCH SIEGE",
+            "ACT V · NEO-METRO CITY BRAWL",
+            "ACT VI · FOUNDRY HEAVYWEIGHTS",
+            "ACT VII · ORBITAL DISH GRAND CHAMPION",
         };
 
         private static readonly BrawlStageId[] CampaignActStages =
         {
             BrawlStageId.ScrapyardColosseum,
             BrawlStageId.BasaltMesa,
+            BrawlStageId.RedwoodForest,
             BrawlStageId.GlacierTrench,
+            BrawlStageId.NeoMetroCity,
             BrawlStageId.FoundryCrucible,
             BrawlStageId.OrbitalDish,
         };
@@ -86,10 +90,15 @@ namespace IronFauna.Brawl
         private MechLoadout _loadout;
         private Camera _camera;
         private Transform _arena;
-        private RectTransform _hpBar, _poiseBar;
+        private RectTransform _hpBar, _hpGhostBar, _poiseBar;
+        private Text _hpValueText, _poiseValueText, _scoreboardTitle;
+        private readonly Image[] _limbBadgeImgs = new Image[4];
+        private readonly Text[] _limbBadgeTexts = new Text[4];
+        private float _hpGhostFill = 1f, _poiseSmoothFill = 1f;
         private Text _banner, _alive, _moveLabel, _stageHeader, _postureLabel;
         private MechBoxerPlayerInput _input;
         private MechBrawlNet _net;
+        private BrawlAnnouncer _announcer;
         private float _bannerT, _resetT = -1f, _targetT;
         private bool _roundWon;
         private float _savedFixedDt;
@@ -113,6 +122,7 @@ namespace IronFauna.Brawl
             _savedFixedDt = Time.fixedDeltaTime;
             Time.fixedDeltaTime = 1f / 90f;   // ragdolls need a finer physics step
             BreakableProp.Shattered += OnShattered;
+            FallingTree.TreeFelled += OnTreeFelled;
             if (_camera != null)
             {
                 BoxingSfx.Attach(_camera.gameObject);
@@ -122,6 +132,7 @@ namespace IronFauna.Brawl
             {
                 _net.StartNetwork(config.netRole, config.hostIp, MechBrawlNet.DefaultPort);
             }
+            _announcer = gameObject.AddComponent<BrawlAnnouncer>();
             BuildHud();
             StartRound();
             Cursor.lockState = CursorLockMode.Locked;
@@ -233,11 +244,14 @@ namespace IronFauna.Brawl
             UpdateStageHeader();
             if (config.mode == BrawlGameMode.CoopCampaign)
             {
-                Banner(CampaignActTitles[config.campaignAct], 2.2f);
+                string actTitle = CampaignActTitles[config.campaignAct];
+                Banner(actTitle, 2.2f);
+                if (_announcer != null) _announcer.OnRoundStart(config.stage, config.mode, actTitle);
             }
             else
             {
                 Banner(BrawlTerrain.StageName(config.stage), 1.6f);
+                if (_announcer != null) _announcer.OnRoundStart(config.stage, config.mode, "");
             }
         }
 
@@ -364,6 +378,13 @@ namespace IronFauna.Brawl
             f.ragdoll.ArmorShed += (who, at) => BoxingSfx.Clank(0.3f);
             f.ragdoll.KnockedOut += who => { if (who == _fighters[0].ragdoll) Banner("K.O.", 2.5f); };
             f.ragdoll.GrappleEvent += OnGrapple;
+            f.ragdoll.LimbRipped += (who, limb) =>
+            {
+                if (_announcer != null && who.ghost != null)
+                {
+                    _announcer.OnLimbRipped(f.name, limb, who.ghost.LegsLeft, who.ghost.ArmsLeft);
+                }
+            };
             f.ghost.PunchThrown += (who, power) => { if (player) BoxingSfx.Whoosh(power); };
             return f;
         }
@@ -430,29 +451,89 @@ namespace IronFauna.Brawl
             var canvas = MenuUI.CreateCanvas("BrawlHud", 5);
             canvas.transform.SetParent(transform, false);
             Transform root = canvas.transform;
-            _hpBar = Bar(root, "HULL", new Vector2(0.03f, 1f), new Vector2(0.33f, 1f), -110f, IronFaunaPalette.CrimsonFront);
-            _poiseBar = Bar(root, "BALANCE", new Vector2(0.03f, 1f), new Vector2(0.24f, 1f), -170f, IronFaunaPalette.CyanEnergy);
 
-            _stageHeader = MenuUI.Label(root, "", 24, IronFaunaPalette.UiAccent, TextAnchor.UpperLeft, FontStyle.Bold);
-            MenuUI.Place(_stageHeader.rectTransform, new Vector2(0.03f, 1f), new Vector2(0.58f, 1f), new Vector2(0f, -72f), new Vector2(0f, -24f));
+            // 1. Top-Left Framed Player Card (Stage Header, Animated Hull + Ghost Bar, Balance Bar, 4 Limb Pills, Posture)
+            var playerCard = MenuUI.Panel(root, "PlayerHudCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
+            MenuUI.Place(playerCard.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.30f, 1f), new Vector2(0f, -264f), new Vector2(0f, -20f));
+            var cardEdge = MenuUI.Panel(playerCard.transform, "LeftStripe", IronFaunaPalette.CrimsonFront);
+            MenuUI.Place(cardEdge.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, 0f));
+            var cardTop = MenuUI.Panel(playerCard.transform, "TopRule", IronFaunaPalette.HazardYellow);
+            MenuUI.Place(cardTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
 
-            _postureLabel = MenuUI.Label(root, "", 22, IronFaunaPalette.HazardYellow, TextAnchor.UpperLeft, FontStyle.Bold);
-            MenuUI.Place(_postureLabel.rectTransform, new Vector2(0.03f, 1f), new Vector2(0.45f, 1f), new Vector2(0f, -245f), new Vector2(0f, -205f));
+            _stageHeader = MenuUI.Label(playerCard.transform, "", 17, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
+            MenuUI.Place(_stageHeader.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -40f), new Vector2(-12f, -8f));
 
-            _alive = MenuUI.Label(root, "", 24, IronFaunaPalette.UiText, TextAnchor.UpperRight, FontStyle.Bold);
-            MenuUI.Place(_alive.rectTransform, new Vector2(0.60f, 1f), new Vector2(0.97f, 1f), new Vector2(0f, -340f), new Vector2(0f, -32f));
-            _banner = MenuUI.Label(root, "", 110, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
-            MenuUI.Place(_banner.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -40f), new Vector2(0f, 240f));
-            var help = MenuUI.Label(root,
-                "WASD MOVE · CTRL SPRINT · X/ALT CROUCH · Z JIU-JITSU SIT & FLOOR SCOOT · LMB JAB · RMB CROSS · Q HOOK · E UPPERCUT · F/R/V KICKS · SCROLL+SPACE SPECIAL (20)\nHOLD G GRAB (Z/X DRAG ON FLOOR · LMB THROW · RMB JOINT-CRANK/TEAR LIMB · SPACE SUPLEX/SLAM) · TAB NEXT STAGE · F2 SPLIT-SCREEN CO-OP · ESC MENU",
-                19, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
-            MenuUI.Place(help.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 14f), new Vector2(0f, 96f));
+            _hpBar = BarWithGhost(playerCard.transform, "HULL INTEGRITY", -78f, IronFaunaPalette.CrimsonFront, out _hpGhostBar, out _hpValueText);
+            _poiseBar = BarWithGhost(playerCard.transform, "BALANCE / POISE", -140f, IronFaunaPalette.CyanEnergy, out _, out _poiseValueText);
 
-            var movePanel = MenuUI.Panel(root, "SpecialPanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.7f));
-            MenuUI.Place(movePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-560f, 106f), new Vector2(-40f, 326f));
-            _moveLabel = MenuUI.Label(movePanel.transform, "", 28, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+            string[] limbLabels = { "L-ARM", "R-ARM", "L-LEG", "R-LEG" };
+            for (int i = 0; i < 4; i++)
+            {
+                float xMin = 0.03f + i * 0.24f;
+                var pill = MenuUI.Panel(playerCard.transform, "Limb_" + limbLabels[i], IronFaunaPalette.UiSelect);
+                MenuUI.Place(pill.rectTransform, new Vector2(xMin, 1f), new Vector2(xMin + 0.22f, 1f), new Vector2(0f, -204f), new Vector2(0f, -176f));
+                _limbBadgeImgs[i] = pill;
+                var txt = MenuUI.Label(pill.transform, limbLabels[i] + " OK", 14, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+                MenuUI.Fill(txt.rectTransform);
+                _limbBadgeTexts[i] = txt;
+            }
+
+            _postureLabel = MenuUI.Label(playerCard.transform, "", 17, IronFaunaPalette.HazardYellow, TextAnchor.MiddleLeft, FontStyle.Bold);
+            MenuUI.Place(_postureLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(18f, 8f), new Vector2(-12f, 40f));
+
+            // 2. Top-Right Framed Scoreboard Card
+            var scoreCard = MenuUI.Panel(root, "ScoreboardCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.86f));
+            MenuUI.Place(scoreCard.rectTransform, new Vector2(0.71f, 1f), new Vector2(0.98f, 1f), new Vector2(0f, -310f), new Vector2(0f, -20f));
+            var scoreTop = MenuUI.Panel(scoreCard.transform, "ScoreTopRule", IronFaunaPalette.CyanEnergy);
+            MenuUI.Place(scoreTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
+            _scoreboardTitle = MenuUI.Label(scoreCard.transform, "ARENA ROSTER (8/8)", 17, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleRight, FontStyle.Bold);
+            MenuUI.Place(_scoreboardTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -36f), new Vector2(-16f, -8f));
+
+            _alive = MenuUI.Label(scoreCard.transform, "", 19, IronFaunaPalette.UiText, TextAnchor.UpperRight, FontStyle.Bold);
+            MenuUI.Place(_alive.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 10f), new Vector2(-16f, -42f));
+
+            // 3. Center Match Banner
+            _banner = MenuUI.Label(root, "", 104, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+            MenuUI.Place(_banner.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -40f), new Vector2(0f, 220f));
+
+            // 4. Bottom-Center Framed Controls Ribbon
+            var controlsBar = MenuUI.Panel(root, "ControlsRibbon", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.84f));
+            MenuUI.Place(controlsBar.rectTransform, new Vector2(0.02f, 0f), new Vector2(0.73f, 0f), new Vector2(0f, 14f), new Vector2(0f, 84f));
+            var controlsTop = MenuUI.Panel(controlsBar.transform, "ControlsEdge", IronFaunaPalette.UiButton);
+            MenuUI.Place(controlsTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -2f), Vector2.zero);
+            var help = MenuUI.Label(controlsBar.transform,
+                "WASD MOVE · CTRL SPRINT · X CROUCH · Z JIU-JITSU SIT & FLOOR SCOOT · LMB JAB · RMB CROSS · Q HOOK · E UPPERCUT · F/R/V KICKS\nHOLD G GRAB (Z/X DRAG ON MAT · LMB THROW · RMB JOINT-CRANK/TEAR LIMB · SPACE SUPLEX/SLAM) · TAB STAGE · F2 SPLIT-SCREEN · F5 RESTART · ESC MENU",
+                16, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+            MenuUI.Fill(help.rectTransform);
+
+            // 5. Bottom-Right Framed Martial-Arts Special Selector Card
+            var movePanel = MenuUI.Panel(root, "SpecialPanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
+            MenuUI.Place(movePanel.rectTransform, new Vector2(0.75f, 0f), new Vector2(0.98f, 0f), new Vector2(0f, 14f), new Vector2(0f, 234f));
+            var moveStripe = MenuUI.Panel(movePanel.transform, "MoveStripe", IronFaunaPalette.HazardYellow);
+            MenuUI.Place(moveStripe.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, 0f));
+            var moveTop = MenuUI.Panel(movePanel.transform, "MoveTopRule", IronFaunaPalette.UiSelect);
+            MenuUI.Place(moveTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
+            _moveLabel = MenuUI.Label(movePanel.transform, "", 26, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             _moveLabel.supportRichText = true;
             MenuUI.Fill(_moveLabel.rectTransform);
+
+            // 6. Top-Center Ringside Announcer Broadcast Bar
+            if (_announcer != null) _announcer.BuildUi(root);
+        }
+
+        private RectTransform BarWithGhost(Transform parent, string label, float y, Color color, out RectTransform ghostRt, out Text valueLabel)
+        {
+            var back = MenuUI.Panel(parent, label, IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.9f));
+            MenuUI.Place(back.rectTransform, new Vector2(0.03f, 1f), new Vector2(0.96f, 1f), new Vector2(0f, y - 24f), new Vector2(0f, y));
+            var ghost = MenuUI.Panel(back.transform, "GhostFill", IronFaunaPalette.HazardYellow);
+            ghostRt = MenuUI.Fill(ghost.rectTransform);
+            var fill = MenuUI.Panel(back.transform, "Fill", color);
+            var rt = MenuUI.Fill(fill.rectTransform);
+            var t = MenuUI.Label(parent, label, 16, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft, FontStyle.Bold);
+            MenuUI.Place(t.rectTransform, new Vector2(0.03f, 1f), new Vector2(0.65f, 1f), new Vector2(0f, y + 2f), new Vector2(0f, y + 24f));
+            valueLabel = MenuUI.Label(parent, "", 16, IronFaunaPalette.UiText, TextAnchor.LowerRight, FontStyle.Bold);
+            MenuUI.Place(valueLabel.rectTransform, new Vector2(0.55f, 1f), new Vector2(0.96f, 1f), new Vector2(0f, y + 2f), new Vector2(0f, y + 24f));
+            return rt;
         }
 
         private void UpdateStageHeader()
@@ -506,6 +587,13 @@ namespace IronFauna.Brawl
         }
 
         // ------------------------------------------------------------------ feel
+        private string FighterName(MechRagdoll r)
+        {
+            if (r == null) return "ARENA HAZARD";
+            foreach (var f in _fighters) if (f.ragdoll == r) return f.name;
+            return "MECH";
+        }
+
         private void OnHit(MechRagdoll victim, MechRagdoll attacker, Vector3 point, float damage, float power, bool ripped)
         {
             var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
@@ -519,6 +607,10 @@ namespace IronFauna.Brawl
                 BoxingFeel.FovKick = Mathf.Lerp(1.5f, 5f, k);
             }
             if (ripped && attacker == me) Banner("LIMB TORN", 1.2f);
+            if (!ripped && _announcer != null && attacker != null)
+            {
+                _announcer.OnHeavyHit(FighterName(attacker), FighterName(victim), damage);
+            }
         }
 
         private void OnGrapple(MechRagdoll who, string what)
@@ -528,12 +620,20 @@ namespace IronFauna.Brawl
             if (what == "THROW" || what.Contains("OFF BALANCE")) BoxingFeel.Shake(0.35f);
             if (who == me && (what == "TORN" || what == "SLAM" || what == "SUPLEX" || what == "THROW" || what == "JOINT CRANK" || what.Contains("NO ") || what.Contains("OFF BALANCE")))
                 Banner(what == "TORN" ? "LIMB TORN" : what, 1.25f);
+            if (_announcer != null) _announcer.OnGrappleMove(FighterName(who), what);
         }
 
         private void OnShattered(Vector3 at, float size)
         {
             BoxingSfx.Impact(0.6f + size * 0.4f);
             if (_fighters.Count > 0 && Vector3.Distance(at, _fighters[0].ragdoll.Position) < 15f) BoxingFeel.Shake(0.3f + size * 0.4f);
+            if (_announcer != null) _announcer.OnPropShattered(size);
+        }
+
+        private void OnTreeFelled(Vector3 at)
+        {
+            BoxingFeel.Shake(0.55f);
+            if (_announcer != null) _announcer.OnTreeFelled();
         }
 
         // ------------------------------------------------------------------ loop
@@ -621,8 +721,12 @@ namespace IronFauna.Brawl
             {
                 if (!f.out_ && (f.ragdoll.IsKO || f.ragdoll.Position.y < ArenaTop - 13f))
                 {
+                    bool ringOut = f.ragdoll.Position.y < ArenaTop - 13f;
                     f.out_ = true;
-                    if (f.ragdoll.Position.y < ArenaTop - 13f && f.player) Banner("RING OUT", 2f);
+                    if (ringOut && f.player) Banner("RING OUT", 2f);
+                    int rem = 0;
+                    foreach (var other in _fighters) if (!other.out_) rem++;
+                    if (_announcer != null) _announcer.OnElimination(f.name, ringOut, rem);
                 }
                 if (!f.out_)
                 {
@@ -633,16 +737,21 @@ namespace IronFauna.Brawl
                 }
             }
 
+            if (_scoreboardTitle != null)
+            {
+                _scoreboardTitle.text = $"ARENA ROSTER ({aliveTotal}/{_fighters.Count} STANDING)";
+            }
+
             if (_alive != null)
             {
                 var sb = new System.Text.StringBuilder();
                 foreach (var f in _fighters)
                 {
                     string tag = $"[{f.weightTag}]";
-                    if (f.out_) sb.AppendLine($"<color=#8592A3>{f.name} {tag}  OUT</color>");
-                    else if (f.team == 1) sb.AppendLine($"<color=#24E5FF>{f.name} {tag}  {Mathf.CeilToInt(f.ragdoll.health)}HP</color>");
-                    else if (f.isBoss) sb.AppendLine($"<color=#FF7A1A>{f.name} {tag}  {Mathf.CeilToInt(f.ragdoll.health)}HP</color>");
-                    else sb.AppendLine($"{f.name} {tag}  {Mathf.CeilToInt(f.ragdoll.health)}HP");
+                    if (f.out_) sb.AppendLine($"<color=#8592A3>{f.name} {tag}  ·  OUT</color>");
+                    else if (f.team == 1) sb.AppendLine($"<color=#24E5FF>{f.name} {tag}  ·  {Mathf.CeilToInt(f.ragdoll.health)} HP</color>");
+                    else if (f.isBoss) sb.AppendLine($"<color=#FF7A1A>{f.name} {tag}  ·  {Mathf.CeilToInt(f.ragdoll.health)} HP</color>");
+                    else sb.AppendLine($"{f.name} {tag}  ·  {Mathf.CeilToInt(f.ragdoll.health)} HP");
                 }
                 _alive.text = sb.ToString();
                 _alive.supportRichText = true;
@@ -651,19 +760,40 @@ namespace IronFauna.Brawl
             if (_fighters.Count > 0 && _fighters[0].ragdoll != null)
             {
                 var me = _fighters[0].ragdoll;
-                SetBar(_hpBar, me.health / me.maxHealth);
-                SetBar(_poiseBar, me.Poise01);
-                if (_postureLabel != null && me.ghost != null)
+                float hpTarget = Mathf.Clamp01(me.health / Mathf.Max(1f, me.maxHealth));
+                float dt = Time.unscaledDeltaTime;
+                _hpGhostFill = hpTarget > _hpGhostFill ? hpTarget : Mathf.MoveTowards(_hpGhostFill, hpTarget, dt * 0.42f);
+                _poiseSmoothFill = Mathf.MoveTowards(_poiseSmoothFill, me.Poise01, dt * 2.8f);
+                SetBar(_hpBar, hpTarget);
+                SetBar(_hpGhostBar, _hpGhostFill);
+                SetBar(_poiseBar, _poiseSmoothFill);
+
+                if (_hpValueText != null) _hpValueText.text = $"{Mathf.CeilToInt(me.health)} / {Mathf.CeilToInt(me.maxHealth)} HP";
+                if (_poiseValueText != null) _poiseValueText.text = $"{Mathf.RoundToInt(me.Poise01 * 100f)}%";
+
+                if (me.ghost != null)
                 {
                     var g = me.ghost;
-                    string limbs = $"ARMS:{g.ArmsLeft}/2 · LEGS:{g.LegsLeft}/2";
-                    string posture = _fighters[0].out_ ? "SPECTATING (PRESS F5 TO RESPAWN)"
-                                   : g.LegsLeft == 0 ? $"LEGLESS CRAWL (NO KICKS!) · {limbs}"
-                                   : g.LegsLeft == 1 ? $"1-LEG HOP (STANDING KICK TOPPLES!) · {limbs}"
-                                   : g.IsSeated ? $"JIU-JITSU FLOOR SIT / SCOOT (Z) · {limbs}"
-                                   : g.IsCrouching ? $"MMA CROUCH / TAKEDOWN (X) · {limbs}"
-                                   : $"FRAME: {me.weightLabel}" + (g.hyperArmor ? " (HYPER-ARMOR)" : "") + $" · {limbs}";
-                    _postureLabel.text = posture;
+                    bool[] limbOk = { g.hasArmL, g.hasArmR, g.hasLegL, g.hasLegR };
+                    string[] limbNames = { "L-ARM", "R-ARM", "L-LEG", "R-LEG" };
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if (_limbBadgeImgs[i] != null)
+                            _limbBadgeImgs[i].color = limbOk[i] ? IronFaunaPalette.UiSelect : IronFaunaPalette.CrimsonFront;
+                        if (_limbBadgeTexts[i] != null)
+                            _limbBadgeTexts[i].text = limbOk[i] ? $"{limbNames[i]} OK" : $"{limbNames[i]} TORN!";
+                    }
+
+                    if (_postureLabel != null)
+                    {
+                        string posture = _fighters[0].out_ ? "STATUS: SPECTATING (PRESS F5 TO RESPAWN)"
+                                       : g.LegsLeft == 0 ? "POSTURE: LEGLESS CRAWL (NO KICKS!)"
+                                       : g.LegsLeft == 1 ? "POSTURE: 1-LEG HOP (STANDING KICK TOPPLES!)"
+                                       : g.IsSeated ? "POSTURE: JIU-JITSU FLOOR SIT / SCOOT (Z)"
+                                       : g.IsCrouching ? "POSTURE: MMA CROUCH / TAKEDOWN (X)"
+                                       : $"FRAME: {me.weightLabel}" + (g.hyperArmor ? " (HYPER-ARMOR)" : " · STANDING");
+                        _postureLabel.text = posture;
+                    }
                 }
             }
 
@@ -675,20 +805,25 @@ namespace IronFauna.Brawl
                     {
                         _roundWon = true;
                         bool campaignClear = config.mode == BrawlGameMode.CoopCampaign && config.campaignAct >= CampaignActStages.Length - 1;
-                        Banner(campaignClear ? "CAMPAIGN CHAMPION!" : (config.mode == BrawlGameMode.CoopCampaign ? "STAGE CLEAR!" : "SQUAD VICTORY!"), 3.2f);
+                        string winText = campaignClear ? "CAMPAIGN CHAMPION!" : (config.mode == BrawlGameMode.CoopCampaign ? "STAGE CLEAR!" : "SQUAD VICTORY!");
+                        Banner(winText, 3.2f);
+                        if (_announcer != null) _announcer.OnMatchEnd(winText);
                         _resetT = 4.2f;
                     }
                     else if (aliveAllies == 0)
                     {
                         _roundWon = false;
                         Banner("SQUAD WIPED · RETRYING", 3.2f);
+                        if (_announcer != null) _announcer.OnMatchEnd("SQUAD WIPED");
                         _resetT = 4.2f;
                     }
                 }
                 else if (aliveTotal <= 1)
                 {
                     _roundWon = last != null && last.player;
-                    Banner(last != null && last.player ? $"{last.name} WINS" : last != null ? last.name + " WINS" : "DRAW", 3.5f);
+                    string winText = last != null && last.player ? $"{last.name} WINS" : last != null ? last.name + " WINS" : "DRAW";
+                    Banner(winText, 3.5f);
+                    if (_announcer != null) _announcer.OnMatchEnd(winText);
                     _resetT = 4.5f;
                 }
             }
@@ -728,6 +863,7 @@ namespace IronFauna.Brawl
         private void OnDestroy()
         {
             BreakableProp.Shattered -= OnShattered;
+            FallingTree.TreeFelled -= OnTreeFelled;
             BoxingFeel.Clear();
             if (_savedFixedDt > 0f) Time.fixedDeltaTime = _savedFixedDt;
         }

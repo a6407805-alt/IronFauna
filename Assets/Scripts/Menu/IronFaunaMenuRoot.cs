@@ -158,6 +158,13 @@ namespace IronFauna.Menu
             StartBrawl();
         }
 
+        public void StartStage(IronFauna.Brawl.BrawlStageId stage)
+        {
+            _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.FreeForAll;
+            _matchConfig.stage = stage;
+            StartBrawl();
+        }
+
         private void ShowGarage()
         {
             _inGarage = true;
@@ -204,9 +211,16 @@ namespace IronFauna.Menu
             AddTitleButton(buttons, "GARAGE", ShowGarage);
             AddTitleButton(buttons, "QUIT", Quit);
 
-            var setupBox = MenuUI.NewRect(column.transform, "MatchSetup");
-            MenuUI.Place(setupBox, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -1180f), new Vector2(676f, -845f));
-            MenuUI.VStack(setupBox.gameObject, 8f, 0);
+            var setupCard = MenuUI.Panel(column.transform, "MatchSetupCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.88f));
+            MenuUI.Place(setupCard.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(72f, -1210f), new Vector2(688f, -835f));
+            var setupRule = MenuUI.Panel(setupCard.transform, "SetupTopRule", IronFaunaPalette.OrangeJointCore);
+            MenuUI.Place(setupRule.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
+            var setupTitle = MenuUI.Label(setupCard.transform, "MATCH CONFIGURATION  //  7 STAGES  //  LIVE TTS ANNOUNCER", 16, IronFaunaPalette.OrangeJointCore, TextAnchor.MiddleLeft, FontStyle.Bold);
+            MenuUI.Place(setupTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -34f), new Vector2(-16f, -6f));
+
+            var setupBox = MenuUI.NewRect(setupCard.transform, "MatchSetup");
+            MenuUI.Place(setupBox, Vector2.zero, Vector2.one, new Vector2(12f, 12f), new Vector2(-12f, -40f));
+            MenuUI.VStack(setupBox.gameObject, 6f, 0);
             _modeCycler = MenuUI.CreateCycler(setupBox, "Mode", () => CycleMode(-1), () => CycleMode(1));
             _stageCycler = MenuUI.CreateCycler(setupBox, "Stage", () => CycleStage(-1), () => CycleStage(1));
             _localPlayersCycler = MenuUI.CreateCycler(setupBox, "Local Co-Op", () => CycleLocalPlayers(-1), () => CycleLocalPlayers(1));

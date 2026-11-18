@@ -52,6 +52,7 @@ namespace IronFauna.Brawl
         public event Action<MechRagdoll, MechRagdoll, Vector3, float, float, bool> Hit;
         public event Action<MechRagdoll> KnockedOut;
         public event Action<MechRagdoll, Vector3> ArmorShed;
+        public event Action<MechRagdoll, LimbId> LimbRipped;
 
         public class Segment
         {
@@ -407,6 +408,13 @@ namespace IronFauna.Brawl
                 Vector3 pp = _pelvis.rb.position;
                 float groundY = MechBoxer.TryGround(pp + Vector3.up * 4f, out float gy) ? gy : pp.y;
                 ghost.transform.position = new Vector3(pp.x, groundY, pp.z);
+                if (_torso != null && _torso.rb != null && _torso.target != null)
+                {
+                    _torso.rb.linearVelocity = Vector3.zero;
+                    _torso.rb.angularVelocity = Vector3.zero;
+                    _torso.rb.position = Vector3.Lerp(_torso.rb.position, _torso.target.position, 0.55f);
+                    _torso.rb.rotation = Quaternion.Slerp(_torso.rb.rotation, _torso.target.rotation, 0.55f);
+                }
                 _follow = 0f;
             }
             SetLowerBodyKinematic(standing);
@@ -603,8 +611,8 @@ namespace IronFauna.Brawl
             foreach (var s in _segs)
             {
                 if (s.limb != limb) continue;
-                ApplyDrive(s, 0.02f);
                 bool root = s.parent != null && s.parent.limb != limb;
+                ApplyDrive(s, root ? 0.02f : 0.22f); // keep child segments (forearm, calf/foot) joined to their torn limb root
                 if (root && s.joint != null)
                 {
                     Destroy(s.joint);
@@ -640,6 +648,7 @@ namespace IronFauna.Brawl
                 Knockdown(1.5f);
             }
             if (limb == LimbId.Head && !IsKO) KnockOut();
+            LimbRipped?.Invoke(this, limb);
         }
 
         public bool HasLimb(LimbId limb) => !_lost.Contains(limb);
@@ -700,6 +709,7 @@ namespace IronFauna.Brawl
         /// <summary>A part hit something: strikes, wielded limbs, falls and thrown bodies all go through here.</summary>
         internal void OnPartCollision(Segment mine, Collision c)
         {
+            if (mine == null || c == null) return;
             if (mine.heldBy != null) { mine.heldBy.WeaponStrike(mine, c); return; }
             TryStrike(mine, c);
             ImpactDamage(mine, c);
@@ -708,15 +718,21 @@ namespace IronFauna.Brawl
         /// <summary>One damaging contact per strike per victim: fists, feet, knees, the head (headbutt), the torso (charge).</summary>
         internal void TryStrike(Segment mine, Collision c)
         {
-            if (IsDown || ghost == null || mine.detached || !ghost.StrikeActive) return;
+            if (IsDown || ghost == null || mine == null || mine.detached || !ghost.StrikeActive || c == null) return;
             var prop = c.collider != null ? c.collider.GetComponentInParent<BreakableProp>() : null;
             if (prop != null)
             {
                 Vector3 hitPt = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
                 prop.ApplyStrike(hitPt, transform.forward * (12f * knockbackScale), ghost.PunchDamage * 18f * knockbackScale);
             }
+            var tree = c.collider != null ? c.collider.GetComponentInParent<FallingTree>() : null;
+            if (tree != null)
+            {
+                Vector3 hitPt = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
+                tree.ApplyStrike(hitPt, transform.forward * (12f * knockbackScale), ghost.PunchDamage * 16f * knockbackScale);
+            }
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
-            if (otherPart == null || otherPart.owner == this || otherPart.segment.detached) return;
+            if (otherPart == null || otherPart.owner == null || otherPart.owner == this || otherPart.segment == null || otherPart.segment.detached) return;
             if (team != 0 && otherPart.owner.team == team) return; // friendly fire off in Co-Op Campaign & Team Brawl
             bool arm = mine.limb == LimbId.ArmL || mine.limb == LimbId.ArmR;
             bool leg = mine.limb == LimbId.LegL || mine.limb == LimbId.LegR;
@@ -762,7 +778,7 @@ namespace IronFauna.Brawl
             var attacker = thrown || slammed ? _thrownBy : null;
 
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
-            if (otherPart != null && otherPart.owner != this && !otherPart.segment.detached)
+            if (otherPart != null && otherPart.owner != null && otherPart.owner != this && otherPart.segment != null && !otherPart.segment.detached)
             {
                 // human bowling ball: whoever this crashes into goes down too
                 var other = otherPart.owner;
@@ -876,7 +892,7 @@ namespace IronFauna.Brawl
                     var rb = col.attachedRigidbody;
                     if (rb == null) continue;
                     var part = rb.GetComponent<MechRagdollPart>();
-                    if (part == null || part.owner == this || part.segment.heldBy != null) continue;
+                    if (part == null || part.owner == null || part.owner == this || part.segment == null || part.segment.heldBy != null) continue;
                     if (team != 0 && !part.segment.detached && part.owner.team == team) continue;
                     if (!part.segment.detached && part.owner._grabbedBy != null) continue;
                     float d = Vector3.Distance(col.ClosestPoint(tip), tip);
@@ -1034,7 +1050,7 @@ namespace IronFauna.Brawl
         internal void WeaponStrike(Segment weapon, Collision c)
         {
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
-            if (otherPart == null || otherPart.owner == this || otherPart.segment.detached || otherPart.segment.heldBy != null) return;
+            if (otherPart == null || otherPart.owner == null || otherPart.owner == this || otherPart.segment == null || otherPart.segment.detached || otherPart.segment.heldBy != null) return;
             float speed = c.relativeVelocity.magnitude;
             if (speed < 4f) return;
             int serial = 1000000 + _swingSerial;

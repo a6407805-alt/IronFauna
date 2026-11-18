@@ -100,7 +100,9 @@ namespace IronFauna.Brawl
                 float free = len;
                 foreach (var hit in Physics.SphereCastAll(from, 0.45f, toCam / len, len, ~0, QueryTriggerInteraction.Ignore))
                 {
-                    if (hit.collider.attachedRigidbody != null || hit.distance <= 0f) continue;   // only terrain and rocks
+                    if (hit.distance <= 0f) continue;
+                    var rb = hit.collider.attachedRigidbody;
+                    if (rb != null && rb.GetComponent<MechRagdollPart>() != null) continue; // ignore mechs, pull in on terrain, buildings & trees
                     free = Mathf.Min(free, hit.distance);
                 }
                 camPos = from + toCam / len * Mathf.Max(1.5f, free);
