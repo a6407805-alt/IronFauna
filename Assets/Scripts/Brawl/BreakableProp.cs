@@ -37,7 +37,7 @@ namespace IronFauna.Brawl
             p.color = color;
             p.pieces = pieces;
             p.explosive = explosive;
-            p.toughness = explosive ? 140f : rb.mass * 2.8f + 95f;   // chaos: punches, kicks and thrown mechs smash cover
+            p.toughness = explosive ? 110f : Mathf.Clamp(rb.mass * 0.42f + 60f, 80f, 240f);   // 2-3 heavy blows or 1 thrown mech/blast collapses building stories & walls
             return p;
         }
 

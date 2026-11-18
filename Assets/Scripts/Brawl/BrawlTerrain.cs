@@ -141,9 +141,9 @@ namespace IronFauna.Brawl
             mr.sharedMaterial = IronFaunaMaterials.GetTerrain(groundCol);
             ground.AddComponent<MeshCollider>().sharedMesh = mesh;
 
-            // ---------------- boulders and outcrops (static, half buried)
+            // ---------------- boulders and outcrops (static, half buried; omitted on paved Neo-Metro City streets)
             var placed = new List<Vector3>();
-            int boulderCount = stage == BrawlStageId.OrbitalDish ? 8 : 16;
+            int boulderCount = stage == BrawlStageId.NeoMetroCity ? 0 : stage == BrawlStageId.OrbitalDish ? 8 : 16;
             for (int k = 0; k < boulderCount; k++)
             {
                 float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
@@ -251,20 +251,20 @@ namespace IronFauna.Brawl
 
         private static void PopulateCityDestructibles(Transform arena, System.Random rng)
         {
-            // 1. Multi-story destructible city buildings around the avenues (3 stacked floors per building!)
+            // 1. Multi-story destructible city buildings right on the intersection corners & avenues (3-4 stacked floors per building!)
             Vector2[] buildingLots =
             {
-                new Vector2(-14f, -14f), new Vector2(14f, -14f),
-                new Vector2(-14f, 14f),  new Vector2(14f, 14f),
-                new Vector2(0f, -19f),   new Vector2(0f, 19f),
-                new Vector2(-19f, 0f),   new Vector2(19f, 0f),
+                new Vector2(-9.5f, -9.5f), new Vector2(9.5f, -9.5f),
+                new Vector2(-9.5f, 9.5f),  new Vector2(9.5f, 9.5f),
+                new Vector2(0f, -17.5f),   new Vector2(0f, 17.5f),
+                new Vector2(-17.5f, 0f),   new Vector2(17.5f, 0f),
             };
             for (int b = 0; b < buildingLots.Length; b++)
             {
                 Vector3 basePos = new Vector3(buildingLots[b].x, 0f, buildingLots[b].y);
                 if (!IronFauna.Boxing.MechBoxer.TryGround(basePos + Vector3.up * 25f, out float gy)) continue;
-                float w = Mathf.Lerp(4.4f, 5.8f, (float)rng.NextDouble());
-                float d = Mathf.Lerp(4.4f, 5.8f, (float)rng.NextDouble());
+                float w = Mathf.Lerp(4.2f, 5.4f, (float)rng.NextDouble());
+                float d = Mathf.Lerp(4.2f, 5.4f, (float)rng.NextDouble());
                 float floorH = 3.2f;
                 int stories = 3 + (b % 2);
                 for (int f = 0; f < stories; f++)
@@ -273,7 +273,7 @@ namespace IronFauna.Brawl
                     Vector3 center = new Vector3(basePos.x, gy + (f + 0.5f) * floorH, basePos.z);
                     // Bottom floor is anchored until smashed; upper floors rest on top so they collapse when the base is destroyed!
                     var floorProp = BreakableProp.Create(arena, $"CityBuilding_F{f + 1}", center,
-                        new Vector3(w, floorH * 0.96f, d), col, 95f, f == 0, new Vector3Int(3, 2, 3));
+                        new Vector3(w, floorH * 0.96f, d), col, 32f, f == 0, new Vector3Int(3, 2, 3));
                     // Lit window ribbon around each story
                     Color neon = (b % 3 == 0) ? IronFaunaPalette.CyanEnergy : (b % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.OrangeJointCore;
                     ClamshellParts.Spawn(floorProp.transform, "WindowBand",
