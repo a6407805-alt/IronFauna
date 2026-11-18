@@ -83,10 +83,10 @@ namespace IronFauna.Core
         public static readonly Color CityConcrete      = new Color32(0x98, 0xA2, 0xAE, 0xFF); // #98A2AE Skyscraper concrete facade
         public static readonly Color CityGlass         = new Color32(0x4C, 0x86, 0xB8, 0xFF); // #4C86B8 Office tower glass
         public static readonly Color CitySky           = new Color32(0x3A, 0x4E, 0x6E, 0xFF); // #3A4E6E Dusk metropolitan skyline
-        public static readonly Color ForestMoss        = new Color32(0x3E, 0x56, 0x34, 0xFF); // #3E5634 Mossy forest floor
-        public static readonly Color ForestBark        = new Color32(0x5A, 0x3C, 0x28, 0xFF); // #5A3C28 Redwood tree trunk bark
-        public static readonly Color ForestCanopy      = new Color32(0x2E, 0x62, 0x36, 0xFF); // #2E6236 Pine / redwood foliage
-        public static readonly Color ForestSky         = new Color32(0x7A, 0x98, 0x8C, 0xFF); // #7A988C Misty timberland sky
+        public static readonly Color ForestMoss        = new Color32(0x46, 0x62, 0x3A, 0xFF); // #46623A Mossy forest floor
+        public static readonly Color ForestBark        = new Color32(0x8A, 0x4E, 0x32, 0xFF); // #8A4E32 Warm redwood tree trunk bark
+        public static readonly Color ForestCanopy      = new Color32(0x3A, 0x7A, 0x42, 0xFF); // #3A7A42 Pine / redwood foliage
+        public static readonly Color ForestSky         = new Color32(0x88, 0xA8, 0x9C, 0xFF); // #88A89C Misty timberland sky
 
         // Garage paint schemes (front / rear halves). Index 0 is the art-bible default.
         public static readonly Color DesertFront       = new Color32(0xC9, 0xA1, 0x5B, 0xFF); // #C9A15B Desert Raider front

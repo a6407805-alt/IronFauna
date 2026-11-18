@@ -340,12 +340,14 @@ namespace IronFauna.Brawl
 
         private static void PopulateForestDestructibles(Transform arena, System.Random rng)
         {
-            // 1. 18 tall Redwood / Pine trees that crack at the stump and fall over ("TIMBER!") when hit!
+            // 1. 20 tall Redwood / Pine trees (including inner-grove trees right inside the combat zone!) that crack at the stump and fall over ("TIMBER!") when hit!
             var treePositions = new List<Vector3>();
-            for (int i = 0; i < 18; i++)
+            for (int i = 0; i < 20; i++)
             {
-                float ang = i / 18f * Mathf.PI * 2f + (float)rng.NextDouble() * 0.28f;
-                float dist = Mathf.Lerp(7.5f, 24f, (float)rng.NextDouble());
+                float ang = i / 20f * Mathf.PI * 2f + (float)rng.NextDouble() * 0.25f;
+                float dist = (i < 6)
+                    ? Mathf.Lerp(4.2f, 9.5f, (float)rng.NextDouble())
+                    : Mathf.Lerp(10.0f, 22f, (float)rng.NextDouble());
                 Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
                 bool tooClose = false;
                 foreach (var q in treePositions) if ((q - p).sqrMagnitude < 18f) { tooClose = true; break; }

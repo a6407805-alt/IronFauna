@@ -462,6 +462,7 @@ namespace IronFauna.Brawl
                 }
                 // keep the torso upright over the hips on top of its joint motor
                 PdRotate(_torso.rb, _torso.target.rotation, 5.5f * balance, 0.9f);
+                if (ghost.StrikeActive) TickActiveStrikeSweep();
             }
 
             // the ghost never wanders away from the body (falls, sliding down hills, being thrown)
@@ -792,6 +793,63 @@ namespace IronFauna.Brawl
             if (mine.heldBy != null) { mine.heldBy.WeaponStrike(mine, c); return; }
             TryStrike(mine, c);
             ImpactDamage(mine, c);
+        }
+
+        private int _propStrikeSerial = -1;
+
+        /// <summary>Ensures kinematic kicks/sweeps and fast strikes reliably connect with enemy legs, trees, and buildings even when both colliders are kinematic.</summary>
+        private void TickActiveStrikeSweep()
+        {
+            if (IsDown || ghost == null || !ghost.StrikeActive) return;
+            int serial = ghost.PunchSerial;
+            foreach (var mine in _segs)
+            {
+                if (mine.detached) continue;
+                bool arm = mine.limb == LimbId.ArmL || mine.limb == LimbId.ArmR;
+                bool leg = mine.limb == LimbId.LegL || mine.limb == LimbId.LegR;
+                bool side = ghost.StrikeLead == mine.leadHand;
+                bool armStrike = arm && mine.striker && side && !ghost.StrikeIsKick && !ghost.StrikeIsHead && !ghost.StrikeIsBody;
+                bool legStrike = leg && mine.striker && side && ghost.StrikeIsKick;
+                bool headStrike = mine == _head && ghost.StrikeIsHead;
+                bool bodyStrike = mine == _torso && ghost.StrikeIsBody;
+                if (!armStrike && !legStrike && !headStrike && !bodyStrike) continue;
+
+                Vector3 tipPos = mine.tip != null ? mine.tip.position : mine.rb.position;
+                float radius = bodyStrike ? 0.85f : legStrike ? 0.62f : 0.48f;
+                foreach (var col in Physics.OverlapSphere(tipPos, radius, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (_propStrikeSerial != serial)
+                    {
+                        var tree = col.GetComponentInParent<FallingTree>();
+                        if (tree != null)
+                        {
+                            _propStrikeSerial = serial;
+                            tree.ApplyStrike(tipPos, ghost.transform.forward * (14f * knockbackScale), ghost.PunchDamage * 18f * knockbackScale);
+                        }
+                        var prop = col.GetComponentInParent<BreakableProp>();
+                        if (prop != null)
+                        {
+                            _propStrikeSerial = serial;
+                            prop.ApplyStrike(tipPos, ghost.transform.forward * (14f * knockbackScale), ghost.PunchDamage * 18f * knockbackScale);
+                        }
+                    }
+
+                    var rb = col.attachedRigidbody;
+                    var otherPart = rb != null ? rb.GetComponent<MechRagdollPart>() : col.GetComponentInParent<MechRagdollPart>();
+                    if (otherPart == null || otherPart.owner == null || otherPart.owner == this || otherPart.segment == null || otherPart.segment.detached) continue;
+                    if (team != 0 && otherPart.owner.team == team) continue;
+                    if (_struckBy.TryGetValue(otherPart.owner, out int last) && last == serial) continue;
+                    _struckBy[otherPart.owner] = serial;
+                    Vector3 dir = otherPart.owner.Position - Position;
+                    dir.y = 0f;
+                    dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : ghost.transform.forward;
+                    otherPart.owner.ReceiveStrike(this, otherPart.segment, tipPos, dir + Vector3.up * 0.25f, ghost.PunchDamage, ghost.PunchPower);
+                    if (ghost.StrikeSweeps && !otherPart.owner.IsDown)
+                    {
+                        otherPart.owner.Knockdown(1.25f);
+                    }
+                }
+            }
         }
 
         /// <summary>One damaging contact per strike per victim: fists, feet, knees, the head (headbutt), the torso (charge).</summary>
