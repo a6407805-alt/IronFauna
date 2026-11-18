@@ -616,13 +616,18 @@ namespace IronFauna.Brawl
         private void SpawnPopup(Vector3 worldPos, string label, Color color, int fontSize = 26)
         {
             if (_hudRoot == null) return;
+            int nearby = 0;
+            for (int i = 0; i < _popups.Count; i++)
+            {
+                if (_popups[i].age < 0.45f && (_popups[i].worldPos - worldPos).sqrMagnitude < 4.5f) nearby++;
+            }
             var txt = MenuUI.Label(_hudRoot, label, fontSize, color, TextAnchor.MiddleCenter, FontStyle.Bold);
             txt.rectTransform.sizeDelta = new Vector2(360f, 60f);
             _popups.Add(new FloatingPopup
             {
                 rt = txt.rectTransform,
                 text = txt,
-                worldPos = worldPos + Vector3.up * 0.6f,
+                worldPos = worldPos + Vector3.up * (0.65f + nearby * 0.65f),
                 age = 0f,
                 duration = 0.85f,
             });
@@ -829,6 +834,7 @@ namespace IronFauna.Brawl
                 aliveTotal = 1;
                 last = justEliminated;
             }
+            if (justEliminated != null) Retarget();
 
             if (_scoreboardTitle != null)
             {

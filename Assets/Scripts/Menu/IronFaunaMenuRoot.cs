@@ -203,16 +203,18 @@ namespace IronFauna.Menu
             MenuUI.Place(tagline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(84f, -440f), new Vector2(-40f, -396f));
 
             var buttons = MenuUI.NewRect(column.transform, "TitleButtons");
-            MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -820f), new Vector2(676f, -455f));
-            MenuUI.VStack(buttons.gameObject, 12f, 0);
+            MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -860f), new Vector2(676f, -445f));
+            MenuUI.VStack(buttons.gameObject, 10f, 0);
 
             AddTitleButton(buttons, "FIGHT (BRAWL)", StartBrawl);
+            AddTitleButton(buttons, "CITY BRAWL (NEO-METRO)", () => StartStage(IronFauna.Brawl.BrawlStageId.NeoMetroCity));
+            AddTitleButton(buttons, "FOREST BRAWL (TIMBER!)", () => StartStage(IronFauna.Brawl.BrawlStageId.RedwoodForest));
             AddTitleButton(buttons, "8P CO-OP CAMPAIGN", StartCampaign);
             AddTitleButton(buttons, "GARAGE", ShowGarage);
             AddTitleButton(buttons, "QUIT", Quit);
 
             var setupCard = MenuUI.Panel(column.transform, "MatchSetupCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.88f));
-            MenuUI.Place(setupCard.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(72f, -1210f), new Vector2(688f, -835f));
+            MenuUI.Place(setupCard.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(72f, -1245f), new Vector2(688f, -875f));
             var setupRule = MenuUI.Panel(setupCard.transform, "SetupTopRule", IronFaunaPalette.OrangeJointCore);
             MenuUI.Place(setupRule.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
             var setupTitle = MenuUI.Label(setupCard.transform, "MATCH CONFIGURATION  //  7 STAGES  //  LIVE TTS ANNOUNCER", 16, IronFaunaPalette.OrangeJointCore, TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -291,8 +293,8 @@ namespace IronFauna.Menu
 
         private static void AddTitleButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
         {
-            var b = MenuUI.CreateButton(parent, label, 30, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
-            MenuUI.Size(b, 72f);
+            var b = MenuUI.CreateButton(parent, label, 26, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
+            MenuUI.Size(b, 58f);
         }
 
         // ------------------------------------------------------------------
