@@ -295,16 +295,46 @@ namespace IronFauna.Brawl
                     new Vector3(0f, 3.25f, 0f), Quaternion.identity, IronFaunaPalette.HazardYellow, true);
             }
 
-            // 3. Parked street cars / vehicles (explosive when smashed or when a mech is slammed onto them!)
-            for (int i = 0; i < 10; i++)
+            // 3. Parked street cars / vehicles (cabin roof + glowing headlights/taillights; explosive when smashed!)
+            for (int i = 0; i < 8; i++)
             {
                 Vector3 p = new Vector3(Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()), 0f, Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()));
                 if (p.magnitude < 5f) p = p.normalized * 6.5f;
                 if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
                 Color carCol = (i % 3 == 0) ? IronFaunaPalette.CrimsonFront : (i % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.CobaltFront;
-                var car = BreakableProp.Create(arena, "StreetCar", new Vector3(p.x, gy + 0.75f, p.z),
-                    new Vector3(2.1f, 1.35f, 4.0f), carCol, 85f, false, new Vector3Int(2, 2, 3), true);
+                var car = BreakableProp.Create(arena, "StreetCar", new Vector3(p.x, gy + 0.72f, p.z),
+                    new Vector3(2.1f, 0.95f, 4.1f), carCol, 85f, false, new Vector3Int(2, 2, 3), true);
+                var cab = ClamshellParts.Spawn(car.transform, "CarCabin",
+                    ClamshellMeshFactory.BeveledBox(new Vector3(1.75f, 0.68f, 2.1f), 0.08f),
+                    new Vector3(0f, 0.76f, -0.15f), Quaternion.identity, IronFaunaPalette.CityGlass);
+                if (cab.TryGetComponent<Renderer>(out var cr)) cr.sharedMaterial = IronFaunaMaterials.GetTerrain(IronFaunaPalette.CityGlass);
+                ClamshellParts.Spawn(car.transform, "Headlights",
+                    ClamshellMeshFactory.BeveledBox(new Vector3(1.6f, 0.22f, 0.14f), 0.02f),
+                    new Vector3(0f, 0.12f, 2.04f), Quaternion.identity, IronFaunaPalette.HazardYellow, true);
+                ClamshellParts.Spawn(car.transform, "Taillights",
+                    ClamshellMeshFactory.BeveledBox(new Vector3(1.6f, 0.22f, 0.14f), 0.02f),
+                    new Vector3(0f, 0.12f, -2.04f), Quaternion.identity, IronFaunaPalette.CrimsonFront, true);
                 car.transform.rotation = Quaternion.Euler(0f, (i % 2 == 0) ? 0f : 90f, 0f);
+            }
+
+            // 4. Painted avenue lane stripes & crosswalk markings across the central intersection
+            for (int d = -22; d <= 22; d += 4)
+            {
+                if (Mathf.Abs(d) < 3) continue;
+                if (IronFauna.Boxing.MechBoxer.TryGround(new Vector3(d, 25f, 0f), out float gyX))
+                {
+                    var stripeX = ClamshellParts.Spawn(arena, "LaneStripeX",
+                        ClamshellMeshFactory.BeveledBox(new Vector3(2.1f, 0.06f, 0.28f), 0.01f),
+                        new Vector3(d, gyX + 0.02f, 0f), Quaternion.identity, IronFaunaPalette.HazardYellow);
+                    if (stripeX.TryGetComponent<Renderer>(out var sxr)) sxr.sharedMaterial = IronFaunaMaterials.GetTerrain(IronFaunaPalette.HazardYellow);
+                }
+                if (IronFauna.Boxing.MechBoxer.TryGround(new Vector3(0f, 25f, d), out float gyZ))
+                {
+                    var stripeZ = ClamshellParts.Spawn(arena, "LaneStripeZ",
+                        ClamshellMeshFactory.BeveledBox(new Vector3(0.28f, 0.06f, 2.1f), 0.01f),
+                        new Vector3(0f, gyZ + 0.02f, d), Quaternion.identity, IronFaunaPalette.HazardYellow);
+                    if (stripeZ.TryGetComponent<Renderer>(out var szr)) szr.sharedMaterial = IronFaunaMaterials.GetTerrain(IronFaunaPalette.HazardYellow);
+                }
             }
         }
 

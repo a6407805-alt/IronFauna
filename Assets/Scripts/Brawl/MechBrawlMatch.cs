@@ -801,13 +801,14 @@ namespace IronFauna.Brawl
 
             // knockouts and ring-outs
             int aliveTotal = 0, aliveAllies = 0, aliveEnemies = 0;
-            Fighter last = null;
+            Fighter last = null, justEliminated = null;
             foreach (var f in _fighters)
             {
                 if (!f.out_ && (f.ragdoll.IsKO || f.ragdoll.Position.y < ArenaTop - 13f))
                 {
                     bool ringOut = f.ragdoll.Position.y < ArenaTop - 13f;
                     f.out_ = true;
+                    justEliminated = f;
                     if (ringOut && f.player) Banner("RING OUT", 2f);
                     int rem = 0;
                     foreach (var other in _fighters) if (!other.out_) rem++;
@@ -820,6 +821,14 @@ namespace IronFauna.Brawl
                     if (f.team == 1) aliveAllies++;
                     else if (f.team == 2) aliveEnemies++;
                 }
+            }
+            if (aliveTotal == 0 && last == null && justEliminated != null)
+            {
+                // Double-knockout photo finish: crown the last fighter eliminated in the exchange!
+                justEliminated.out_ = false;
+                justEliminated.ragdoll.health = Mathf.Max(1f, justEliminated.ragdoll.health);
+                aliveTotal = 1;
+                last = justEliminated;
             }
 
             if (_scoreboardTitle != null)
@@ -868,17 +877,17 @@ namespace IronFauna.Brawl
                     for (int i = 0; i < 4; i++)
                     {
                         float lh = me.GetLimbHealth01(limbIds[i]);
-                        bool yellow = limbOk[i] && lh >= 0.35f && lh < 0.70f;
+                        bool bright = limbOk[i] && lh < 0.70f;
                         if (_limbBadgeImgs[i] != null)
                         {
                             _limbBadgeImgs[i].color = !limbOk[i] ? IronFaunaPalette.CrimsonFront
                                 : lh < 0.35f ? IronFaunaPalette.OrangeJointCore
-                                : yellow ? IronFaunaPalette.HazardYellow
+                                : lh < 0.70f ? IronFaunaPalette.HazardYellow
                                 : IronFaunaPalette.UiSelect;
                         }
                         if (_limbBadgeTexts[i] != null)
                         {
-                            _limbBadgeTexts[i].color = yellow ? IronFaunaPalette.DarkIron : IronFaunaPalette.UiText;
+                            _limbBadgeTexts[i].color = bright ? IronFaunaPalette.DarkIron : IronFaunaPalette.UiText;
                             _limbBadgeTexts[i].text = limbOk[i] ? $"{limbNames[i]} {Mathf.CeilToInt(lh * 100f)}%" : $"{limbNames[i]} TORN!";
                         }
                     }

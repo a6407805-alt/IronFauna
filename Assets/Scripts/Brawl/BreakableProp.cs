@@ -101,7 +101,7 @@ namespace IronFauna.Brawl
             if (explosive)
             {
                 var hitOwners = new System.Collections.Generic.HashSet<MechRagdoll>();
-                foreach (var col in Physics.OverlapSphere(point, 9.5f, ~0, QueryTriggerInteraction.Ignore))
+                foreach (var col in Physics.OverlapSphere(point, 6.2f, ~0, QueryTriggerInteraction.Ignore))
                 {
                     var rb = col.attachedRigidbody;
                     if (rb == null) continue;
@@ -110,13 +110,13 @@ namespace IronFauna.Brawl
                     {
                         Vector3 dir = (part.owner.Position - point);
                         float dist = Mathf.Max(1f, dir.magnitude);
-                        float dmg = Mathf.Lerp(26f, 8f, dist / 9.5f);
-                        part.owner.ReceiveStrike(null, part.segment, point, dir.normalized + Vector3.up * 0.45f, dmg, 1f);
-                        part.owner.Knockdown(1.6f);
+                        float dmg = Mathf.Lerp(16f, 4f, dist / 6.2f);
+                        part.owner.ReceiveStrike(null, part.segment, point, dir.normalized + Vector3.up * 0.45f, dmg, 0.9f);
+                        part.owner.Knockdown(1.3f);
                     }
                     else if (!rb.isKinematic)
                     {
-                        rb.AddExplosionForce(900f, point, 9.5f, 1.2f, ForceMode.Impulse);
+                        rb.AddExplosionForce(550f, point, 6.2f, 1.0f, ForceMode.Impulse);
                     }
                 }
             }
