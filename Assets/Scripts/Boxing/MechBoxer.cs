@@ -56,6 +56,24 @@ namespace IronFauna.Boxing
         public bool Telegraphing => _punch != null && _phase == Phase.Windup;
         public Vector3 Velocity => _vel;
 
+        /// <summary>Physics brawler: the ragdoll's collisions deal the damage, so the distance check is skipped.</summary>
+        [NonSerialized] public bool physicsDriven;
+        /// <summary>Set by the ragdoll while its body is down or broken: no new punches, no footwork.</summary>
+        [NonSerialized] public bool suppressed;
+        /// <summary>Increments on every punch so a physical strike lands once.</summary>
+        public int PunchSerial { get; private set; }
+        /// <summary>The fist is travelling at (or resting on) the target.</summary>
+        public bool StrikeActive => _punch != null && (_phase == Phase.Strike || _phase == Phase.Hold);
+        public bool PunchLeadHand => _punch != null && _punch.lead;
+        public float PunchPower => _punch != null ? Power(_punch) : 0f;
+        public float PunchDamage => _punch != null ? _punch.damage : 0f;
+        /// <summary>Ragdoll got hit: interrupt a wind-up and stagger the footwork.</summary>
+        public void Interrupt(float stagger)
+        {
+            _stagger = Mathf.Max(_stagger, stagger);
+            if (_punch != null && _phase == Phase.Windup) _punch = null;
+        }
+
         /// <summary>attacker, contact point, power 0..1, blocked, landed (false = whiff)</summary>
         public event Action<MechBoxer, Vector3, float, bool, bool> PunchResolved;
         public event Action<MechBoxer> KnockedOut;
@@ -305,7 +323,7 @@ namespace IronFauna.Boxing
             Vector3 fwd = dist > 0.01f ? toOpp / dist : transform.forward;
             Vector3 right = Vector3.Cross(Vector3.up, fwd);
 
-            Vector2 m = IsKO ? Vector2.zero : Vector2.ClampMagnitude(intent.move, 1f);
+            Vector2 m = IsKO || suppressed ? Vector2.zero : Vector2.ClampMagnitude(intent.move, 1f);
             float slow = (_punch != null ? 0.35f : 1f) * (_stagger > 0f ? 0.3f : 1f) * (_guardBlend > 0.5f ? 0.7f : 1f);
             Vector3 want = (right * m.x * 0.92f + fwd * m.y * (m.y < 0f ? 0.85f : 1f)) * maxSpeed * slow;
             float rate = want.sqrMagnitude > _vel.sqrMagnitude ? acceleration : braking;
@@ -345,7 +363,7 @@ namespace IronFauna.Boxing
             if (_bufferT <= 0f) _buffer = PunchType.None;
             if (intent.slip != 0 && _punch == null && _slipT <= 0f && !IsKO) { _slipT = 0.42f; _slipDir = intent.slip; }
 
-            bool canStart = !IsKO && _stagger <= 0f && _slipT < 0.15f &&
+            bool canStart = !IsKO && !suppressed && _stagger <= 0f && _slipT < 0.15f &&
                             (_punch == null || (_phase == Phase.Recover && _phaseT > _punch.recover * 0.35f));
             if (_buffer != PunchType.None && canStart)
             {
@@ -369,6 +387,7 @@ namespace IronFauna.Boxing
             _phaseT = 0f;
             _connected = _blockedHit = false;
             _aim = AimPoint(spec);
+            PunchSerial++;
             PunchThrown?.Invoke(this, Power(spec));
         }
 
@@ -424,6 +443,7 @@ namespace IronFauna.Boxing
 
         private void Resolve(PunchSpec s)
         {
+            if (physicsDriven) { _connected = true; return; }
             var arm = ArmFor(s.lead);
             Vector3 fist = arm != null ? arm.rig.fore.TransformPoint(arm.rig.tip - arm.rig.elbow) : _aim;
             if (opponent == null || opponent.IsKO)

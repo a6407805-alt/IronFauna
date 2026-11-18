@@ -133,8 +133,9 @@ namespace IronFauna.Menu
             _titleFooter.text = MechLoadoutStore.HasSaved ? "v0.1 prototype   //   saved loadout ready" : "v0.1 prototype   //   no saved loadout yet";
         }
 
-        /// <summary>Mech boxing: hides the menu and turntable and builds the ring in this scene (Esc reloads the menu).</summary>
-        private void StartBoxing()
+        /// <summary>Mech brawl (active ragdolls): hides the menu and turntable and builds the arena in this scene
+        /// (Esc reloads the menu). The earlier boxing ring is still available as IronFauna.Boxing.MechBoxingMatch.</summary>
+        private void StartBrawl()
         {
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
@@ -147,7 +148,7 @@ namespace IronFauna.Menu
                     if (t != null) t.gameObject.SetActive(false);
                 }
             }
-            IronFauna.Boxing.MechBoxingMatch.Begin(_loadout, _stage != null ? _stage.StageCamera : Camera.main);
+            IronFauna.Brawl.MechBrawlMatch.Begin(_loadout, _stage != null ? _stage.StageCamera : Camera.main);
             enabled = false;
         }
 
@@ -192,7 +193,7 @@ namespace IronFauna.Menu
             MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -800f), new Vector2(520f, -500f));
             MenuUI.VStack(buttons.gameObject, 18f, 0);
 
-            AddTitleButton(buttons, "BOXING", StartBoxing);
+            AddTitleButton(buttons, "BRAWL", StartBrawl);
             AddTitleButton(buttons, "GARAGE", ShowGarage);
             AddTitleButton(buttons, "DEPLOY", () => IronFaunaGameFlow.Deploy(_loadout));
             AddTitleButton(buttons, "QUIT", IronFaunaGameFlow.Quit);

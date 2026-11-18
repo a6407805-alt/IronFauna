@@ -11,6 +11,8 @@ namespace IronFauna.Boxing
     {
         [Range(0f, 1f)] public float skill = 0.55f;
         public float idealRange = 2.7f;
+        /// <summary>Keep this far inside the centre (half-size of the floor); &lt;= 0 uses the boxer's ring size.</summary>
+        public float edgeHalfSize = -1f;
 
         private MechBoxer _me;
         private float _circleDir = 1f;
@@ -102,7 +104,8 @@ namespace IronFauna.Boxing
             }
             // keep off the ropes
             Vector3 p = transform.position;
-            if (Mathf.Abs(p.x) > _me.ringHalfSize - 1.2f || Mathf.Abs(p.z) > _me.ringHalfSize - 1.2f)
+            float edge = edgeHalfSize > 0f ? edgeHalfSize : _me.ringHalfSize - 1.2f;
+            if (Mathf.Abs(p.x) > edge || Mathf.Abs(p.z) > edge)
             {
                 Vector3 toCentre = transform.InverseTransformDirection(-new Vector3(p.x, 0f, p.z).normalized);
                 move += new Vector2(toCentre.x, toCentre.z) * 0.8f;
