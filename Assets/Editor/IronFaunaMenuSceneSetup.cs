@@ -63,6 +63,14 @@ namespace IronFauna.EditorTools
             }
         }
 
+        [MenuItem("IronFauna/Start Campaign (Play Mode)")]
+        public static void StartCampaignInPlayMode()
+        {
+            if (!EditorApplication.isPlaying) return;
+            var menu = Object.FindAnyObjectByType<IronFaunaMenuRoot>();
+            if (menu != null) menu.StartCampaign();
+        }
+
         private const string ToonShaderName = "IronFauna/Toon";
         private const string ToonTemplatePath = "Assets/Resources/IF_ToonTemplate.mat";
 

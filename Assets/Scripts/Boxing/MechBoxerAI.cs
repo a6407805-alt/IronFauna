@@ -26,7 +26,7 @@ namespace IronFauna.Boxing
         private enum Mode { Circle, Engage, Retreat }
         private Mode _mode = Mode.Circle;
         private float _modeT;
-        private float _grabT, _holdT;
+        private float _grabT, _holdT, _crouchT;
         private bool _holdActed;
 
         private static readonly PunchType[][] Combos =
@@ -44,6 +44,12 @@ namespace IronFauna.Boxing
             new[] { PunchType.FlyingKnee },
             new[] { PunchType.SupermanPunch, PunchType.Hook },
             new[] { PunchType.Elbow, PunchType.Uppercut },
+            new[] { PunchType.LowCalfKick, PunchType.Cross, PunchType.QuestionMarkKick },
+            new[] { PunchType.Jab, PunchType.TornadoKick },
+            new[] { PunchType.CapoeiraSweep, PunchType.AxeKick },
+            new[] { PunchType.DoubleLegTakedown },
+            new[] { PunchType.ClinchKnee, PunchType.Elbow },
+            new[] { PunchType.FlyingScissor, PunchType.Upkick },
         };
 
         private void Awake() => _me = GetComponent<MechBoxer>();
@@ -75,12 +81,16 @@ namespace IronFauna.Boxing
                 if (_reactT <= 0f && opp.Punching && !_me.Punching)
                 {
                     float r = Random.value;
-                    if (r < skill * 0.45f) _guardT = 0.5f;
-                    else if (r < skill * 0.7f) _me.intent.slip = Random.value < 0.5f ? -1 : 1;
+                    if (r < skill * 0.35f) _guardT = 0.5f;
+                    else if (r < skill * 0.58f) _me.intent.slip = Random.value < 0.5f ? -1 : 1;
+                    else if (r < skill * 0.80f) _crouchT = 0.55f; // duck under high swings
                 }
             }
             float hurt = 1f - _me.health / _me.maxHealth;
             _guardT -= dt;
+            _crouchT -= dt;
+            if (_me.intent.sit && (dist > 4.5f || Random.value < 0.35f * dt)) _me.intent.sit = false;
+            _me.intent.crouch = _crouchT > 0f;
 
             // ---------------- footwork modes
             _modeT -= dt;

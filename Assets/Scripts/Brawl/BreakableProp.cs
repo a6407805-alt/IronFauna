@@ -13,12 +13,13 @@ namespace IronFauna.Brawl
         public float toughness = 600f;     // accumulated impulse before it shatters
         public Vector3Int pieces = new Vector3Int(3, 3, 3);
         public Color color;
+        public bool explosive;
         public static event System.Action<Vector3, float> Shattered;
 
         private float _damage;
         private bool _broken;
 
-        public static BreakableProp Create(Transform parent, string name, Vector3 pos, Vector3 size, Color color, float massPerM3, bool anchored, Vector3Int pieces)
+        public static BreakableProp Create(Transform parent, string name, Vector3 pos, Vector3 size, Color color, float massPerM3, bool anchored, Vector3Int pieces, bool explosive = false)
         {
             var go = ClamshellParts.Spawn(parent, name, ClamshellMeshFactory.BeveledBox(size, Mathf.Min(0.04f, size.x * 0.05f)), pos, Quaternion.identity, color);
             var col = go.AddComponent<BoxCollider>();
@@ -30,15 +31,29 @@ namespace IronFauna.Brawl
             var p = go.AddComponent<BreakableProp>();
             p.color = color;
             p.pieces = pieces;
-            p.toughness = rb.mass * 3.5f + 120f;   // chaos: thrown mechs and big hits smash cover
+            p.explosive = explosive;
+            p.toughness = explosive ? 140f : rb.mass * 2.8f + 95f;   // chaos: punches, kicks and thrown mechs smash cover
             return p;
+        }
+
+        public void ApplyStrike(Vector3 point, Vector3 velocity, float damage)
+        {
+            if (_broken) return;
+            _damage += damage;
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null && !rb.isKinematic) rb.AddForceAtPosition(velocity * 14f, point, ForceMode.Impulse);
+            if (_damage >= toughness) Shatter(point, velocity);
         }
 
         private void OnCollisionEnter(Collision c)
         {
             if (_broken) return;
             float hit = c.impulse.magnitude;
-            if (hit < 40f) return;
+            if (c.rigidbody != null && c.rigidbody.GetComponent<MechRagdollPart>() != null)
+            {
+                hit = Mathf.Max(hit, c.relativeVelocity.magnitude * 26f);
+            }
+            if (hit < 30f) return;
             _damage += hit;
             if (_damage >= toughness) Shatter(c.contactCount > 0 ? c.GetContact(0).point : transform.position, c.relativeVelocity);
         }
@@ -72,7 +87,29 @@ namespace IronFauna.Brawl
                 rb.angularVelocity = Random.insideUnitSphere * 4f;
                 Destroy(go, Random.Range(10f, 14f));
             }
-            Shattered?.Invoke(point, Mathf.Clamp01(parentRb.mass / 2000f));
+            if (explosive)
+            {
+                var hitOwners = new System.Collections.Generic.HashSet<MechRagdoll>();
+                foreach (var col in Physics.OverlapSphere(point, 9.5f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    var rb = col.attachedRigidbody;
+                    if (rb == null) continue;
+                    var part = rb.GetComponent<MechRagdollPart>();
+                    if (part != null && part.owner != null && hitOwners.Add(part.owner))
+                    {
+                        Vector3 dir = (part.owner.Position - point);
+                        float dist = Mathf.Max(1f, dir.magnitude);
+                        float dmg = Mathf.Lerp(26f, 8f, dist / 9.5f);
+                        part.owner.ReceiveStrike(null, part.segment, point, dir.normalized + Vector3.up * 0.45f, dmg, 1f);
+                        part.owner.Knockdown(1.6f);
+                    }
+                    else if (!rb.isKinematic)
+                    {
+                        rb.AddExplosionForce(900f, point, 9.5f, 1.2f, ForceMode.Impulse);
+                    }
+                }
+            }
+            Shattered?.Invoke(point, explosive ? 1.2f : Mathf.Clamp01(parentRb.mass / 2000f));
             Destroy(gameObject);
         }
     }

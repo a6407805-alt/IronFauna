@@ -77,6 +77,151 @@ namespace IronFauna.Clamshell
             return l;
         }
 
+        public struct CombatModifiers
+        {
+            public float healthMult;
+            public float limbHealthMult;
+            public float poiseMult;
+            public float massMult;
+            public float moveSpeedMult;
+            public float sprintSpeedMult;
+            public float strikeSpeedMult;
+            public float damageMult;
+            public float knockbackDealtMult;
+            public float knockbackTakenMult;
+            public float limbTearMult;
+            public bool hyperArmor;
+            public string weightLabel;
+        }
+
+        /// <summary>
+        /// Translates torsoWeight, legWeight and the 18 clamshell armor slots into real combat advantages:
+        /// Light = fast movement, rapid combos, agile floor-scoot and high jumps;
+        /// Medium = balanced MMA all-rounder and submission grappler;
+        /// Heavy = huge hull/limb HP, hyper-armor during wind-ups, heavy slams and wall-smashing mass.
+        /// </summary>
+        public CombatModifiers ComputeCombatModifiers()
+        {
+            var stats = ComputeStats();
+            float armorNorm = Mathf.Clamp((stats.armor - 190f) / 140f, -0.35f, 0.55f);
+            float speedNorm = Mathf.Clamp((stats.speed - 110f) / 110f, -0.30f, 0.45f);
+            float powerNorm = Mathf.Clamp((stats.firepower - 120f) / 110f, -0.25f, 0.45f);
+            float staminaNorm = Mathf.Clamp((stats.cooling - 110f) / 110f, -0.25f, 0.45f);
+
+            var m = new CombatModifiers
+            {
+                healthMult = 1f + armorNorm * 0.45f,
+                limbHealthMult = 1f + armorNorm * 0.4f,
+                poiseMult = 1f + armorNorm * 0.35f + staminaNorm * 0.25f,
+                massMult = 1f,
+                moveSpeedMult = 1f + speedNorm * 0.3f,
+                sprintSpeedMult = 1f + speedNorm * 0.32f,
+                strikeSpeedMult = 1f + staminaNorm * 0.22f,
+                damageMult = 1f + powerNorm * 0.35f,
+                knockbackDealtMult = 1f + powerNorm * 0.3f,
+                knockbackTakenMult = 1f,
+                limbTearMult = 1f + powerNorm * 0.35f,
+                hyperArmor = torsoWeight == MechWeightClass.Heavy,
+                weightLabel = torsoWeight == legWeight ? torsoWeight.ToString().ToUpperInvariant() : $"{torsoWeight.ToString().ToUpperInvariant()}/{legWeight.ToString().ToUpperInvariant()}",
+            };
+
+            if (torsoWeight == MechWeightClass.Light)
+            {
+                m.healthMult *= 0.82f;
+                m.limbHealthMult *= 0.85f;
+                m.poiseMult *= 0.80f;
+                m.massMult *= 0.82f;
+                m.strikeSpeedMult *= 1.22f;
+                m.moveSpeedMult *= 1.12f;
+                m.knockbackTakenMult *= 1.22f;
+            }
+            else if (torsoWeight == MechWeightClass.Heavy)
+            {
+                m.healthMult *= 1.38f;
+                m.limbHealthMult *= 1.35f;
+                m.poiseMult *= 1.42f;
+                m.massMult *= 1.28f;
+                m.strikeSpeedMult *= 0.86f;
+                m.damageMult *= 1.24f;
+                m.knockbackDealtMult *= 1.32f;
+                m.knockbackTakenMult *= 0.72f;
+                m.limbTearMult *= 1.25f;
+            }
+
+            if (legWeight == MechWeightClass.Light)
+            {
+                m.moveSpeedMult *= 1.22f;
+                m.sprintSpeedMult *= 1.25f;
+                m.massMult *= 0.90f;
+                m.knockbackTakenMult *= 1.12f;
+            }
+            else if (legWeight == MechWeightClass.Heavy)
+            {
+                m.moveSpeedMult *= 0.82f;
+                m.sprintSpeedMult *= 0.84f;
+                m.healthMult *= 1.12f;
+                m.poiseMult *= 1.20f;
+                m.massMult *= 1.18f;
+                m.knockbackTakenMult *= 0.78f;
+            }
+            return m;
+        }
+
+        public const int PresetCount = 10;
+
+        public static MechLoadout CreatePreset(int index, out string title, out string roleNote)
+        {
+            int idx = ((index % PresetCount) + PresetCount) % PresetCount;
+            var l = new MechLoadout { legPose = LegPosePreset.Pose1_HumanLeg, paintScheme = idx % IronFauna.Core.IronFaunaPalette.PaintSchemes.Length };
+            ClamshellSetArchetype set = (ClamshellSetArchetype)idx;
+            for (int i = 0; i < SlotCount; i++) l.slotSets[i] = (int)set;
+
+            switch (idx)
+            {
+                case 0:
+                    l.torsoWeight = MechWeightClass.Medium; l.legWeight = MechWeightClass.Medium;
+                    title = "IRONCLAD BRAWLER"; roleNote = "MEDIUM ALL-ROUNDER · Balanced hull, speed & grappling.";
+                    break;
+                case 1:
+                    l.torsoWeight = MechWeightClass.Light; l.legWeight = MechWeightClass.Light;
+                    title = "MANTIS NAK MUAY"; roleNote = "LIGHT STRIKER · +34% speed, lightning kicks & flying knees.";
+                    break;
+                case 2:
+                    l.torsoWeight = MechWeightClass.Heavy; l.legWeight = MechWeightClass.Heavy;
+                    title = "GOLIATH JUGGERNAUT"; roleNote = "HEAVY TITAN · Hyper-armor wind-ups, massive slams & hull.";
+                    break;
+                case 3:
+                    l.torsoWeight = MechWeightClass.Medium; l.legWeight = MechWeightClass.Light;
+                    title = "RIPJAW JIU-JITSU"; roleNote = "AGILE GRAPPLER · Fast floor butt-scoot, takedowns & limb tearing.";
+                    break;
+                case 4:
+                    l.torsoWeight = MechWeightClass.Light; l.legWeight = MechWeightClass.Light;
+                    title = "AFTERBURN BLITZ"; roleNote = "FEATHERWEIGHT · Fastest footwork, tornado kicks & slips.";
+                    break;
+                case 5:
+                    l.torsoWeight = MechWeightClass.Heavy; l.legWeight = MechWeightClass.Heavy;
+                    title = "BASTION COLOSSUS"; roleNote = "SUPER-HEAVY TANK · Maximum armor & knockback resistance.";
+                    break;
+                case 6:
+                    l.torsoWeight = MechWeightClass.Light; l.legWeight = MechWeightClass.Medium;
+                    title = "OVERCLOCK BOXER"; roleNote = "SPEED BOXER · +28% faster punch wind-up & combo recovery.";
+                    break;
+                case 7:
+                    l.torsoWeight = MechWeightClass.Medium; l.legWeight = MechWeightClass.Medium;
+                    title = "VOLTAIC CLINCHER"; roleNote = "CLINCH FIGHTER · Heavy elbows, knees & suplex throws.";
+                    break;
+                case 8:
+                    l.torsoWeight = MechWeightClass.Heavy; l.legWeight = MechWeightClass.Medium;
+                    title = "SALVO CRUSHER"; roleNote = "POWER PUNCHER · Heavy torso hyper-armor with mobile legs.";
+                    break;
+                default:
+                    l.torsoWeight = MechWeightClass.Medium; l.legWeight = MechWeightClass.Heavy;
+                    title = "AEGIS GUARDIAN"; roleNote = "ROOTED COUNTER · Heavy planted legs, high poise & sweeps.";
+                    break;
+            }
+            return l;
+        }
+
         private void EnsureSize()
         {
             if (slotSets == null || slotSets.Length != SlotCount)

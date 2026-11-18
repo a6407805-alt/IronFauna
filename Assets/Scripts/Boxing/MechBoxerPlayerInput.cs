@@ -4,24 +4,30 @@ using UnityEngine.InputSystem;
 namespace IronFauna.Boxing
 {
     /// <summary>
-    /// Keyboard + mouse (and gamepad) controls for a MechBoxer.
-    ///   WASD / left stick  move, relative to the camera (free roam; squares up when an opponent is close)
-    ///   Ctrl / L3 (hold)    sprint
+    /// Keyboard + mouse (and multi-gamepad split-screen) controls for a MechBoxer.
+    ///   WASD / left stick   move, relative to the camera
+    ///   Ctrl / L3 (hold)    sprint (stands up from floor sit)
+    ///   X / Alt (hold)      MMA crouch (ducks high swings, sets up takedowns & low drags)
+    ///   Z / D-pad Down      Jiu-Jitsu floor sit toggle (butt-scoot with WASD, drag grabbed bodies on the floor, upkick with F/R)
     ///   LMB / X  jab        RMB / Y  cross
     ///   Q / B    hook       E / A    uppercut
+    ///   F front kick        R roundhouse      V low calf kick
     ///   Shift / LB (hold)   high guard
-    ///   F front kick        R roundhouse
-    ///   G / LT (hold)       grab - release to throw; while holding: LMB throw, RMB tear a limb off, Space slam,
-    ///                       and with a torn-off limb in hand any strike swings it
-    ///   Scroll / D-pad      pick a martial-arts special      Space / RT   throw it
-    ///   C / RB              slip (toward the A/D or stick side; alternates when neutral)
+    ///   G / LT (hold)       grab - drag on the floor with Z/X, LMB throw, RMB joint-crank/tear limb, Space suplex/slam
+    ///   Scroll / D-pad L/R  pick a martial-arts special (20 moves)      Space / RT   throw it
+    ///   C / RB              slip
     /// </summary>
     [RequireComponent(typeof(MechBoxer))]
     public class MechBoxerPlayerInput : MonoBehaviour
     {
+        [Tooltip("0 = Player 1 (WASD/Mouse or Pad 0), 1..3 = Local Co-Op Players 2..4 (Gamepads or IJKL/Arrows for P2)")]
+        public int playerIndex;
+        public bool allowMouseAndWasd = true;
+
         private MechBoxer _boxer;
         private int _lastSlip = 1;
         private float _scrollAcc;
+        private bool _sitToggle;
 
         /// <summary>Index into MechBoxer.Specials of the special the scroll wheel has picked.</summary>
         public int SpecialIndex { get; private set; }
@@ -42,51 +48,87 @@ namespace IronFauna.Boxing
             if (_boxer.moveReference == null && Camera.main != null) _boxer.moveReference = Camera.main.transform;
         }
 
+        private Gamepad GetAssignedPad()
+        {
+            var pads = Gamepad.all;
+            if (pads.Count == 0) return null;
+            if (playerIndex == 0) return pads.Count == 1 && allowMouseAndWasd ? pads[0] : (pads.Count > 0 && !allowMouseAndWasd ? pads[0] : (pads.Count == 1 ? pads[0] : null));
+            int idx = allowMouseAndWasd ? playerIndex - 1 : playerIndex;
+            return idx >= 0 && idx < pads.Count ? pads[idx] : null;
+        }
+
         private void Update()
         {
             var kb = Keyboard.current;
             var mouse = Mouse.current;
-            var pad = Gamepad.current;
+            var pad = GetAssignedPad();
             Vector2 move = Vector2.zero;
-            if (kb != null)
-            {
-                if (kb.wKey.isPressed) move.y += 1f;
-                if (kb.sKey.isPressed) move.y -= 1f;
-                if (kb.dKey.isPressed) move.x += 1f;
-                if (kb.aKey.isPressed) move.x -= 1f;
-            }
-            if (pad != null && pad.leftStick.ReadValue().sqrMagnitude > 0.04f) move = pad.leftStick.ReadValue();
-
             PunchType punch = PunchType.None;
             bool guard = false;
             bool slip = false;
             bool sprint = false;
-            bool grab = kb != null && kb.gKey.isPressed;
-            if (mouse != null)
+            bool grab = false;
+            bool crouch = false;
+
+            if (playerIndex == 0 && allowMouseAndWasd)
             {
-                if (mouse.leftButton.wasPressedThisFrame) punch = PunchType.Jab;
-                if (mouse.rightButton.wasPressedThisFrame) punch = PunchType.Cross;
-                // one notch = one move (wheel deltas are 120 per notch on Windows, 1 elsewhere)
-                float sc = mouse.scroll.ReadValue().y;
-                if (Mathf.Abs(sc) > 0.01f)
+                if (kb != null)
                 {
-                    _scrollAcc += Mathf.Sign(sc);
-                    Cycle(sc > 0f ? -1 : 1);
+                    if (kb.wKey.isPressed) move.y += 1f;
+                    if (kb.sKey.isPressed) move.y -= 1f;
+                    if (kb.dKey.isPressed) move.x += 1f;
+                    if (kb.aKey.isPressed) move.x -= 1f;
+                    if (kb.qKey.wasPressedThisFrame) punch = PunchType.Hook;
+                    if (kb.eKey.wasPressedThisFrame) punch = PunchType.Uppercut;
+                    if (kb.fKey.wasPressedThisFrame) punch = PunchType.FrontKick;
+                    if (kb.rKey.wasPressedThisFrame) punch = PunchType.Roundhouse;
+                    if (kb.vKey.wasPressedThisFrame) punch = PunchType.LowCalfKick;
+                    guard |= kb.leftShiftKey.isPressed;
+                    slip |= kb.cKey.wasPressedThisFrame;
+                    crouch |= kb.xKey.isPressed || kb.leftAltKey.isPressed;
+                    if (kb.zKey.wasPressedThisFrame) _sitToggle = !_sitToggle;
+                    if (kb.spaceKey.wasPressedThisFrame) punch = SelectedSpecial;
+                    sprint |= kb.leftCtrlKey.isPressed;
+                    grab |= kb.gKey.isPressed;
+                }
+                if (mouse != null)
+                {
+                    if (mouse.leftButton.wasPressedThisFrame) punch = PunchType.Jab;
+                    if (mouse.rightButton.wasPressedThisFrame) punch = PunchType.Cross;
+                    float sc = mouse.scroll.ReadValue().y;
+                    if (Mathf.Abs(sc) > 0.01f)
+                    {
+                        _scrollAcc += Mathf.Sign(sc);
+                        Cycle(sc > 0f ? -1 : 1);
+                    }
                 }
             }
-            if (kb != null)
+            else if (playerIndex == 1 && kb != null)
             {
-                if (kb.qKey.wasPressedThisFrame) punch = PunchType.Hook;
-                if (kb.eKey.wasPressedThisFrame) punch = PunchType.Uppercut;
-                if (kb.fKey.wasPressedThisFrame) punch = PunchType.FrontKick;
-                if (kb.rKey.wasPressedThisFrame) punch = PunchType.Roundhouse;
-                guard |= kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
-                slip |= kb.cKey.wasPressedThisFrame;
-                if (kb.spaceKey.wasPressedThisFrame) punch = SelectedSpecial;
-                sprint |= kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
+                // Player 2 keyboard fallback (IJKL / Arrows + U/O/Y/P/H/N/M/RightShift/Enter) for 2-player couch co-op on one PC
+                if (kb.iKey.isPressed || kb.upArrowKey.isPressed) move.y += 1f;
+                if (kb.kKey.isPressed || kb.downArrowKey.isPressed) move.y -= 1f;
+                if (kb.lKey.isPressed || kb.rightArrowKey.isPressed) move.x += 1f;
+                if (kb.jKey.isPressed || kb.leftArrowKey.isPressed) move.x -= 1f;
+                if (kb.uKey.wasPressedThisFrame) punch = PunchType.Jab;
+                if (kb.oKey.wasPressedThisFrame) punch = PunchType.Cross;
+                if (kb.yKey.wasPressedThisFrame) punch = PunchType.Hook;
+                if (kb.pKey.wasPressedThisFrame) punch = PunchType.Uppercut;
+                if (kb.semicolonKey.wasPressedThisFrame) punch = PunchType.FrontKick;
+                if (kb.quoteKey.wasPressedThisFrame) punch = PunchType.Roundhouse;
+                guard |= kb.rightShiftKey.isPressed;
+                sprint |= kb.rightCtrlKey.isPressed;
+                grab |= kb.hKey.isPressed;
+                crouch |= kb.mKey.isPressed;
+                if (kb.nKey.wasPressedThisFrame) _sitToggle = !_sitToggle;
+                if (kb.leftBracketKey.wasPressedThisFrame) Cycle(-1);
+                if (kb.rightBracketKey.wasPressedThisFrame) Cycle(1);
+                if (kb.enterKey.wasPressedThisFrame) punch = SelectedSpecial;
             }
+
             if (pad != null)
             {
+                if (pad.leftStick.ReadValue().sqrMagnitude > 0.04f) move = pad.leftStick.ReadValue();
                 if (pad.buttonWest.wasPressedThisFrame) punch = PunchType.Jab;
                 if (pad.buttonNorth.wasPressedThisFrame) punch = PunchType.Cross;
                 if (pad.buttonEast.wasPressedThisFrame) punch = PunchType.Hook;
@@ -94,11 +136,16 @@ namespace IronFauna.Boxing
                 guard |= pad.leftShoulder.isPressed;
                 grab |= pad.leftTrigger.ReadValue() > 0.4f;
                 slip |= pad.rightShoulder.wasPressedThisFrame;
+                crouch |= pad.rightStickButton.isPressed;
+                if (pad.dpad.down.wasPressedThisFrame) _sitToggle = !_sitToggle;
+                if (pad.dpad.up.wasPressedThisFrame) punch = PunchType.FrontKick;
                 if (pad.dpad.right.wasPressedThisFrame) Cycle(1);
                 if (pad.dpad.left.wasPressedThisFrame) Cycle(-1);
                 if (pad.rightTrigger.wasPressedThisFrame) punch = SelectedSpecial;
                 sprint |= pad.leftStickButton.isPressed;
             }
+
+            if (sprint) _sitToggle = false; // sprinting stands the mech back up from Jiu-Jitsu floor sit
 
             int slipDir = 0;
             if (slip)
@@ -113,6 +160,8 @@ namespace IronFauna.Boxing
             i.guard = guard;
             i.sprint = sprint;
             i.grab = grab;
+            i.crouch = crouch;
+            i.sit = _sitToggle;
             if (slipDir != 0) i.slip = slipDir;
             _boxer.intent = i;
         }

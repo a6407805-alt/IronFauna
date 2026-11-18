@@ -59,12 +59,24 @@ namespace IronFauna.Core
         public static readonly Color StudioFill        = new Color32(0x4A, 0x5A, 0x72, 0xFF); // #4A5A72 Soft fill / ambient sky
         public static readonly Color StudioAmbientLow  = new Color32(0x0E, 0x12, 0x18, 0xFF); // #0E1218 Ambient ground
 
-        // Brawl terrain (rocky hill island)
+        // Brawl terrain (rocky hill island & multi-stage palettes)
         public static readonly Color TerrainDirt       = new Color32(0x5B, 0x4E, 0x40, 0xFF); // #5B4E40 Packed dirt / scrub
         public static readonly Color TerrainRock       = new Color32(0x6E, 0x6A, 0x63, 0xFF); // #6E6A63 Weathered basalt
         public static readonly Color TerrainRockDark   = new Color32(0x3E, 0x3B, 0x37, 0xFF); // #3E3B37 Cliff faces, shadowed rock
         public static readonly Color SkyHaze           = new Color32(0x8C, 0x9B, 0xAA, 0xFF); // #8C9BAA Overcast sky / distance fog
         public static readonly Color SunWarm           = new Color32(0xFF, 0xE6, 0xC4, 0xFF); // #FFE6C4 Low afternoon sun
+
+        // Stage palettes (Foundry, Orbital, Scrapyard, Glacier)
+        public static readonly Color FoundryDeck       = new Color32(0x2B, 0x28, 0x26, 0xFF); // #2B2826 Sooty smelter deck
+        public static readonly Color FoundryRust       = new Color32(0x6E, 0x38, 0x26, 0xFF); // #6E3826 Oxidised foundry girder
+        public static readonly Color FoundrySky        = new Color32(0x38, 0x22, 0x1A, 0xFF); // #38221A Smelter smoke haze
+        public static readonly Color OrbitalDeck       = new Color32(0xC8, 0xD2, 0xDC, 0xFF); // #C8D2DC High-altitude dish ceramic
+        public static readonly Color OrbitalSky        = new Color32(0x16, 0x28, 0x44, 0xFF); // #162844 Stratosphere deep blue
+        public static readonly Color ScrapyardSand     = new Color32(0x78, 0x64, 0x4C, 0xFF); // #78644C Rusty pit floor
+        public static readonly Color ScrapyardSky      = new Color32(0x9E, 0x84, 0x68, 0xFF); // #9E8468 Dusty colosseum haze
+        public static readonly Color GlacierIce        = new Color32(0x9A, 0xBE, 0xD8, 0xFF); // #9ABED8 Glacial blue ice
+        public static readonly Color GlacierSnow       = new Color32(0xD8, 0xE4, 0xEE, 0xFF); // #D8E4EE Packed ridge snow
+        public static readonly Color GlacierSky        = new Color32(0x6C, 0x88, 0xA6, 0xFF); // #6C88A6 Subzero storm sky
 
         // Garage paint schemes (front / rear halves). Index 0 is the art-bible default.
         public static readonly Color DesertFront       = new Color32(0xC9, 0xA1, 0x5B, 0xFF); // #C9A15B Desert Raider front

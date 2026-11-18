@@ -32,6 +32,11 @@ namespace IronFauna.Brawl
         public float poiseMax = 28f;
         [Tooltip("Chaos: how far hits shove mechs around")]
         public float knockbackScale = 1.8f;
+        public float knockbackTakenScale = 1f;
+        public float limbTearScale = 1f;
+        [Tooltip("0 = Free-For-All, 1 = Allied Team (Players + Co-Op Bots), 2 = Enemy AI Team")]
+        public int team;
+        public string weightLabel = "MEDIUM";
 
         [Header("Strength")]
         public float muscle = 1f;             // joint motor multiplier (0 = limp)
@@ -142,6 +147,45 @@ namespace IronFauna.Brawl
 
             // hide the ghost (it still animates)
             foreach (var r in animated.GetComponentsInChildren<Renderer>()) r.enabled = false;
+        }
+
+        public void ApplyLoadoutStats(MechLoadout loadout, float bonusHpMult = 1f)
+        {
+            if (loadout == null) return;
+            var m = loadout.ComputeCombatModifiers();
+            weightLabel = m.weightLabel;
+            maxHealth = Mathf.Round(160f * m.healthMult * bonusHpMult);
+            health = maxHealth;
+            poiseMax = Mathf.Round(30f * m.poiseMult * Mathf.Lerp(1f, 1.4f, bonusHpMult - 1f));
+            _poise = poiseMax;
+            knockbackScale = 1.8f * m.knockbackDealtMult;
+            knockbackTakenScale = m.knockbackTakenMult;
+            limbTearScale = m.limbTearMult;
+
+            float limbScale = m.limbHealthMult * Mathf.Lerp(1f, 1.3f, bonusHpMult - 1f);
+            foreach (LimbId id in Enum.GetValues(typeof(LimbId)))
+            {
+                if (id != LimbId.None) _limbHealth[id] = (id == LimbId.Head ? 70f : 55f) * limbScale;
+            }
+
+            _totalMass = 0f;
+            foreach (var s in _segs)
+            {
+                if (s.rb != null)
+                {
+                    s.rb.mass *= m.massMult;
+                    _totalMass += s.rb.mass;
+                }
+            }
+
+            if (ghost != null)
+            {
+                ghost.maxSpeed = 3.0f * m.moveSpeedMult;
+                ghost.sprintSpeed = 5.6f * m.sprintSpeedMult;
+                ghost.strikeSpeedScale = m.strikeSpeedMult;
+                ghost.damageScale = m.damageMult;
+                ghost.hyperArmor = m.hyperArmor;
+            }
         }
 
         private static string Side(int side) => side < 0 ? "_L" : "_R";
@@ -467,9 +511,10 @@ namespace IronFauna.Brawl
             _poise -= damage * (headShot ? 1.6f : 1f);
 
             // the blow really moves the body: a shove at the contact point on top of the collision itself
-            seg.rb.AddForceAtPosition(dir * damage * 16f * knockbackScale, point, ForceMode.Impulse);
-            ghost.Interrupt(0.12f + damage * 0.012f);
-            ghost.AddKnockback(dir * Mathf.Lerp(1.5f, 8f, damage / 25f) * knockbackScale);
+            float shove = (attacker != null ? attacker.knockbackScale : knockbackScale) * knockbackTakenScale;
+            seg.rb.AddForceAtPosition(dir * damage * 16f * shove, point, ForceMode.Impulse);
+            ghost.Interrupt(0.12f + damage * 0.012f * knockbackTakenScale);
+            ghost.AddKnockback(dir * Mathf.Lerp(1.5f, 8f, damage / 25f) * shove);
             muscle = Mathf.Min(muscle, Mathf.Lerp(1f, 0.35f, damage / 25f));   // a hard hit goes slack for a beat
 
             bool ripped = false;
@@ -637,8 +682,15 @@ namespace IronFauna.Brawl
         internal void TryStrike(Segment mine, Collision c)
         {
             if (IsDown || ghost == null || mine.detached || !ghost.StrikeActive) return;
+            var prop = c.collider != null ? c.collider.GetComponentInParent<BreakableProp>() : null;
+            if (prop != null)
+            {
+                Vector3 hitPt = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
+                prop.ApplyStrike(hitPt, transform.forward * (12f * knockbackScale), ghost.PunchDamage * 18f * knockbackScale);
+            }
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
             if (otherPart == null || otherPart.owner == this || otherPart.segment.detached) return;
+            if (team != 0 && otherPart.owner.team == team) return; // friendly fire off in Co-Op Campaign & Team Brawl
             bool arm = mine.limb == LimbId.ArmL || mine.limb == LimbId.ArmR;
             bool leg = mine.limb == LimbId.LegL || mine.limb == LimbId.LegR;
             bool side = ghost.StrikeLead == mine.leadHand;
@@ -657,6 +709,10 @@ namespace IronFauna.Brawl
             float speed = c.relativeVelocity.magnitude;
             float damage = ghost.PunchDamage * Mathf.Clamp(speed / 8f, 0.7f, 1.4f);
             otherPart.owner.ReceiveStrike(this, otherPart.segment, point, dir + Vector3.up * 0.25f, damage, ghost.PunchPower);
+            if (ghost.StrikeSweeps && !otherPart.owner.IsDown)
+            {
+                otherPart.owner.Knockdown(1.25f);
+            }
         }
 
         // ------------------------------------------------------------------ falls, throws, bowling
@@ -794,6 +850,7 @@ namespace IronFauna.Brawl
                     if (rb == null) continue;
                     var part = rb.GetComponent<MechRagdollPart>();
                     if (part == null || part.owner == this || part.segment.heldBy != null) continue;
+                    if (team != 0 && !part.segment.detached && part.owner.team == team) continue;
                     if (!part.segment.detached && part.owner._grabbedBy != null) continue;
                     float d = Vector3.Distance(col.ClosestPoint(tip), tip);
                     if (d < bestD) { bestD = d; best = part.segment; bestOwner = part.owner; }
@@ -857,23 +914,27 @@ namespace IronFauna.Brawl
         {
             if (_held == null) { DropHold(); return; }
             var victim = _held;
-            Vector3 v = ghost.transform.forward * 5f + Vector3.down * 26f;
+            bool suplex = ghost != null && ghost.IsCrouching;
+            Vector3 v = suplex
+                ? (-ghost.transform.forward * 14f + Vector3.down * 28f) // Jiu-Jitsu / Wrestling back-arch suplex
+                : (ghost.transform.forward * 5f + Vector3.down * 26f);
             foreach (var s in victim._segs) if (!s.rb.isKinematic) s.rb.linearVelocity = v;
             victim._thrownBy = this;
             victim._slammedT = Time.time;
             DropHold();
             victim.Knockdown(2.2f);
-            GrappleEvent?.Invoke(this, "SLAM");
+            GrappleEvent?.Invoke(this, suplex ? "SUPLEX" : "SLAM");
         }
 
-        /// <summary>Yank on the held part: limbs take heavy damage and tear off into your hands.</summary>
+        /// <summary>Yank on the held part: limbs take heavy damage and tear off into your hands (bonus damage in Jiu-Jitsu floor lock).</summary>
         private void Tug()
         {
             var victim = _held;
             if (victim == null) return;
             Vector3 toMe = (Position - victim.Position);
             toMe.y = 0f;
-            Segment torn = victim.TugLimb(_heldSeg, toMe.normalized, this);
+            float groundLockBonus = (ghost != null && ghost.IsSeated ? 1.65f : ghost != null && ghost.IsCrouching ? 1.3f : 1f) * limbTearScale;
+            Segment torn = victim.TugLimb(_heldSeg, toMe.normalized, this, groundLockBonus);
             BoxingSfx.Clank(1f);
             if (torn != null)
             {
@@ -884,24 +945,28 @@ namespace IronFauna.Brawl
                 _heldMass = victim.LimbMass(torn.limb);
                 GrappleEvent?.Invoke(this, "TORN");
             }
+            else if (ghost != null && ghost.IsSeated)
+            {
+                GrappleEvent?.Invoke(this, "JOINT CRANK");
+            }
         }
 
-        internal Segment TugLimb(Segment seg, Vector3 dir, MechRagdoll attacker)
+        internal Segment TugLimb(Segment seg, Vector3 dir, MechRagdoll attacker, float mult = 1f)
         {
             LimbId limb = seg.limb;
             if (limb == LimbId.None)
             {
                 // torso / hips: shake them like a rag doll
-                health -= 6f;
+                health -= 6f * mult;
                 foreach (var s in _segs) if (!s.rb.isKinematic) s.rb.AddForce(dir * 30f + UnityEngine.Random.insideUnitSphere * 20f, ForceMode.Impulse);
                 ShedArmor(seg, dir, 1);
                 if (health <= 0f) KnockOut();
-                Hit?.Invoke(this, attacker, seg.rb.position, 6f, 0.4f, false);
+                Hit?.Invoke(this, attacker, seg.rb.position, 6f * mult, 0.4f, false);
                 return null;
             }
             if (_lost.Contains(limb)) return null;
-            _limbHealth[limb] -= 22f;
-            health -= 7f;
+            _limbHealth[limb] -= 22f * mult;
+            health -= 7f * mult;
             ShedArmor(seg, dir, 1);
             bool ripped = _limbHealth[limb] <= 0f;
             Segment root = null;

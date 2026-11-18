@@ -57,6 +57,10 @@ namespace IronFauna.Gameplay
         public bool footfallDust = true;
         public float dustScale = 0.7f;
 
+        [Header("MMA Crouching & Jiu-Jitsu Floor Sit")]
+        [Range(0f, 1f)] public float crouchBlend;
+        [Range(0f, 1f)] public float seatedBlend;
+
         private class LegState
         {
             public MechClamshellBuilder.LegRig rig;
@@ -198,8 +202,29 @@ namespace IronFauna.Gameplay
 
             // ---------------- feet
             float worstReach = 0f;
+            float sit = Mathf.Clamp01(seatedBlend);
+            float crouch = Mathf.Clamp01(crouchBlend) * (1f - sit);
             foreach (var leg in _legs)
             {
+                if (sit > 0.05f)
+                {
+                    // Jiu-Jitsu open guard / butt-scoot on the floor: legs extended forward, knees bent outward,
+                    // heels dig and pull rhythmically when scooting across the mat.
+                    bool left = leg.rig.root.name.EndsWith("_L");
+                    float side = left ? -1f : 1f;
+                    float scootPhase = Mathf.Repeat(_phase + leg.offset, 1f);
+                    float scootPull = walking ? Mathf.Sin(scootPhase * Mathf.PI * 2f) * 0.38f * speed01 : 0f;
+                    float scootLift = walking ? Mathf.Max(0f, -Mathf.Cos(scootPhase * Mathf.PI * 2f)) * 0.16f * speed01 : 0f;
+                    Vector3 guardLocal = new Vector3(side * 0.68f, 0.14f + scootLift, 1.35f + scootPull);
+                    Vector3 guardWorld = transform.TransformPoint(guardLocal);
+                    guardWorld.y = Mathf.Max(GroundPoint(guardWorld).y + 0.08f + scootLift, transform.position.y + 0.08f + scootLift);
+                    Quaternion guardRot = Quaternion.Euler(-48f, transform.eulerAngles.y + side * 18f, side * 16f);
+                    leg.footPos = Vector3.Lerp(leg.footPos, guardWorld, sit);
+                    leg.footRot = Quaternion.Slerp(leg.footRot, guardRot, sit);
+                    leg.plant = leg.footPos;
+                    leg.swinging = false;
+                    continue;
+                }
                 if (_airBlend > 0f || _glideBlend > 0f)
                 {
                     HangFoot(leg, g, dt);
@@ -255,7 +280,10 @@ namespace IronFauna.Gameplay
             float k = Mathf.Pow(2f * Mathf.PI * g.bodyFrequency, 2f);
             float c = 2f * 0.45f * Mathf.Sqrt(k);
             float rhythm = walking ? -0.025f * Mathf.Cos(2f * Mathf.PI * _footfallsPerCycle * _phase) * speed01 : 0f;
-            float bodyTarget = -walkCrouch * speed01 - 0.18f * _glideBlend - _reachDrop + rhythm;
+            float sitDrop = Mathf.Max(0.8f, _builder.HipHeight - 0.52f) * sit;
+            float crouchDrop = 0.72f * crouch;
+            float scootBob = sit > 0.2f && walking ? Mathf.Sin(2f * Mathf.PI * _phase * 2f) * 0.08f * speed01 : 0f;
+            float bodyTarget = -walkCrouch * speed01 * (1f - sit) - 0.18f * _glideBlend - _reachDrop * (1f - sit) - crouchDrop - sitDrop + rhythm + scootBob;
             _bodyVy += (k * (bodyTarget - _bodyY) - c * _bodyVy) * dt;
             _bodyY += _bodyVy * dt;
 

@@ -58,6 +58,8 @@ namespace IronFauna.Menu
 
         private MechShowcaseStage _stage;
         private MechLoadout _loadout;
+        private readonly IronFauna.Brawl.BrawlMatchConfig _matchConfig = new IronFauna.Brawl.BrawlMatchConfig();
+        private int _presetIndex;
 
         private GameObject _titleCanvas;
         private GameObject _garageCanvas;
@@ -65,10 +67,15 @@ namespace IronFauna.Menu
         private readonly Dictionary<Tab, GameObject> _tabPages = new Dictionary<Tab, GameObject>();
         private readonly Dictionary<Tab, Image> _tabButtons = new Dictionary<Tab, Image>();
         private readonly List<KeyValuePair<ClamshellSlot, MenuUI.Cycler>> _slotCyclers = new List<KeyValuePair<ClamshellSlot, MenuUI.Cycler>>();
+        private MenuUI.Cycler _presetCycler;
         private MenuUI.Cycler _paintCycler;
         private MenuUI.Cycler _torsoWeightCycler;
         private MenuUI.Cycler _legWeightCycler;
         private MenuUI.Cycler _viewCycler;
+        private MenuUI.Cycler _modeCycler;
+        private MenuUI.Cycler _stageCycler;
+        private MenuUI.Cycler _localPlayersCycler;
+        private MenuUI.Cycler _netRoleCycler;
         private bool _skeletonView;
         private MenuUI.Cycler _fullSetCycler;
         private Text _headerInfo;
@@ -127,7 +134,7 @@ namespace IronFauna.Menu
 
         /// <summary>Mech brawl (active ragdolls): hides the menu and turntable and builds the arena in this scene
         /// (Esc reloads the menu).</summary>
-        private void StartBrawl()
+        public void StartBrawl()
         {
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
@@ -140,8 +147,15 @@ namespace IronFauna.Menu
                     if (t != null) t.gameObject.SetActive(false);
                 }
             }
-            IronFauna.Brawl.MechBrawlMatch.Begin(_loadout, _stage != null ? _stage.StageCamera : Camera.main);
+            IronFauna.Brawl.MechBrawlMatch.Begin(_loadout, _stage != null ? _stage.StageCamera : Camera.main, _matchConfig);
             enabled = false;
+        }
+
+        public void StartCampaign()
+        {
+            _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.CoopCampaign;
+            _matchConfig.campaignAct = 0;
+            StartBrawl();
         }
 
         private void ShowGarage()
@@ -182,15 +196,74 @@ namespace IronFauna.Menu
             MenuUI.Place(tagline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(84f, -440f), new Vector2(-40f, -396f));
 
             var buttons = MenuUI.NewRect(column.transform, "TitleButtons");
-            MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -800f), new Vector2(520f, -500f));
-            MenuUI.VStack(buttons.gameObject, 18f, 0);
+            MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -820f), new Vector2(676f, -455f));
+            MenuUI.VStack(buttons.gameObject, 12f, 0);
 
-            AddTitleButton(buttons, "FIGHT", StartBrawl);
+            AddTitleButton(buttons, "FIGHT (BRAWL)", StartBrawl);
+            AddTitleButton(buttons, "8P CO-OP CAMPAIGN", StartCampaign);
             AddTitleButton(buttons, "GARAGE", ShowGarage);
             AddTitleButton(buttons, "QUIT", Quit);
 
+            var setupBox = MenuUI.NewRect(column.transform, "MatchSetup");
+            MenuUI.Place(setupBox, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -1180f), new Vector2(676f, -845f));
+            MenuUI.VStack(setupBox.gameObject, 8f, 0);
+            _modeCycler = MenuUI.CreateCycler(setupBox, "Mode", () => CycleMode(-1), () => CycleMode(1));
+            _stageCycler = MenuUI.CreateCycler(setupBox, "Stage", () => CycleStage(-1), () => CycleStage(1));
+            _localPlayersCycler = MenuUI.CreateCycler(setupBox, "Local Co-Op", () => CycleLocalPlayers(-1), () => CycleLocalPlayers(1));
+            _netRoleCycler = MenuUI.CreateCycler(setupBox, "Online 8P", () => CycleNetRole(-1), () => CycleNetRole(1));
+            RefreshTitleSetup();
+
             _titleFooter = MenuUI.Label(column.transform, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft);
             MenuUI.Place(_titleFooter.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(84f, 40f), new Vector2(-40f, 80f));
+        }
+
+        private void CycleMode(int d)
+        {
+            int n = 3;
+            _matchConfig.mode = (IronFauna.Brawl.BrawlGameMode)((((int)_matchConfig.mode + d) % n + n) % n);
+            RefreshTitleSetup();
+        }
+
+        private void CycleStage(int d)
+        {
+            int n = IronFauna.Brawl.BrawlTerrain.StageCount;
+            _matchConfig.stage = (IronFauna.Brawl.BrawlStageId)((((int)_matchConfig.stage + d) % n + n) % n);
+            RefreshTitleSetup();
+        }
+
+        private void CycleLocalPlayers(int d)
+        {
+            _matchConfig.localPlayers = ((_matchConfig.localPlayers - 1 + d + 4) % 4) + 1;
+            RefreshTitleSetup();
+        }
+
+        private void CycleNetRole(int d)
+        {
+            int n = 3;
+            _matchConfig.netRole = (IronFauna.Brawl.BrawlNetRole)((((int)_matchConfig.netRole + d) % n + n) % n);
+            RefreshTitleSetup();
+        }
+
+        private void RefreshTitleSetup()
+        {
+            if (_modeCycler.Value != null)
+            {
+                _modeCycler.Value.text = _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.CoopCampaign ? "8P CO-OP CAMPAIGN"
+                    : _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8P FREE-FOR-ALL";
+            }
+            if (_stageCycler.Value != null)
+            {
+                _stageCycler.Value.text = IronFauna.Brawl.BrawlTerrain.StageName(_matchConfig.stage);
+            }
+            if (_localPlayersCycler.Value != null)
+            {
+                _localPlayersCycler.Value.text = _matchConfig.localPlayers == 1 ? "1 PLAYER (SOLO)" : $"{_matchConfig.localPlayers}P SPLIT SCREEN";
+            }
+            if (_netRoleCycler.Value != null)
+            {
+                _netRoleCycler.Value.text = _matchConfig.netRole == IronFauna.Brawl.BrawlNetRole.Host ? "HOST 8P (:7777)"
+                    : _matchConfig.netRole == IronFauna.Brawl.BrawlNetRole.Client ? "JOIN 8P (:7777)" : "OFFLINE";
+            }
         }
 
         private static void Quit()
@@ -204,8 +277,8 @@ namespace IronFauna.Menu
 
         private static void AddTitleButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
         {
-            var b = MenuUI.CreateButton(parent, label, 34, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
-            MenuUI.Size(b, 84f);
+            var b = MenuUI.CreateButton(parent, label, 30, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
+            MenuUI.Size(b, 72f);
         }
 
         // ------------------------------------------------------------------
@@ -320,14 +393,24 @@ namespace IronFauna.Menu
         private void BuildFramePage(Transform pages)
         {
             var page = NewPage(pages, Tab.Frame);
+            _presetCycler = MenuUI.CreateCycler(page.transform, "Fighter preset", () => CyclePreset(-1), () => CyclePreset(1));
             _paintCycler = MenuUI.CreateCycler(page.transform, "Paint", () => CyclePaint(-1), () => CyclePaint(1));
             _torsoWeightCycler = MenuUI.CreateCycler(page.transform, "Torso weight", () => CycleTorsoWeight(-1), () => CycleTorsoWeight(1));
             _legWeightCycler = MenuUI.CreateCycler(page.transform, "Leg weight", () => CycleLegWeight(-1), () => CycleLegWeight(1));
             _viewCycler = MenuUI.CreateCycler(page.transform, "View", ToggleSkeletonView, ToggleSkeletonView);
             var note = MenuUI.Label(page.transform,
-                "Pick a torso and leg weight class, then clamp armor onto the skeleton. Any front half fits any back half; the seam always runs down the sides.",
-                19, IronFaunaPalette.UiTextDim, TextAnchor.UpperLeft);
-            MenuUI.Size(note, 90f);
+                "LIGHT: +34% speed, rapid combos & agile floor-scoot.\nMEDIUM: Balanced MMA striker & submission grappler.\nHEAVY: +38% hull/poise, hyper-armor wind-ups & massive slams.",
+                18, IronFaunaPalette.UiTextDim, TextAnchor.UpperLeft);
+            MenuUI.Size(note, 100f);
+        }
+
+        private void CyclePreset(int delta)
+        {
+            _presetIndex = ((_presetIndex + delta) % MechLoadout.PresetCount + MechLoadout.PresetCount) % MechLoadout.PresetCount;
+            _loadout = MechLoadout.CreatePreset(_presetIndex, out string title, out string roleNote);
+            _selectedTitle.text = title;
+            _selectedPerk.text = roleNote;
+            Changed();
         }
 
         private void BuildSlotPage(Transform pages, Tab tab, SlotRow[] rows)
@@ -476,6 +559,11 @@ namespace IronFauna.Menu
         private void RefreshAll()
         {
             if (_garageCanvas == null) return;
+            if (_presetCycler.Value != null)
+            {
+                MechLoadout.CreatePreset(_presetIndex, out string presetTitle, out _);
+                _presetCycler.Value.text = presetTitle;
+            }
             _paintCycler.Value.text = IronFaunaPalette.GetPaint(_loadout.paintScheme).name.ToUpperInvariant();
             _torsoWeightCycler.Value.text = _loadout.torsoWeight.ToString().ToUpperInvariant();
             _legWeightCycler.Value.text = _loadout.legWeight.ToString().ToUpperInvariant();

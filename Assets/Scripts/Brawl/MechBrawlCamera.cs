@@ -14,6 +14,7 @@ namespace IronFauna.Brawl
     {
         public MechRagdoll player;
         public MechRagdoll target;
+        public int playerIndex;
         public float baseFov = 48f;
         public float height = 4.8f;
         public float side = 2.6f;
@@ -53,11 +54,23 @@ namespace IronFauna.Brawl
             }
             else
             {
-                // roaming: the mouse turns the camera; the mech walks wherever it is steered relative to it
-                var mouse = Mouse.current;
-                if (mouse != null && Cursor.lockState == CursorLockMode.Locked) _yaw += mouse.delta.ReadValue().x * mouseSensitivity;
-                var pad = Gamepad.current;
-                if (pad != null) _yaw += pad.rightStick.ReadValue().x * 140f * dt;
+                // roaming: the mouse turns P1's camera; each split-screen player's gamepad right stick turns their camera
+                if (playerIndex == 0)
+                {
+                    var mouse = Mouse.current;
+                    if (mouse != null && Cursor.lockState == CursorLockMode.Locked) _yaw += mouse.delta.ReadValue().x * mouseSensitivity;
+                }
+                var pads = Gamepad.all;
+                Gamepad pad = playerIndex < pads.Count ? pads[playerIndex] : null;
+                if (pad != null && pad.rightStick.ReadValue().sqrMagnitude > 0.02f)
+                {
+                    _yaw += pad.rightStick.ReadValue().x * 140f * dt;
+                }
+                else if (playerIndex > 0 && player.ghost != null && player.ghost.Velocity.sqrMagnitude > 0.4f)
+                {
+                    float moveYaw = Mathf.Atan2(player.ghost.Velocity.x, player.ghost.Velocity.z) * Mathf.Rad2Deg;
+                    _yaw = Mathf.LerpAngle(_yaw, moveYaw, 1f - Mathf.Exp(-2.5f * dt));
+                }
                 axis = Quaternion.Euler(0f, _yaw, 0f) * Vector3.forward;
                 sep = 5f;
                 b = a + axis * 5f;
