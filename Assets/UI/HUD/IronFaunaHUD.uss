@@ -1,0 +1,117 @@
+:root {
+  --color-bg-panel: rgba(30, 34, 41, 0.88);
+  --color-bg-dark: rgba(20, 23, 28, 0.94);
+  --color-crimson: #C8282E;
+  --color-maroon: #6E1E26;
+  --color-tan: #F0ECE1;
+  --color-hazard: #E6B800;
+  --color-orange: #FF7A1A;
+  --color-cyan: #24E5FF;
+  --color-gunmetal: #3A3F46;
+}
+
+.hud-root {
+  flex-grow: 1;
+  padding: 16px;
+  justify-content: space-between;
+}
+
+.top-bar {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.status-card {
+  background-color: var(--color-bg-panel);
+  border-width: 2px;
+  border-color: var(--color-crimson);
+  padding: 12px 16px;
+  min-width: 280px;
+}
+
+.title-text {
+  color: var(--color-orange);
+  font-size: 16px;
+  -unity-font-style: bold;
+  margin-bottom: 4px;
+}
+
+.stat-text {
+  color: var(--color-tan);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.accent-cyan {
+  color: var(--color-cyan);
+  font-size: 13px;
+  -unity-font-style: bold;
+}
+
+.options-card {
+  background-color: var(--color-bg-dark);
+  border-width: 2px;
+  border-color: var(--color-gunmetal);
+  padding: 12px 16px;
+  min-width: 380px;
+}
+
+.button-row {
+  flex-direction: row;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+.scheme-button {
+  flex-grow: 1;
+  background-color: var(--color-gunmetal);
+  color: var(--color-tan);
+  border-width: 1px;
+  border-color: var(--color-tan);
+  padding: 6px 10px;
+  margin-right: 6px;
+  font-size: 12px;
+  -unity-font-style: bold;
+  transition-duration: 0.15s;
+}
+
+.scheme-button:hover {
+  background-color: var(--color-crimson);
+}
+
+.scheme-button-active {
+  background-color: var(--color-crimson);
+  border-color: var(--color-hazard);
+  color: var(--color-tan);
+}
+
+.action-button {
+  flex-grow: 1;
+  background-color: var(--color-maroon);
+  color: var(--color-tan);
+  border-width: 1px;
+  border-color: var(--color-orange);
+  padding: 6px 10px;
+  margin-right: 6px;
+  font-size: 12px;
+  -unity-font-style: bold;
+  transition-duration: 0.15s;
+}
+
+.action-button:hover {
+  background-color: var(--color-crimson);
+}
+
+.bottom-bar {
+  background-color: var(--color-bg-panel);
+  border-width: 2px;
+  border-color: var(--color-hazard);
+  padding: 10px 16px;
+}
+
+.prompts-text {
+  color: var(--color-tan);
+  font-size: 13px;
+  white-space: normal;
+}

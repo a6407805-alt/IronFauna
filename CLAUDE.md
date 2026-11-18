@@ -70,6 +70,13 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
 - Material role `Copper` maps to `IronFaunaPalette.CopperCoil`.
 - `Tools/Blender/fold_check_all.py <blend>` checks thigh/calf/foot of every set in all 5 stances (toe details stay under ~0.30 m height: the calf passes over the toe in Pose2).
 
+## 8. Piloting (player feel)
+- Deploy (`IronFaunaGameFlow`) builds `PlayerMech` with `MechRobotOperator` (Antigravity's procedural animation + combat, now with `externalLocomotion`, `FeedLocomotion`, `PlayJumpStretch`, `PlayLandSquash`, `aimPointOverride`), `MechPilotController` and `MechPilotCamera` on the main camera. Playing `SampleScene` directly still uses Antigravity's showcase robots, not the pilot.
+- `MechPilotController`: camera-relative WASD with mass (acceleration / braking / turn rate per leg weight class, torso class scales turn and boost), Shift boost with a dash kick and energy, Space jump + hold to hover, gravity, CharacterController collisions (walls, objective), hard-landing slowdown and squash. The torso turns toward the aim at the class turn rate, so heavy mechs lag the camera. It also slows the operator's gait (stride frequency 1.15-1.7 Hz) so the mech reads as big.
+- `MechPilotCamera`: V toggles third person (over-the-shoulder spring arm that ignores the mech, scroll zoom 4.5-15 m, damped follow) and first person (eye at the visor, head hidden but still casting shadows, body roll and stride bob come through). Cursor locked; click re-locks after alt-tab. Boost widens FOV; dashes and landings shake via trauma. Own uGUI HUD: crosshair, view mode + controls (top centre), boost energy + km/h (above the arena's bottom bar). Fire (LMB, Antigravity's input) aims at the crosshair.
+- On deploy the arena floor gets the dark panelled hangar deck (the old pale floor blew out to white under realistic materials and gave no sense of speed).
+- Known gaps: feet still slide (leg swing is a whole-leg rotation, no foot planting); enemies walk through the player mech; only keyboard + mouse for piloting (Antigravity's gamepad bindings are not wired into the pilot).
+
 ## 7. Skeleton, Weight Classes & Hardpoints
 - `Assets/Scripts/Clamshell/MechFrameSpec.cs` — `MechWeightClass` (Light/Medium/Heavy) and the per-class numbers: frame thickness, armor width/depth, seam offset, joint radius, hip/shoulder/collar/quadruped leg spacing. **Mirrors `CLASSES` in `Tools/Blender/skeleton.py` — change both together.** Medium = the original universal envelope.
 - `MechClamshellBuilder.torsoWeight` (torso, arms, hardpoint sizes) and `legWeight` (thigh, calf, foot, leg joints) are independent; both are saved in `MechLoadout` and affect stats. `showArmor = false` builds the bare skeleton (garage "View" toggle).

@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using IronFauna.Clamshell;
+using IronFauna.Core;
+using IronFauna.Gameplay;
 
 namespace IronFauna.Menu
 {
@@ -70,6 +72,19 @@ namespace IronFauna.Menu
             var showcase = GameObject.Find(ShowcaseRootName);
             if (showcase != null) showcase.SetActive(false);
 
+            // The arena was lit for the old cel-shaded look: its pale floor blows out to white under the realistic
+            // materials and gives no sense of speed. Swap in the dark panelled hangar deck (4 m panels).
+            if (IronFaunaMaterials.Realistic)
+            {
+                var floor = GameObject.Find("ArenaDeckFloor");
+                if (floor != null && floor.TryGetComponent<Renderer>(out var floorRenderer))
+                {
+                    float size = Mathf.Max(floor.transform.lossyScale.x, floor.transform.lossyScale.z);
+                    if (floorRenderer.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null) size *= Mathf.Max(mf.sharedMesh.bounds.size.x, mf.sharedMesh.bounds.size.z);
+                    floorRenderer.sharedMaterial = IronFaunaMaterials.StudioFloor(Mathf.Max(1f, size / 4f));
+                }
+            }
+
             var go = new GameObject("PlayerMech");
             SceneManager.MoveGameObjectToScene(go, scene);
             go.transform.SetPositionAndRotation(new Vector3(0f, 0f, -2.5f), Quaternion.identity);
@@ -79,6 +94,21 @@ namespace IronFauna.Menu
             builder.RebuildMech();
 
             go.AddComponent<ArenaReturnToGarage>();
+
+            // Pilot it: procedural animation + combat (MechRobotOperator), mass-based WASD movement, and the
+            // first / third-person camera on the scene's main camera.
+            var op = go.AddComponent<MechRobotOperator>();
+            op.aiWingmanActive = false;
+            op.externalLocomotion = true;
+            var pilot = go.AddComponent<MechPilotController>();
+            Camera cam = Camera.main;
+            if (cam != null)
+            {
+                var pilotCam = cam.GetComponent<MechPilotCamera>();
+                if (pilotCam == null) pilotCam = cam.gameObject.AddComponent<MechPilotCamera>();
+                pilotCam.target = pilot;
+                op.aimPointOverride = pilotCam.AimPoint;
+            }
         }
     }
 }
