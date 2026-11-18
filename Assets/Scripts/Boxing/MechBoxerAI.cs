@@ -202,6 +202,20 @@ namespace IronFauna.Boxing
         {
             _combo.Clear();
             var opp = _me != null ? _me.opponent : null;
+            if (_me != null && _me.LegsLeft <= 1 && !_me.IsSeated && Random.value < 0.85f)
+            {
+                // With 0 or 1 leg left, usually rely on upper-body boxing/elbows/headbutts so we don't topple our only standing leg!
+                PunchType[][] oneLegCombos =
+                {
+                    new[] { PunchType.Jab, PunchType.Cross, PunchType.Hook },
+                    new[] { PunchType.Elbow, PunchType.Uppercut },
+                    new[] { PunchType.SupermanPunch, PunchType.Hook },
+                    new[] { PunchType.Headbutt, PunchType.Cross },
+                };
+                var oc = oneLegCombos[Random.Range(0, oneLegCombos.Length)];
+                foreach (var p in oc) _combo.Enqueue(p);
+                return;
+            }
             if (opp != null && (opp.LegsLeft == 0 || opp.IsSeated || opp.suppressed) && _me.LegsLeft > 0)
             {
                 // Against a downed, seated, or legless crawler: use low kicks, axe kicks, or ground-and-pound hooks!

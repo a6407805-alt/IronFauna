@@ -101,11 +101,11 @@ namespace IronFauna.Brawl
                 rb.angularVelocity = Random.insideUnitSphere * 4f;
                 Destroy(go, Random.Range(22f, 30f));
             }
-            // If this was a supporting building story, un-anchor any story resting directly above it so the skyscraper collapses downward!
-            foreach (var col in Physics.OverlapBox(transform.position + Vector3.up * (size.y * 0.85f), new Vector3(size.x * 0.45f, size.y * 0.6f, size.z * 0.45f), transform.rotation, ~0, QueryTriggerInteraction.Ignore))
+            // If this was a supporting building story, un-anchor ALL stories in the column above it so the entire skyscraper cascades downward!
+            foreach (var col in Physics.OverlapBox(transform.position + Vector3.up * (size.y * 2.5f), new Vector3(size.x * 0.45f, size.y * 2.5f, size.z * 0.45f), transform.rotation, ~0, QueryTriggerInteraction.Ignore))
             {
                 var aboveProp = col.GetComponentInParent<BreakableProp>();
-                if (aboveProp != null && aboveProp != this && !aboveProp._broken)
+                if (aboveProp != null && aboveProp != this && !aboveProp._broken && aboveProp.transform.position.y > transform.position.y + 0.5f)
                 {
                     var aboveRb = aboveProp.GetComponent<Rigidbody>();
                     if (aboveRb != null && aboveRb.isKinematic)
