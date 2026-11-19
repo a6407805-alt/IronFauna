@@ -71,3 +71,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treaming[Aa]ssets/aa/*
 __pycache__/
 ModelDrop/
+
+# Launcher build output
+/Launcher/bin/
+/Launcher/obj/

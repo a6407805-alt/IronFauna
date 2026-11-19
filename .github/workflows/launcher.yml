@@ -1,0 +1,58 @@
+# Builds the IronFauna Launcher (Launcher/) on GitHub's Windows servers whenever its code changes, takes a
+# screenshot of it, and publishes it to the "latest" release as IronFauna-Launcher.exe plus launcher-info.json
+# (the exe's size, which running launchers compare with their own to update themselves).
+# The game build itself is uploaded to the same release from Unity: IronFauna > Publish Update.
+name: Build launcher
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'Launcher/**', '.github/workflows/launcher.yml' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish the launcher (self-contained single exe)
+        run: dotnet publish Launcher/IronFaunaLauncher.csproj -c Release -o launcher-out -nologo
+
+      - name: Screenshot the launcher (preview mode, installs nothing)
+        shell: pwsh
+        run: |
+          $out = Join-Path $pwd 'launcher-preview.png'
+          $p = Start-Process launcher-out\IronFauna-Launcher.exe -ArgumentList '--screenshot', "`"$out`"" -PassThru
+          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw 'launcher did not exit' }
+          if (-not (Test-Path $out)) { throw 'no screenshot' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IronFauna-Launcher
+          path: |
+            launcher-out/IronFauna-Launcher.exe
+            launcher-preview.png
+
+      - name: Publish to the latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp launcher-out/IronFauna-Launcher.exe .
+          size=$(stat -c %s IronFauna-Launcher.exe)
+          printf '{"size":%s,"commit":"%s"}\n' "$size" "$GITHUB_SHA" > launcher-info.json
+          if ! gh release view latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create latest -R "$GITHUB_REPOSITORY" --title "IronFauna (latest)" --latest \
+              --notes "Download **IronFauna-Launcher.exe** below and run it. It installs the game and keeps it up to date."
+          fi
+          # exe first, info last: a running launcher only updates once the new exe is there
+          gh release upload latest IronFauna-Launcher.exe launcher-preview.png --clobber -R "$GITHUB_REPOSITORY"
+          gh release upload latest launcher-info.json --clobber -R "$GITHUB_REPOSITORY"
