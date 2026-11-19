@@ -39,6 +39,7 @@ namespace IronFauna.EditorTools
         private string _title = "";
         private string _notes = "";
         private bool _includeArt = true;
+        private bool _reuseBuild;
         private Vector2 _scroll;
 
         // background upload state (written from a worker thread, read by OnGUI)
@@ -136,6 +137,9 @@ namespace IronFauna.EditorTools
                 bool hasArt = File.Exists(ArtPath);
                 _includeArt = EditorGUILayout.ToggleLeft(hasArt ? "Send launcher art (" + ArtPath + ")" : "No launcher art yet: enter Play mode, then IronFauna > Capture Launcher Art", _includeArt && hasArt);
 
+                bool hasZip = File.Exists(Path.Combine("Builds", ZipName)) && File.Exists(Path.Combine(BuildDir, ExeName));
+                _reuseBuild = EditorGUILayout.ToggleLeft(hasZip ? "Upload the last build again (skip building)" : "No previous build to re-upload", _reuseBuild && hasZip);
+
                 EditorGUILayout.Space();
                 bool ready = !string.IsNullOrEmpty(_token) && !string.IsNullOrWhiteSpace(_version);
                 using (new EditorGUI.DisabledScope(!ready || EditorApplication.isPlayingOrWillChangePlaymode))
@@ -164,7 +168,11 @@ namespace IronFauna.EditorTools
             _progress = 0.02f;
             string version = _version.Trim();
 
-            // 1. build
+            // 1. build (or re-use the last one after a failed upload)
+            string zipPath = Path.Combine("Builds", ZipName);
+            bool reuse = _reuseBuild && File.Exists(zipPath);
+            if (!reuse)
+            {
             if (Directory.Exists(BuildDir)) Directory.Delete(BuildDir, true);
             Directory.CreateDirectory(BuildDir);
             string previousVersion = PlayerSettings.bundleVersion;
@@ -190,9 +198,10 @@ namespace IronFauna.EditorTools
             // 2. zip + json files
             _status = "Zipping...";
             _progress = 0.1f;
-            string zipPath = Path.Combine("Builds", ZipName);
             if (File.Exists(zipPath)) File.Delete(zipPath);
             ZipFile.CreateFromDirectory(BuildDir, zipPath, System.IO.Compression.CompressionLevel.Optimal, false);
+            }
+            else PlayerSettings.bundleVersion = version;
             long zipSize = new FileInfo(zipPath).Length;
             bool art = _includeArt && File.Exists(ArtPath);
             string published = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
@@ -216,20 +225,21 @@ namespace IronFauna.EditorTools
                     await Upload(token, version, published, title, notes, zipPath, art, info, ct);
                     _status = "Published " + version + "! Friends get it next time they open the launcher.";
                     _progress = 1f;
+                    _version = NextVersion(version);   // ready for the next update
+                    _title = "";
+                    _notes = "";
                 }
                 catch (Exception ex)
                 {
                     _failed = true;
                     _status = ex is OperationCanceledException ? "Upload cancelled." : "Upload failed: " + ex.Message;
+                    try { File.WriteAllText(Path.Combine("Builds", "publish-log.txt"), DateTime.Now + "\n" + ex); } catch (Exception) { }
                 }
                 finally
                 {
                     _running = false;
                 }
             });
-            _version = NextVersion(version);
-            _title = "";
-            _notes = "";
         }
 
         private void Fail(string message)
