@@ -74,10 +74,10 @@ namespace IronFauna.Brawl
                     return new Look
                     {
                         zenith = P.GlacierSkyZenith, horizon = P.GlacierSkyHorizon, below = P.GlacierIce, sun = P.OffWhitePanel,
-                        sunPitch = 34f, sunYaw = -60f, sunIntensity = 1.7f, fillIntensity = 0.6f,
+                        sunPitch = 34f, sunYaw = -60f, sunIntensity = 1.25f, fillIntensity = 0.4f,
                         ambSky = P.GlacierSkyHorizon * 0.9f, ambEquator = P.GlacierSnow * 0.85f, ambGround = P.GlacierIce * 0.75f,
                         fog = P.GlacierSkyHorizon, fogStart = 25f, fogEnd = 200f, clouds = 0.7f, filter = P.StageWhite,
-                        exposure = 0.15f, contrast = 8f, saturation = -4f, bloom = 0.5f, bloomThreshold = 1.1f, vignette = 0.25f, temperature = -14f,
+                        exposure = -0.4f, contrast = 12f, saturation = -4f, bloom = 0.3f, bloomThreshold = 1.3f, vignette = 0.3f, temperature = -14f,
                         sky = SkyKind.Overcast, fx = Fx.Snow,
                     };
                 case BrawlStageId.NeoMetroCity:
@@ -107,7 +107,7 @@ namespace IronFauna.Brawl
                         sunPitch = 28f, sunYaw = -38f, sunIntensity = 2.4f, fillIntensity = 0.5f,
                         ambSky = P.Lerp(P.MesaSkyZenith, P.MesaSkyHorizon, 0.5f), ambEquator = P.MesaSkyHorizon * 0.8f, ambGround = P.TerrainDirt,
                         fog = P.Lerp(P.MesaSkyHorizon, P.MesaSkyZenith, 0.15f), fogStart = 45f, fogEnd = 300f, clouds = 0.35f, filter = P.MesaSun,
-                        exposure = 0.1f, contrast = 12f, saturation = 6f, bloom = 0.4f, bloomThreshold = 1.1f, vignette = 0.28f, temperature = 8f,
+                        exposure = -0.15f, contrast = 12f, saturation = 6f, bloom = 0.35f, bloomThreshold = 1.2f, vignette = 0.28f, temperature = 8f,
                         sky = SkyKind.Day, fx = Fx.Dust,
                     };
             }
@@ -342,7 +342,7 @@ namespace IronFauna.Brawl
                 case BrawlStageId.GlacierTrench:
                 {
                     float ripple = Mathf.Sin(x * 2.1f + Fbm(nx * 0.2f, nz * 0.2f) * 9f) * 0.035f;
-                    col = P.GlacierSnow * (0.97f + ripple + grain * 0.03f);
+                    col = P.GlacierSnow * (0.8f + ripple + grain * 0.03f);   // snow below white so it keeps its shape
                     float ice = Ramp(0.14f, 0.32f, slope) + Ramp(-1.5f, -4.5f, h) * 0.6f;
                     col = L(col, P.GlacierIce, ice);
                     col = L(col, P.GlacierDeepIce, Ramp(0.4f, 0.65f, slope) * 0.8f);
@@ -873,8 +873,8 @@ namespace IronFauna.Brawl
                 {
                     float a = i / (float)seg * Mathf.PI * 2f;
                     float cx = Mathf.Cos(a), sz = Mathf.Sin(a);
-                    float n = peaks ? Mathf.Pow(Ridge(cx * 2.4f + ox, sz * 2.4f + tr * 1.5f), 2.2f) : Fbm(cx * 1.8f + ox, sz * 1.8f + tr * 0.8f, 4);
-                    float prof = Mathf.Pow(Mathf.Sin(Mathf.PI * Mathf.Clamp01(tr * 1.15f)), 0.8f);
+                    float n = peaks ? Mathf.Pow(Mathf.Clamp01(Ridge(cx * 2.4f + ox, sz * 2.4f + tr * 1.5f)), 2.2f) : Fbm(cx * 1.8f + ox, sz * 1.8f + tr * 0.8f, 4);
+                    float prof = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(Mathf.PI * Mathf.Clamp01(tr * 1.15f))), 0.8f);   // sin(pi) is a hair below 0: Pow of it is NaN
                     float hgt = Mathf.Lerp(hMin, hMax, n) * prof;
                     float y = top - drop + (drop + hgt) * Mathf.Clamp01(prof * 1.6f);
                     mb.v.Add(new Vector3(cx * rr, y, sz * rr));

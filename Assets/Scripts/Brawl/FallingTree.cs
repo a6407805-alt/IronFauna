@@ -30,7 +30,7 @@ namespace IronFauna.Brawl
         {
             // Stump stays in the ground where the tree stood
             var stump = ClamshellParts.Spawn(parent, "TreeStump",
-                ClamshellMeshFactory.BeveledBox(new Vector3(radius * 2.1f, 0.8f, radius * 2.1f), 0.08f),
+                ClamshellMeshFactory.TaperedPrism(radius * 1.25f, radius * 0.95f, 0.8f, 12),
                 groundPos + Vector3.up * 0.35f, Quaternion.Euler(0f, (seed % 360), 0f), IronFaunaPalette.ForestBark);
             stump.GetComponent<Renderer>().sharedMaterial = IronFaunaMaterials.GetTerrain(IronFaunaPalette.ForestBark);
 
@@ -45,18 +45,18 @@ namespace IronFauna.Brawl
 
             Vector3 trunkSize = new Vector3(radius * 1.75f, height, radius * 1.75f);
             var trunkVis = ClamshellParts.Spawn(treeGo.transform, "Trunk",
-                ClamshellMeshFactory.BeveledBox(trunkSize, radius * 0.22f),
+                ClamshellMeshFactory.TaperedPrism(radius * 0.95f, radius * 0.55f, height, 12),   // round, tapering trunk (was a box)
                 new Vector3(0f, height * 0.5f, 0f), Quaternion.identity, IronFaunaPalette.ForestBark);
             trunkVis.GetComponent<Renderer>().sharedMaterial = barkMat;
 
             // 3 layered evergreen canopy tiers
-            for (int tier = 0; tier < 3; tier++)
+            for (int tier = 0; tier < 4; tier++)
             {
-                float w = radius * (5.4f - tier * 1.25f);
-                float h = height * (0.26f - tier * 0.03f);
-                float y = height * (0.58f + tier * 0.18f);
+                float w = radius * (6.2f - tier * 1.3f);
+                float h = height * (0.3f - tier * 0.04f);
+                float y = height * (0.5f + tier * 0.15f);
                 var crown = ClamshellParts.Spawn(treeGo.transform, "Canopy_" + tier,
-                    ClamshellMeshFactory.BeveledBox(new Vector3(w, h, w), 0.18f),
+                    ClamshellMeshFactory.TaperedPrism(w * 0.5f, w * 0.04f, h, 9),   // drooping conifer tiers (were boxes)
                     new Vector3(0f, y, 0f), Quaternion.Euler(0f, tier * 30f, 0f), IronFaunaPalette.ForestCanopy);
                 crown.GetComponent<Renderer>().sharedMaterial = canopyMat;
             }
@@ -103,7 +103,7 @@ namespace IronFauna.Brawl
             if (_splintered) return;
             _splintered = true;
             var barkMat = IronFaunaMaterials.GetTerrain(IronFaunaPalette.ForestBark);
-            Mesh logMesh = ClamshellMeshFactory.BeveledBox(new Vector3(trunkRadius * 1.4f, height * 0.18f, trunkRadius * 1.4f), 0.06f);
+            Mesh logMesh = ClamshellMeshFactory.Prism(trunkRadius * 0.7f, height * 0.18f, 10);
             for (int i = 0; i < 4; i++)
             {
                 Vector3 world = transform.TransformPoint(new Vector3(0f, height * (0.18f + i * 0.2f), 0f));

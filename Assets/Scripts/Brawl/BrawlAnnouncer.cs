@@ -165,7 +165,7 @@ namespace IronFauna.Brawl
                         line = "REDWOOD TIMBERLAND — CHOP THE TREES AND WATCH YOUR HEAD!";
                         break;
                     case BrawlStageId.FoundryCrucible:
-                        line = "FOUNDRY CRUCIBLE — WATCH THOSE EXPLOSIVE FUEL CELLS!";
+                        line = "FOUNDRY CRUCIBLE — MIND THE MOLTEN SEAMS!";
                         break;
                     case BrawlStageId.OrbitalDish:
                         line = "HIGH ABOVE EARTH ON THE ORBITAL DISH — LET'S SCRAP!";
@@ -243,9 +243,7 @@ namespace IronFauna.Brawl
 
         public void OnPropShattered(float size)
         {
-            if (size >= 1.0f)
-                Announce("EXPLOSIVE DETONATION ROCKS THE ARENA!", 2.4f, 2, 1, 0.95f);
-            else if (size >= 0.45f && _cooldown <= 0f)
+            if (size >= 0.45f && _cooldown <= 0f)
                 Announce("STRUCTURAL COLLAPSE — COVER SMASHED TO RUBBLE!", 2.2f, 1, 2, 0.8f);
         }
 

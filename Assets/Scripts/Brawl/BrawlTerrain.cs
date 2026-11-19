@@ -220,8 +220,8 @@ namespace IronFauna.Brawl
                     ? new Vector3(5.2f, 3.2f, 2.2f) // shipping container
                     : new Vector3(4.6f, 3.6f, 1.1f); // blast wall / ice wall / radar screen
                 Color col = stage == BrawlStageId.ScrapyardColosseum ? (i % 2 == 0 ? IronFaunaPalette.CrimsonFront : IronFaunaPalette.CobaltFront)
-                          : stage == BrawlStageId.OrbitalDish ? IronFaunaPalette.CyanEnergy
-                          : stage == BrawlStageId.GlacierTrench ? IronFaunaPalette.GlacierIce
+                          : stage == BrawlStageId.OrbitalDish ? IronFaunaPalette.OrbitalSeam      // radar screens: grey panels, not flat cyan slabs
+                          : stage == BrawlStageId.GlacierTrench ? IronFaunaPalette.GlacierDeepIce
                           : rimCol;
                 var prop = BreakableProp.Create(arena, "DestructibleWall", new Vector3(p.x, gy + size.y * 0.5f - 0.2f, p.z),
                     size, col, 180f, true, new Vector3Int(4, 3, 2));
