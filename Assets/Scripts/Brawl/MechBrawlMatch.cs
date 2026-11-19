@@ -303,7 +303,8 @@ namespace IronFauna.Brawl
                 }
 
                 cam.fieldOfView = 48f;
-                cam.farClipPlane = 400f;
+                cam.farClipPlane = 1200f;   // stage backdrops reach ~1 km
+                cam.clearFlags = RenderSettings.skybox != null ? CameraClearFlags.Skybox : cam.clearFlags;
                 cam.rect = ViewportRect(i, localCount);
                 var brawlCam = cam.GetComponent<MechBrawlCamera>();
                 if (brawlCam == null) brawlCam = cam.gameObject.AddComponent<MechBrawlCamera>();
@@ -395,6 +396,7 @@ namespace IronFauna.Brawl
 
         private void BuildArena(BrawlStageId stage)
         {
+            BrawlStageLook.Release();
             _arena = new GameObject("BrawlArena").transform;
             _arena.SetParent(transform, false);
             int seed = Random.Range(0, 100000);
@@ -402,49 +404,14 @@ namespace IronFauna.Brawl
             Physics.SyncTransforms();
             BrawlTerrain.PopulateDestructibles(_arena, stage, seed + 7);
 
-            BrawlTerrain.StageColors(stage, out Color groundCol, out _, out _, out Color skyCol, out Color sunCol);
+            BrawlStageLook.Dress(_arena, stage, ArenaTop, IslandRadius, seed + 13);
             foreach (var l in FindObjectsByType<Light>())
                 if (!l.transform.IsChildOf(transform)) l.enabled = false;
-            foreach (var cam in _playerCams)
-            {
-                var c = cam.GetComponent<Camera>();
-                if (c != null)
-                {
-                    c.clearFlags = CameraClearFlags.SolidColor;
-                    c.backgroundColor = skyCol;
-                }
-            }
-            if (_camera != null)
-            {
-                _camera.clearFlags = CameraClearFlags.SolidColor;
-                _camera.backgroundColor = skyCol;
-            }
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = skyCol;
-            RenderSettings.fogStartDistance = 54f;
-            RenderSettings.fogEndDistance = 210f;
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = IronFaunaPalette.Lerp(skyCol, IronFaunaPalette.OffWhitePanel, 0.48f);
-            RenderSettings.ambientIntensity = 1.35f;
-
-            var sunGo = new GameObject("Sun");
-            sunGo.transform.SetParent(_arena, false);
-            sunGo.transform.rotation = Quaternion.Euler(46f, -38f, 0f);
-            var sun = sunGo.AddComponent<Light>();
-            sun.type = LightType.Directional;
-            sun.color = sunCol;
-            sun.intensity = 2.1f;
-            sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.48f;
-            var fillGo = new GameObject("SkyFill");
-            fillGo.transform.SetParent(_arena, false);
-            fillGo.transform.rotation = Quaternion.Euler(55f, 142f, 0f);
-            var fill = fillGo.AddComponent<Light>();
-            fill.type = LightType.Directional;
-            fill.color = IronFaunaPalette.Lerp(skyCol, IronFaunaPalette.StudioRim, 0.35f);
-            fill.intensity = 0.68f;
-            fill.shadows = LightShadows.None;
+            var cams = new List<Camera>();
+            foreach (var pc in _playerCams) if (pc != null && pc.GetComponent<Camera>() != null) cams.Add(pc.GetComponent<Camera>());
+            if (_camera != null) cams.Add(_camera);
+            BrawlStageLook.ApplyLighting(_arena, stage, cams, ArenaTop);
+            BrawlStageLook.CaptureReflections(_arena, ArenaTop);
         }
 
         // ------------------------------------------------------------------ hud

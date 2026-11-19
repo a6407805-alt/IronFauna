@@ -88,6 +88,48 @@ namespace IronFauna.Core
         public static readonly Color ForestCanopy      = new Color32(0x3A, 0x7A, 0x42, 0xFF); // #3A7A42 Pine / redwood foliage
         public static readonly Color ForestSky         = new Color32(0x88, 0xA8, 0x9C, 0xFF); // #88A89C Misty timberland sky
 
+        // Stage looks (BrawlStageLook): baked ground detail, skies, lighting and set dressing
+        public static readonly Color MesaDust          = new Color32(0x8A, 0x74, 0x58, 0xFF); // #8A7458 Pale trail dust
+        public static readonly Color MesaGrass         = new Color32(0x6B, 0x6A, 0x3A, 0xFF); // #6B6A3A Dry olive scrub grass
+        public static readonly Color MesaSkyZenith     = new Color32(0x3E, 0x62, 0x8E, 0xFF); // #3E628E Late-afternoon zenith
+        public static readonly Color MesaSkyHorizon    = new Color32(0xD9, 0xC3, 0xA0, 0xFF); // #D9C3A0 Warm dusty horizon
+        public static readonly Color MesaSun           = new Color32(0xFF, 0xD9, 0xA8, 0xFF); // #FFD9A8 Low golden sun
+        public static readonly Color FoundryPlate      = new Color32(0x3C, 0x3B, 0x3A, 0xFF); // #3C3B3A Scorched steel deck plate
+        public static readonly Color FoundrySeam       = new Color32(0x14, 0x13, 0x12, 0xFF); // #141312 Plate seams and soot
+        public static readonly Color FoundryMolten     = new Color32(0xFF, 0x5A, 0x10, 0xFF); // #FF5A10 Molten metal glow
+        public static readonly Color FoundrySkyZenith  = new Color32(0x10, 0x0B, 0x09, 0xFF); // #100B09 Smoke-black sky
+        public static readonly Color FoundrySkyHorizon = new Color32(0x6A, 0x30, 0x16, 0xFF); // #6A3016 Furnace-lit smoke
+        public static readonly Color OrbitalPanel      = new Color32(0xD7, 0xDE, 0xE6, 0xFF); // #D7DEE6 Ceramic dish panel
+        public static readonly Color OrbitalSeam       = new Color32(0x6E, 0x7A, 0x88, 0xFF); // #6E7A88 Panel seams
+        public static readonly Color OrbitalSkyZenith  = new Color32(0x04, 0x09, 0x1A, 0xFF); // #04091A Near-space black-blue
+        public static readonly Color OrbitalSkyHorizon = new Color32(0x4A, 0x86, 0xCC, 0xFF); // #4A86CC Thin bright limb
+        public static readonly Color OrbitalCloud      = new Color32(0xE8, 0xEE, 0xF4, 0xFF); // #E8EEF4 Cloud sea far below
+        public static readonly Color OrbitalPlanet     = new Color32(0xB8, 0x8A, 0x6A, 0xFF); // #B88A6A Gas giant / moon in the sky
+        public static readonly Color ScrapOil          = new Color32(0x2A, 0x24, 0x1E, 0xFF); // #2A241E Oil stains
+        public static readonly Color ScrapSkyZenith    = new Color32(0x4E, 0x4A, 0x6E, 0xFF); // #4E4A6E Dusk violet
+        public static readonly Color ScrapSkyHorizon   = new Color32(0xE8, 0x9A, 0x5A, 0xFF); // #E89A5A Rust sunset
+        public static readonly Color ScrapSun          = new Color32(0xFF, 0xB0, 0x70, 0xFF); // #FFB070 Sunset key light
+        public static readonly Color GlacierDeepIce    = new Color32(0x3E, 0x7C, 0xA8, 0xFF); // #3E7CA8 Deep blue ice
+        public static readonly Color GlacierCrack     = new Color32(0x1C, 0x3A, 0x56, 0xFF); // #1C3A56 Crevasse shadow
+        public static readonly Color GlacierSkyZenith  = new Color32(0x5E, 0x78, 0x98, 0xFF); // #5E7898 Cold zenith
+        public static readonly Color GlacierSkyHorizon = new Color32(0xD6, 0xE2, 0xEC, 0xFF); // #D6E2EC Whiteout horizon
+        public static readonly Color GlacierAurora     = new Color32(0x5C, 0xFF, 0xB0, 0xFF); // #5CFFB0 Faint aurora
+        public static readonly Color CitySidewalk      = new Color32(0x6E, 0x73, 0x7A, 0xFF); // #6E737A Concrete paving
+        public static readonly Color CitySkyZenith     = new Color32(0x06, 0x09, 0x16, 0xFF); // #060916 Night zenith
+        public static readonly Color CitySkyHorizon    = new Color32(0x3A, 0x30, 0x5E, 0xFF); // #3A305E Light-polluted horizon
+        public static readonly Color CityNeonPink      = new Color32(0xFF, 0x3E, 0x9A, 0xFF); // #FF3E9A Neon signage
+        public static readonly Color CityWindow        = new Color32(0xFF, 0xD3, 0x8A, 0xFF); // #FFD38A Lit office windows
+        public static readonly Color ForestLitter      = new Color32(0x6A, 0x4A, 0x30, 0xFF); // #6A4A30 Needle and leaf litter
+        public static readonly Color ForestDirt        = new Color32(0x4A, 0x3A, 0x2A, 0xFF); // #4A3A2A Trail dirt
+        public static readonly Color ForestFern        = new Color32(0x2E, 0x5A, 0x2E, 0xFF); // #2E5A2E Fern undergrowth
+        public static readonly Color ForestSkyZenith   = new Color32(0x7F, 0xA6, 0xB8, 0xFF); // #7FA6B8 Morning zenith
+        public static readonly Color ForestSkyHorizon  = new Color32(0xD8, 0xE0, 0xC8, 0xFF); // #D8E0C8 Misty horizon
+        public static readonly Color ForestSun         = new Color32(0xFF, 0xE8, 0xB8, 0xFF); // #FFE8B8 Soft morning sun
+        public static readonly Color StageBlack        = new Color32(0x00, 0x00, 0x00, 0xFF); // #000000 Unlit / no emission
+        public static readonly Color StageWhite        = new Color32(0xFF, 0xFF, 0xFF, 0xFF); // #FFFFFF Neutral tint
+        public static readonly Color StageGrey         = new Color32(0x80, 0x80, 0x80, 0xFF); // #808080 Neutral detail (x2 multiply)
+        public static readonly Color StageNormalFlat   = new Color32(0x80, 0x80, 0xFF, 0xFF); // #8080FF Flat tangent-space normal
+
         // Garage paint schemes (front / rear halves). Index 0 is the art-bible default.
         public static readonly Color DesertFront       = new Color32(0xC9, 0xA1, 0x5B, 0xFF); // #C9A15B Desert Raider front
         public static readonly Color DesertRear        = new Color32(0x7A, 0x5A, 0x2E, 0xFF); // #7A5A2E Desert Raider rear

@@ -116,7 +116,7 @@ namespace IronFauna.Brawl
                 float z = -half + 2f * half * j / n;
                 float y = Height(x, z, top, radius, ox, oz, stage);
                 verts[j * (n + 1) + i] = new Vector3(x, y, z);
-                uvs[j * (n + 1) + i] = new Vector2(x, z) * 0.12f;
+                uvs[j * (n + 1) + i] = new Vector2((float)i / n, (float)j / n);   // 0..1: the baked stage ground map
             }
             var tris = new int[n * n * 6];
             int t = 0;
@@ -138,7 +138,7 @@ namespace IronFauna.Brawl
             ground.transform.SetParent(root, false);
             ground.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = ground.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = IronFaunaMaterials.GetTerrain(groundCol);
+            mr.sharedMaterial = BrawlStageLook.GroundMaterial(stage, mesh, n, half, top, radius, seed);
             ground.AddComponent<MeshCollider>().sharedMesh = mesh;
 
             // ---------------- boulders and outcrops (static, half buried; omitted on paved Neo-Metro City streets)
@@ -239,7 +239,7 @@ namespace IronFauna.Brawl
                 Vector3 p = new Vector3(Random.Range(-21f, 21f), 0f, Random.Range(-21f, 21f));
                 if (p.magnitude < 5.5f) p = p.normalized * 7.5f;
                 if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
-                bool explosive = (i % 3 == 0) || (stage == BrawlStageId.FoundryCrucible && i % 2 == 0);
+                bool explosive = (i % 5 == 0) || (stage == BrawlStageId.FoundryCrucible && i % 4 == 1);   // a few hazards, not a minefield
                 float sz = explosive ? 1.35f : Random.Range(1.1f, 1.9f);
                 Color col = explosive ? IronFaunaPalette.OrangeJointCore : IronFaunaPalette.HazardYellow;
                 BreakableProp.Create(arena, explosive ? "ExplosiveCell" : "Crate",
@@ -303,7 +303,7 @@ namespace IronFauna.Brawl
                 if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
                 Color carCol = (i % 3 == 0) ? IronFaunaPalette.CrimsonFront : (i % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.CobaltFront;
                 var car = BreakableProp.Create(arena, "StreetCar", new Vector3(p.x, gy + 0.72f, p.z),
-                    new Vector3(2.1f, 0.95f, 4.1f), carCol, 85f, false, new Vector3Int(2, 2, 3), true);
+                    new Vector3(2.1f, 0.95f, 4.1f), carCol, 85f, false, new Vector3Int(2, 2, 3), i % 4 == 0);
                 var cab = ClamshellParts.Spawn(car.transform, "CarCabin",
                     ClamshellMeshFactory.BeveledBox(new Vector3(1.75f, 0.68f, 2.1f), 0.08f),
                     new Vector3(0f, 0.76f, -0.15f), Quaternion.identity, IronFaunaPalette.CityGlass);
@@ -317,25 +317,7 @@ namespace IronFauna.Brawl
                 car.transform.rotation = Quaternion.Euler(0f, (i % 2 == 0) ? 0f : 90f, 0f);
             }
 
-            // 4. Painted avenue lane stripes & crosswalk markings across the central intersection
-            for (int d = -22; d <= 22; d += 4)
-            {
-                if (Mathf.Abs(d) < 3) continue;
-                if (IronFauna.Boxing.MechBoxer.TryGround(new Vector3(d, 25f, 0f), out float gyX))
-                {
-                    var stripeX = ClamshellParts.Spawn(arena, "LaneStripeX",
-                        ClamshellMeshFactory.BeveledBox(new Vector3(2.1f, 0.06f, 0.28f), 0.01f),
-                        new Vector3(d, gyX + 0.02f, 0f), Quaternion.identity, IronFaunaPalette.HazardYellow);
-                    if (stripeX.TryGetComponent<Renderer>(out var sxr)) sxr.sharedMaterial = IronFaunaMaterials.GetTerrain(IronFaunaPalette.HazardYellow);
-                }
-                if (IronFauna.Boxing.MechBoxer.TryGround(new Vector3(0f, 25f, d), out float gyZ))
-                {
-                    var stripeZ = ClamshellParts.Spawn(arena, "LaneStripeZ",
-                        ClamshellMeshFactory.BeveledBox(new Vector3(0.28f, 0.06f, 2.1f), 0.01f),
-                        new Vector3(0f, gyZ + 0.02f, d), Quaternion.identity, IronFaunaPalette.HazardYellow);
-                    if (stripeZ.TryGetComponent<Renderer>(out var szr)) szr.sharedMaterial = IronFaunaMaterials.GetTerrain(IronFaunaPalette.HazardYellow);
-                }
-            }
+            // (lane paint, crosswalks and manholes are baked into the ground by BrawlStageLook)
         }
 
         private static void PopulateForestDestructibles(Transform arena, System.Random rng)
