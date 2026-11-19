@@ -113,6 +113,7 @@ namespace IronFaunaLauncher
             ShowNotes(demo);
             SetState(State.Update);
             SetStatus("Update available: v0.3.0", "412.6 MB download");
+            SetProgress(0);
         }
 
         /// <summary>Reads the release and decides INSTALL / UPDATE / PLAY.</summary>
