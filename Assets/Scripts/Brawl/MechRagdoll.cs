@@ -29,9 +29,9 @@ namespace IronFauna.Brawl
         public MechBoxer ghost;               // the hidden animated mech
         public float health = 160f;
         public float maxHealth = 160f;
-        public float poiseMax = 28f;
-        [Tooltip("Chaos: how far hits shove mechs around")]
-        public float knockbackScale = 1.8f;
+        public float poiseMax = 50f;
+        [Tooltip("How far hits shove mechs around (technical pass: 1 = a solid rock, not a launch)")]
+        public float knockbackScale = 1f;
         public float knockbackTakenScale = 1f;
         public float limbTearScale = 1f;
         [Tooltip("0 = Free-For-All, 1 = Allied Team (Players + Co-Op Bots), 2 = Enemy AI Team")]
@@ -47,7 +47,7 @@ namespace IronFauna.Brawl
         public Rigidbody Pelvis => _pelvis != null ? _pelvis.rb : null;
         public Vector3 Position => _pelvis != null ? _pelvis.rb.position : transform.position;
         public float Poise01 => Mathf.Clamp01(_poise / poiseMax);
-        public float GetLimbHealth01(LimbId id) => _lost.Contains(id) ? 0f : (_limbHealth.TryGetValue(id, out float v) ? Mathf.Clamp01(v / (id == LimbId.Head ? 70f : 55f)) : 1f);
+        public float GetLimbHealth01(LimbId id) => _lost.Contains(id) ? 0f : (_limbHealth.TryGetValue(id, out float v) ? Mathf.Clamp01(v / (id == LimbId.Head ? HeadHealth : LimbHealth)) : 1f);
 
         /// <summary>victim, attacker, point, damage, power 0..1, limb ripped</summary>
         public event Action<MechRagdoll, MechRagdoll, Vector3, float, float, bool> Hit;
@@ -84,6 +84,7 @@ namespace IronFauna.Brawl
         private float _downT;
         private float _recoverT;
         private float _lastHitT;
+        private const float LimbHealth = 80f, HeadHealth = 90f;
         private float _koElapsed;
         private bool _koCleared;
         private readonly Dictionary<MechRagdoll, int> _struckBy = new Dictionary<MechRagdoll, int>();
@@ -146,7 +147,7 @@ namespace IronFauna.Brawl
                 for (int j = i + 1; j < cols.Count; j++)
                     Physics.IgnoreCollision(cols[i], cols[j], true);
 
-            foreach (LimbId id in Enum.GetValues(typeof(LimbId))) if (id != LimbId.None) _limbHealth[id] = id == LimbId.Head ? 70f : 55f;
+            foreach (LimbId id in Enum.GetValues(typeof(LimbId))) if (id != LimbId.None) _limbHealth[id] = id == LimbId.Head ? HeadHealth : LimbHealth;
             _poise = poiseMax;
             health = maxHealth;
 
@@ -167,16 +168,16 @@ namespace IronFauna.Brawl
             weightLabel = m.weightLabel;
             maxHealth = Mathf.Round(160f * m.healthMult * bonusHpMult);
             health = maxHealth;
-            poiseMax = Mathf.Round(30f * m.poiseMult * Mathf.Lerp(1f, 1.4f, bonusHpMult - 1f));
+            poiseMax = Mathf.Round(50f * m.poiseMult * Mathf.Lerp(1f, 1.4f, bonusHpMult - 1f));
             _poise = poiseMax;
-            knockbackScale = 1.8f * m.knockbackDealtMult;
+            knockbackScale = m.knockbackDealtMult;
             knockbackTakenScale = m.knockbackTakenMult;
             limbTearScale = m.limbTearMult;
 
             float limbScale = m.limbHealthMult * Mathf.Lerp(1f, 1.3f, bonusHpMult - 1f);
             foreach (LimbId id in Enum.GetValues(typeof(LimbId)))
             {
-                if (id != LimbId.None) _limbHealth[id] = (id == LimbId.Head ? 70f : 55f) * limbScale;
+                if (id != LimbId.None) _limbHealth[id] = (id == LimbId.Head ? HeadHealth : LimbHealth) * limbScale;
             }
 
             _totalMass = 0f;
@@ -196,6 +197,13 @@ namespace IronFauna.Brawl
                 ghost.strikeSpeedScale = m.strikeSpeedMult;
                 ghost.damageScale = m.damageMult;
                 ghost.hyperArmor = m.hyperArmor;
+                // stamina by weight class: light frames recover fast, heavy frames carry a deep tank but refill slowly
+                var tw = loadout.torsoWeight;
+                ghost.staminaMax = tw == MechWeightClass.Heavy ? 120f : tw == MechWeightClass.Light ? 90f : 100f;
+                ghost.staminaRegen = tw == MechWeightClass.Heavy ? 27f : tw == MechWeightClass.Light ? 42f : 34f;
+                ghost.dodgeCost = loadout.legWeight == MechWeightClass.Heavy ? 27f : loadout.legWeight == MechWeightClass.Light ? 15f : 20f;
+                ghost.dodgeSpeed = loadout.legWeight == MechWeightClass.Heavy ? 6.6f : loadout.legWeight == MechWeightClass.Light ? 9.2f : 8f;
+                ghost.stamina = ghost.staminaMax;
             }
         }
 
@@ -559,7 +567,65 @@ namespace IronFauna.Brawl
 
         // ------------------------------------------------------------------ damage
         /// <summary>Called by a striking part of <paramref name="attacker"/> that hit <paramref name="seg"/>.</summary>
-        public void ReceiveStrike(MechRagdoll attacker, Segment seg, Vector3 point, Vector3 dir, float damage, float power)
+        /// <summary>A fighter's strike (fist, foot, knee, head, shoulder) reached this mech: dodge, parry and block are
+        /// resolved here before any damage. Explosions, falls and thrown bodies call ReceiveStrike directly.</summary>
+        public void ReceiveFighterStrike(MechRagdoll attacker, Segment seg, Vector3 point, Vector3 dir, float damage, float power)
+        {
+            if (seg.detached || IsKO || attacker == null || attacker.ghost == null) return;
+            var atk = attacker.ghost;
+            atk.OnStrikeLanded();
+            if (!IsDown && ghost != null)
+            {
+                if (ghost.Evading) { CombatCue?.Invoke(this, attacker, point, "EVADE"); return; }
+                Vector3 toAtk = attacker.Position - Position;
+                toAtk.y = 0f;
+                Vector3 fwd = ghost.transform.forward;
+                fwd.y = 0f;
+                bool facing = toAtk.sqrMagnitude > 1e-4f && Vector3.Dot(fwd.normalized, toAtk.normalized) > 0.2f;
+                if (facing && !IsHeld && !atk.StrikeUnblockable)
+                {
+                    if (ghost.Parrying)
+                    {
+                        atk.OnParried();
+                        attacker.muscle = Mathf.Min(attacker.muscle, 0.55f);
+                        attacker._poise -= 14f;
+                        if (attacker.ghost != null) attacker.ghost.AddKnockback(toAtk.normalized * 1.6f);
+                        ghost.OnParrySuccess();
+                        EmitHitSparks(point, 0.9f);
+                        CombatCue?.Invoke(this, attacker, point, "PARRY");
+                        return;
+                    }
+                    if (ghost.Blocking)
+                    {
+                        ghost.OnBlocked(damage, atk.StrikeGuardBreak, dir);
+                        atk.OnStrikeBlocked();
+                        health -= damage * 0.08f;   // chip damage only: no limb damage, no armor shed
+                        _lastHitT = Time.time;
+                        seg.rb.AddForceAtPosition(dir.normalized * damage * 1.5f, point, ForceMode.Impulse);
+                        EmitHitSparks(point, 0.25f);
+                        CombatCue?.Invoke(this, attacker, point, ghost.GuardBroken ? "GUARD BREAK" : "BLOCK");
+                        if (health <= 0f && !IsKO) KnockOut();
+                        return;
+                    }
+                }
+            }
+            float poiseMult = 1f;
+            string cue = null;
+            if (atk.StrikeIsRiposte) { poiseMult = 2.2f; cue = "RIPOSTE"; }
+            else if (ghost != null && (ghost.Vulnerable || ghost.GuardBroken))
+            {
+                damage *= 1.3f;
+                poiseMult = 1.5f;
+                cue = "COUNTER";
+            }
+            ReceiveStrike(attacker, seg, point, dir, damage, power, poiseMult);
+            if (cue != null) CombatCue?.Invoke(this, attacker, point, cue);
+        }
+
+        /// <summary>victim, attacker, point, cue ("PARRY", "BLOCK", "GUARD BREAK", "COUNTER", "RIPOSTE", "EVADE")</summary>
+        public event Action<MechRagdoll, MechRagdoll, Vector3, string> CombatCue;
+
+        public void ReceiveStrike(MechRagdoll attacker, Segment seg, Vector3 point, Vector3 dir, float damage, float power, float poiseMult = 1f)
         {
             if (seg.detached) return;
             damage = Mathf.Clamp(damage, 0f, 40f);
@@ -570,24 +636,18 @@ namespace IronFauna.Brawl
             float mult = headShot ? 1.35f : seg == _torso || seg == _pelvis ? 1f : 0.8f;
             health -= damage * mult;
             _lastHitT = Time.time;
-            _poise -= damage * (headShot ? 1.6f : 1f);
+            _poise -= damage * (headShot ? 1.3f : 1f) * poiseMult;
 
-            // the blow really moves the body: a shove at the contact point on top of the collision itself
+            // the blow rocks the body (a weighty stagger, not a launch): a shove at the contact point on top of the collision
             float shove = (attacker != null ? attacker.knockbackScale : knockbackScale) * knockbackTakenScale;
-            seg.rb.AddForceAtPosition(dir * damage * 16f * shove, point, ForceMode.Impulse);
-            ghost.Interrupt(0.12f + damage * 0.012f * knockbackTakenScale);
-            ghost.AddKnockback(dir * Mathf.Lerp(1.5f, 8f, damage / 25f) * shove);
-            muscle = Mathf.Min(muscle, Mathf.Lerp(1f, 0.35f, damage / 25f));   // a hard hit goes slack for a beat
+            seg.rb.AddForceAtPosition(dir * damage * 5f * shove, point, ForceMode.Impulse);
+            ghost.Interrupt(0.18f + damage * 0.018f * knockbackTakenScale);
+            ghost.AddKnockback(dir * Mathf.Lerp(0.6f, 3.2f, damage / 25f) * shove);
+            muscle = Mathf.Min(muscle, Mathf.Lerp(1f, 0.7f, damage / 25f));   // a hard hit goes slack for a beat
 
             bool ripped = false;
             float tearMult = attacker != null ? attacker.limbTearScale : 1f;
-            LimbId targetLimb = seg.limb;
-            if (targetLimb == LimbId.None && damage >= 9f)
-            {
-                LimbId[] limbs = { LimbId.ArmL, LimbId.ArmR, LimbId.LegL, LimbId.LegR };
-                LimbId pick = limbs[UnityEngine.Random.Range(0, limbs.Length)];
-                if (!_lost.Contains(pick)) targetLimb = pick;
-            }
+            LimbId targetLimb = seg.limb;   // torso hits wear down the hull, not a random limb
             if (targetLimb != LimbId.None && !_lost.Contains(targetLimb))
             {
                 float limbDmg = damage * (seg.limb != LimbId.None ? (headShot ? 0.9f : 1.35f) : 0.65f) * tearMult;
@@ -856,14 +916,14 @@ namespace IronFauna.Brawl
                     if (tree != null)
                     {
                         _propStrikeSerial = serial;
-                        tree.ApplyStrike(envProbe, ghost.transform.forward * (16f * knockbackScale), ghost.PunchDamage * 22f * knockbackScale);
+                        tree.ApplyStrike(envProbe, ghost.transform.forward * (6f * knockbackScale), ghost.PunchDamage * 8f * knockbackScale);
                         break;
                     }
                     var prop = col.GetComponentInParent<BreakableProp>();
                     if (prop != null)
                     {
                         _propStrikeSerial = serial;
-                        prop.ApplyStrike(envProbe, ghost.transform.forward * (16f * knockbackScale), ghost.PunchDamage * 20f * knockbackScale);
+                        prop.ApplyStrike(envProbe, ghost.transform.forward * (6f * knockbackScale), ghost.PunchDamage * 7f * knockbackScale);
                         break;
                     }
                 }
@@ -893,10 +953,12 @@ namespace IronFauna.Brawl
                     Vector3 dir = otherPart.owner.Position - Position;
                     dir.y = 0f;
                     dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : ghost.transform.forward;
-                    otherPart.owner.ReceiveStrike(this, otherPart.segment, tipPos, dir + Vector3.up * 0.25f, ghost.PunchDamage, ghost.PunchPower);
-                    if (ghost.StrikeSweeps && !otherPart.owner.IsDown)
+                    var victim = otherPart.owner;
+                    float before = victim.health;
+                    victim.ReceiveFighterStrike(this, otherPart.segment, tipPos, dir + Vector3.up * 0.1f, ghost.PunchDamage, ghost.PunchPower);
+                    if (ghost.StrikeSweeps && !victim.IsDown && victim.health < before - 3f)
                     {
-                        otherPart.owner.Knockdown(1.25f);
+                        victim.Knockdown(1.25f);
                     }
                 }
             }
@@ -910,13 +972,13 @@ namespace IronFauna.Brawl
             if (prop != null)
             {
                 Vector3 hitPt = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
-                prop.ApplyStrike(hitPt, transform.forward * (12f * knockbackScale), ghost.PunchDamage * 18f * knockbackScale);
+                prop.ApplyStrike(hitPt, transform.forward * (5f * knockbackScale), ghost.PunchDamage * 6f * knockbackScale);
             }
             var tree = c.collider != null ? c.collider.GetComponentInParent<FallingTree>() : null;
             if (tree != null)
             {
                 Vector3 hitPt = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
-                tree.ApplyStrike(hitPt, transform.forward * (12f * knockbackScale), ghost.PunchDamage * 16f * knockbackScale);
+                tree.ApplyStrike(hitPt, transform.forward * (5f * knockbackScale), ghost.PunchDamage * 6f * knockbackScale);
             }
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
             if (otherPart == null || otherPart.owner == null || otherPart.owner == this || otherPart.segment == null || otherPart.segment.detached) return;
@@ -938,8 +1000,9 @@ namespace IronFauna.Brawl
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : transform.forward;
             float speed = c.relativeVelocity.magnitude;
             float damage = ghost.PunchDamage * Mathf.Clamp(speed / 8f, 0.7f, 1.4f);
-            otherPart.owner.ReceiveStrike(this, otherPart.segment, point, dir + Vector3.up * 0.25f, damage, ghost.PunchPower);
-            if (ghost.StrikeSweeps && !otherPart.owner.IsDown)
+            float hpBefore = otherPart.owner.health;
+            otherPart.owner.ReceiveFighterStrike(this, otherPart.segment, point, dir + Vector3.up * 0.1f, damage, ghost.PunchPower);
+            if (ghost.StrikeSweeps && !otherPart.owner.IsDown && otherPart.owner.health < hpBefore - 3f)
             {
                 otherPart.owner.Knockdown(1.25f);
             }
@@ -1061,12 +1124,13 @@ namespace IronFauna.Brawl
             if (_held != null)
             {
                 _holdT += dt;
-                if (_holdT > 4f && !_held.IsKO) { var h = _held; DropHold(); h.Knockdown(0.6f); GrappleEvent?.Invoke(this, "BROKE FREE"); }
+                if (_holdT > 2.8f && !_held.IsKO) { var h = _held; DropHold(); h.Knockdown(0.6f); GrappleEvent?.Invoke(this, "BROKE FREE"); }
             }
         }
 
         private void TryGrab()
         {
+            if (ghost.Exhausted || ghost.stamina <= 0f) return;   // too spent to clinch
             Segment best = null;
             MechRagdoll bestOwner = null;
             float bestD = 1.4f;
@@ -1082,6 +1146,7 @@ namespace IronFauna.Brawl
                     if (part == null || part.owner == null || part.owner == this || part.segment == null || part.segment.heldBy != null) continue;
                     if (team != 0 && !part.segment.detached && part.owner.team == team) continue;
                     if (!part.segment.detached && part.owner._grabbedBy != null) continue;
+                    if (!part.segment.detached && part.owner.ghost != null && part.owner.ghost.Evading) continue;   // dodged the clinch
                     float d = Vector3.Distance(col.ClosestPoint(tip), tip);
                     if (d < bestD) { bestD = d; best = part.segment; bestOwner = part.owner; }
                 }
@@ -1102,7 +1167,8 @@ namespace IronFauna.Brawl
                 _held = bestOwner;
                 _heldMass = bestOwner._totalMass;
                 bestOwner.GrabbedBy(this);
-                GrappleEvent?.Invoke(this, "GRAB");
+                ghost.SpendStamina(18f);
+                GrappleEvent?.Invoke(this, bestOwner.ghost != null && bestOwner.ghost.Blocking ? "GUARD GRAB" : "GRAB");
             }
             BoxingSfx.Clank(0.7f);
         }

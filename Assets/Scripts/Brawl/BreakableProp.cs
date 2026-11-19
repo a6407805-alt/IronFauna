@@ -46,7 +46,7 @@ namespace IronFauna.Brawl
             if (_broken) return;
             _damage += damage;
             var rb = GetComponent<Rigidbody>();
-            if (rb != null && !rb.isKinematic) rb.AddForceAtPosition(velocity * 14f, point, ForceMode.Impulse);
+            if (rb != null && !rb.isKinematic) rb.AddForceAtPosition(velocity * 8f, point, ForceMode.Impulse);
             if (_damage >= toughness) Shatter(point, velocity);
         }
 
@@ -57,6 +57,7 @@ namespace IronFauna.Brawl
             bool hitByMech = c.rigidbody != null && c.rigidbody.GetComponent<MechRagdollPart>() != null;
             if (hitByMech)
             {
+                if (c.relativeVelocity.magnitude < 3.5f) return;   // walking into cover does not wreck it
                 hit = Mathf.Max(hit, c.relativeVelocity.magnitude * 26f);
             }
             else if (c.relativeVelocity.magnitude < 4.5f)
@@ -128,13 +129,13 @@ namespace IronFauna.Brawl
                     {
                         Vector3 dir = (part.owner.Position - point);
                         float dist = Mathf.Max(1f, dir.magnitude);
-                        float dmg = Mathf.Lerp(16f, 4f, dist / 6.2f);
+                        float dmg = Mathf.Lerp(14f, 3f, dist / 6.2f);
                         part.owner.ReceiveStrike(null, part.segment, point, dir.normalized + Vector3.up * 0.45f, dmg, 0.9f);
-                        part.owner.Knockdown(1.3f);
+                        if (dist < 3.5f) part.owner.Knockdown(1.1f);
                     }
                     else if (!rb.isKinematic)
                     {
-                        rb.AddExplosionForce(550f, point, 6.2f, 1.0f, ForceMode.Impulse);
+                        rb.AddExplosionForce(260f, point, 6.2f, 0.6f, ForceMode.Impulse);
                     }
                 }
             }

@@ -19,14 +19,14 @@ namespace IronFauna.Boxing
         private float _circleT;
         private float _thinkT;
         private float _guardT;
-        private float _reactT = -1f;
-        private bool _reacting;
         private readonly System.Collections.Generic.Queue<PunchType> _combo = new System.Collections.Generic.Queue<PunchType>();
         private float _comboGap;
         private enum Mode { Circle, Engage, Retreat }
         private Mode _mode = Mode.Circle;
         private float _modeT;
         private float _grabT, _holdT, _crouchT;
+        private int _readSerial = -1;
+        private float _parryAt, _dodgeAt, _oppBlockT;
         private bool _holdActed;
 
         private static readonly PunchType[][] Combos =
@@ -68,24 +68,49 @@ namespace IronFauna.Boxing
             d.y = 0f;
             float dist = d.magnitude;
 
-            // ---------------- defence: see the wind-up, react after a delay
-            if (opp.Telegraphing && !_reacting)
+            // ---------------- defence: read the wind-up, then parry, dodge or block on time (Souls-style)
+            if (opp.Telegraphing && opp.PunchSerial != _readSerial && dist < 5.5f)
             {
-                _reacting = true;
-                _reactT = Mathf.Lerp(0.26f, 0.1f, skill) + Random.Range(0f, 0.08f);
-            }
-            if (!opp.Punching) _reacting = false;
-            if (_reactT > 0f)
-            {
-                _reactT -= dt;
-                if (_reactT <= 0f && opp.Punching && !_me.Punching)
+                _readSerial = opp.PunchSerial;
+                float reaction = Mathf.Lerp(0.3f, 0.12f, skill) + Random.Range(0f, 0.06f);
+                float left = opp.WindupRemaining;
+                if (left > reaction && !_me.Punching)
                 {
                     float r = Random.value;
-                    if (r < skill * 0.35f) _guardT = 0.5f;
-                    else if (r < skill * 0.58f) _me.intent.slip = Random.value < 0.5f ? -1 : 1;
-                    else if (r < skill * 0.80f) _crouchT = 0.55f; // duck under high swings
+                    if (opp.StrikeUnblockable)
+                    {
+                        if (r < 0.25f + skill * 0.6f) { _dodgeAt = Mathf.Max(0.01f, left - 0.06f); }
+                    }
+                    else if (r < skill * 0.42f && _me.stamina > 10f)
+                    {
+                        // parry: release, then press the guard just before contact (sloppier timing at low skill)
+                        _parryAt = Mathf.Max(0.01f, left - 0.03f + Random.Range(-0.08f, 0.1f) * (1.1f - skill));
+                        _guardT = 0f;
+                    }
+                    else if (r < skill * 0.42f + 0.18f + skill * 0.12f && _me.stamina > _me.dodgeCost)
+                    {
+                        _dodgeAt = Mathf.Max(0.01f, left - 0.05f);
+                    }
+                    else if (r < 0.85f)
+                    {
+                        _guardT = left + 0.55f;
+                    }
                 }
+                else if (_guardT > 0f) _guardT = Mathf.Max(_guardT, 0.5f);   // already covered: stay covered
             }
+            if (_parryAt > 0f)
+            {
+                _parryAt -= dt;
+                _guardT = 0f;
+                if (_parryAt <= 0f) _guardT = 0.4f;
+            }
+            if (_dodgeAt > 0f)
+            {
+                _dodgeAt -= dt;
+                if (_dodgeAt <= 0f) _me.intent.slip = Random.value < 0.5f ? -1 : 1;
+            }
+            // count how long the opponent turtles (a guard is beaten by a grab)
+            _oppBlockT = opp.Blocking ? _oppBlockT + dt : 0f;
             float hurt = 1f - _me.health / _me.maxHealth;
             _guardT -= dt;
             _crouchT -= dt;
@@ -99,9 +124,9 @@ namespace IronFauna.Boxing
             if (_modeT <= 0f)
             {
                 float r = Random.value;
-                _mode = r < 0.45f + skill * 0.15f ? Mode.Engage : (r < 0.8f ? Mode.Circle : Mode.Retreat);
+                _mode = _me.Exhausted || _me.Stamina01 < 0.3f ? Mode.Retreat : r < 0.3f + skill * 0.12f ? Mode.Engage : (r < 0.85f ? Mode.Circle : Mode.Retreat);
                 _modeT = _mode == Mode.Engage ? Random.Range(0.9f, 1.6f) : Random.Range(0.6f, 1.4f);
-                if (_mode == Mode.Engage) QueueCombo();
+                if (_mode == Mode.Engage && _me.Stamina01 > 0.45f) QueueCombo();
             }
 
             Vector2 move = Vector2.zero;
@@ -158,35 +183,48 @@ namespace IronFauna.Boxing
 
             // ---------------- offence
             _comboGap -= dt;
-            if (_combo.Count > 0 && dist < idealRange + 0.35f && _comboGap <= 0f && !_me.Punching && _guardT <= 0f)
+            bool rested = _me.Stamina01 > 0.45f && !_me.Exhausted;
+            // punish: a whiffed or blocked blow, a stagger or a broken guard is an opening; a parry earns a riposte
+            if (!_me.Punching && _parryAt <= 0f && dist < idealRange + 0.6f && !_me.Exhausted && _comboGap <= 0f)
+            {
+                if (_me.RiposteReady)
+                {
+                    _combo.Clear();
+                    _me.intent.punch = _me.LegsLeft == 2 && Random.value < 0.5f ? PunchType.Roundhouse : PunchType.Haymaker;
+                    _comboGap = 0.4f;
+                }
+                else if ((opp.InRecovery || opp.Staggered || opp.GuardBroken) && Random.value < 0.35f + skill * 0.6f)
+                {
+                    _combo.Clear();
+                    _combo.Enqueue(opp.GuardBroken ? PunchType.Cross : PunchType.Jab);
+                    if (_me.Stamina01 > 0.5f) _combo.Enqueue(PunchType.Hook);
+                    _guardT = 0f;
+                }
+            }
+            if (!rested && _combo.Count > 0 && !_me.Punching) _combo.Clear();   // out of breath: stop swinging, back off
+            if (_combo.Count > 0 && dist < idealRange + 0.35f && _comboGap <= 0f && !_me.Punching && _guardT <= 0f && _parryAt <= 0f)
             {
                 _me.intent.punch = _combo.Dequeue();
                 _comboGap = Random.Range(0.08f, 0.2f);
                 if (_combo.Count == 0) { _mode = Mode.Retreat; _modeT = Random.Range(0.5f, 0.9f); }
             }
-            // counter right after the player whiffs or finishes, or chop down a tree / obstacle blocking our path!
+            // patient: open up now and then when rested and in range; a turtling opponent gets grabbed
             _thinkT -= dt;
             if (_thinkT <= 0f)
             {
-                _thinkT = 0.25f;
-                if (!opp.Punching && dist < idealRange + 0.2f && _combo.Count == 0 && Random.value < 0.18f + skill * 0.2f) QueueCombo();
-                else if (!_me.Punching && _combo.Count == 0)
+                _thinkT = 0.3f;
+                if (rested && !opp.Punching && dist < idealRange + 0.2f && _combo.Count == 0 && Random.value < 0.1f + skill * 0.12f) QueueCombo();
+                if (_oppBlockT > 0.7f && rested && dist < idealRange + 0.4f && !_me.holding && Random.value < 0.3f + skill * 0.4f)
                 {
-                    Vector3 ahead = transform.position + transform.forward * 1.4f + Vector3.up * 1.5f;
-                    foreach (var col in Physics.OverlapSphere(ahead, 1.35f, ~0, QueryTriggerInteraction.Ignore))
-                    {
-                        if (col.transform.parent != null && col.transform.parent.name == "FallingTree" || col.name == "FallingTree" || col.name.StartsWith("StreetCar"))
-                        {
-                            _me.intent.punch = _me.LegsLeft == 2 ? PunchType.Roundhouse : PunchType.ShoulderCharge;
-                            break;
-                        }
-                    }
+                    _grabT = Random.Range(0.8f, 1.4f);
+                    _holdT = 0f;
+                    _holdActed = false;
                 }
             }
 
             // grapples: lunge in and grab now and then; once holding, throw, slam or tear something off
             _grabT -= dt;
-            if (_grabT <= 0f && !_me.Punching && !_me.holding && dist < idealRange + 0.6f && _combo.Count == 0 && Random.value < (0.12f + skill * 0.15f) * dt * 4f)
+            if (_grabT <= 0f && !_me.Punching && !_me.holding && rested && dist < idealRange + 0.6f && _combo.Count == 0 && Random.value < (0.03f + skill * 0.04f) * dt * 4f)
             {
                 _grabT = Random.Range(1.2f, 2.6f);
                 _holdT = 0f;

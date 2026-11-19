@@ -70,6 +70,119 @@ namespace IronFauna.Boxing
         public bool followGround;
         public float minDistance = 2.05f;
 
+        [Header("Stamina, guard, parry & dodge (Souls-style)")]
+        public float staminaMax = 100f;
+        [Tooltip("Stamina per second once the regen delay has passed (35% while guarding)")]
+        public float staminaRegen = 34f;
+        public float staminaRegenDelay = 0.65f;
+        [Tooltip("Guard pressed this close before a hit lands = parry")]
+        public float parryWindow = 0.2f;
+        public float dodgeCost = 20f;
+        public float dodgeSpeed = 8f;
+        public float sprintDrain = 9f;
+        public const float DodgeTime = 0.42f;
+        public const float DodgeIFrames = 0.28f;
+        [NonSerialized] public float stamina = 100f;
+        public float Stamina01 => staminaMax > 0f ? Mathf.Clamp01(stamina / staminaMax) : 0f;
+        /// <summary>Hit zero stamina: no attacks, dodges or sprinting until it climbs back to 35%.</summary>
+        public bool Exhausted { get; private set; }
+        /// <summary>Invulnerable part of a dodge.</summary>
+        public bool Evading => _slipT > DodgeTime - DodgeIFrames && !IsKO;
+        public bool Dodging => _slipT > 0f;
+        /// <summary>Guard was raised within the parry window.</summary>
+        public bool Parrying => intent.guard && _guardHeldT <= parryWindow && _punch == null && !IsKO && !GuardBroken && _stagger <= 0f;
+        public bool GuardBroken => _guardBrokenT > 0f;
+        /// <summary>Caught mid wind-up or recovery: hits land as counters.</summary>
+        public bool Vulnerable => _punch != null && (_phase == Phase.Windup || _phase == Phase.Recover);
+        public bool InRecovery => _punch != null && _phase == Phase.Recover;
+        /// <summary>Seconds until the current wind-up turns into the strike (0 when not winding up).</summary>
+        public float WindupRemaining => _punch != null && _phase == Phase.Windup ? Mathf.Max(0f, _punch.windup - _phaseT) / Mathf.Max(0.5f, strikeSpeedScale) : 0f;
+        /// <summary>A parry opened the attacker up: the next strike within this window is a riposte.</summary>
+        public bool RiposteReady => _riposteT > 0f;
+        public bool StrikeUnblockable => _punch != null && _punch.unblockable;
+        public float StrikeGuardBreak => _punch != null ? _punch.guardBreak : 1f;
+        public bool Staggered => _stagger > 0f;
+        /// <summary>"PARRY", "GUARD BREAK", "EXHAUSTED", "RIPOSTE" ... for HUD popups and sound.</summary>
+        public event Action<MechBoxer, string> CombatCue;
+
+        private float _staminaDelay, _guardHeldT = 99f, _riposteT, _guardBrokenT;
+        private bool _punchIsRiposte, _wasGuard;
+        private Vector3 _dodgeDir;
+
+        public void SpendStamina(float amount)
+        {
+            if (amount <= 0f) return;
+            stamina -= amount;
+            _staminaDelay = staminaRegenDelay;
+            if (stamina <= 0f)
+            {
+                stamina = 0f;
+                if (!Exhausted) { Exhausted = true; CombatCue?.Invoke(this, "EXHAUSTED"); }
+            }
+        }
+
+        private void TickStamina(float dt, bool sprinting)
+        {
+            _riposteT = Mathf.Max(0f, _riposteT - dt);
+            _guardBrokenT = Mathf.Max(0f, _guardBrokenT - dt);
+            if (intent.guard && !_wasGuard) _guardHeldT = 0f;
+            else if (intent.guard) _guardHeldT += dt;
+            else _guardHeldT = 99f;
+            _wasGuard = intent.guard;
+
+            if (sprinting) { stamina = Mathf.Max(0f, stamina - sprintDrain * dt); _staminaDelay = 0.35f; return; }
+            if (_staminaDelay > 0f) { _staminaDelay -= dt; return; }
+            float rate = staminaRegen * (Blocking ? 0.35f : 1f) * (_punch != null ? 0f : 1f);
+            stamina = Mathf.Min(staminaMax, stamina + rate * dt);
+            if (Exhausted && stamina >= staminaMax * 0.35f) Exhausted = false;
+        }
+
+        /// <summary>A blocked blow lands on the guard: costs stamina; an empty bar breaks the guard.</summary>
+        public void OnBlocked(float damage, float guardBreak, Vector3 dir)
+        {
+            SpendStamina(damage * 1.7f * guardBreak);
+            Vector3 local = transform.InverseTransformDirection(dir);
+            _armPushVel += new Vector3(-local.x, 0.2f, -1f) * (1.4f + damage * 0.1f);
+            _joltVel += new Vector3(local.x * 0.3f, 0f, -0.5f) * (0.5f + damage * 0.05f);
+            _vel += new Vector3(dir.x, 0f, dir.z) * Mathf.Lerp(0.4f, 1.6f, damage / 22f);
+            if (stamina <= 0f) BreakGuard();
+            else CombatCue?.Invoke(this, "BLOCK");
+        }
+
+        public void BreakGuard()
+        {
+            _guardBrokenT = 1.25f;
+            _stagger = Mathf.Max(_stagger, 1.0f);
+            _armPushVel += new Vector3(0f, 0.8f, -2.4f);
+            CombatCue?.Invoke(this, "GUARD BREAK");
+        }
+
+        /// <summary>This fighter's blow was parried: the strike is knocked away and it reels, wide open.</summary>
+        public void OnParried()
+        {
+            _punch = null;
+            _stagger = Mathf.Max(_stagger, 1.05f);
+            SpendStamina(22f);
+            _joltVel += new Vector3(0f, 0.15f, -2.2f);
+            _headSnapVel += new Vector3(-120f, 0f, 0f);
+            CombatCue?.Invoke(this, "PARRIED");
+        }
+
+        /// <summary>This fighter parried: a short window to riposte for heavy damage.</summary>
+        public void OnParrySuccess()
+        {
+            _riposteT = 1.1f;
+            stamina = Mathf.Min(staminaMax, stamina + 15f);
+            _guardHeldT = 99f;
+            CombatCue?.Invoke(this, "PARRY");
+        }
+
+        /// <summary>This fighter's blow hit a guard: a longer, punishable recovery.</summary>
+        public void OnStrikeBlocked()
+        {
+            _blockedHit = true;
+        }
+
         public float health = 100f;
         public float maxHealth = 100f;
         public bool IsKO { get; private set; }
@@ -121,7 +234,10 @@ namespace IronFauna.Boxing
         public bool StrikeActive => _punch != null && (_phase == Phase.Strike || _phase == Phase.Hold);
         public bool PunchLeadHand => _punch != null && _activeStrikeLead;
         public float PunchPower => _punch != null ? Power(_punch) : 0f;
-        public float PunchDamage => _punch != null ? _punch.damage * damageScale : 0f;
+        public float PunchDamage => _punch != null ? _punch.damage * damageScale * (_punchIsRiposte ? 1.8f : 1f) : 0f;
+        public bool StrikeIsRiposte => _punch != null && _punchIsRiposte;
+        /// <summary>The ragdoll reports that the current strike touched a fighter (whiffs recover slower).</summary>
+        public void OnStrikeLanded() => _connected = true;
         public bool StrikeSweeps => _punch != null && _punch.sweep;
         /// <summary>Ragdoll got hit: interrupt a wind-up and stagger the footwork.</summary>
         /// <summary>Shoves the fighter (adds to its travel velocity; footwork brakes it back down).</summary>
@@ -168,6 +284,35 @@ namespace IronFauna.Boxing
             public bool head;                 // headbutt: the head is the weapon
             public bool body;                 // shoulder charge: the torso is the weapon
             public bool sweep;                // low sweep / takedown: trips & knocks down opponents on contact
+            // technical fighting
+            public float guardBreak = 1f;     // stamina drained from a blocking defender (x damage x 1.7)
+            public bool unblockable;          // takedowns and floor sweeps: cannot be blocked or parried, only dodged
+            public float staminaCost;         // filled in by the static constructor
+        }
+
+        /// <summary>
+        /// Technical pass (owner, 2026-11-18: "everything explodes ... Dark Souls / For Honor - respect your opponent"):
+        /// every move costs stamina, heavy moves crush guards, takedowns can only be dodged, and lunges are shorter so
+        /// spacing matters more than charging.
+        /// </summary>
+        static MechBoxer()
+        {
+            foreach (var s in Specs.Values)
+            {
+                s.staminaCost = 7f + s.damage * 0.95f;
+                s.lungeImpulse *= 0.62f;
+            }
+            Specs[PunchType.Haymaker].guardBreak = 2.2f;
+            Specs[PunchType.ShoulderCharge].guardBreak = 2.4f;
+            Specs[PunchType.SideKick].guardBreak = 1.8f;
+            Specs[PunchType.AxeKick].guardBreak = 1.7f;
+            Specs[PunchType.SpinningHookKick].guardBreak = 1.5f;
+            Specs[PunchType.TornadoKick].guardBreak = 1.5f;
+            Specs[PunchType.Headbutt].guardBreak = 1.6f;
+            Specs[PunchType.FrontKick].guardBreak = 1.5f;
+            Specs[PunchType.DoubleLegTakedown].unblockable = true;
+            Specs[PunchType.FlyingScissor].unblockable = true;
+            Specs[PunchType.CapoeiraSweep].unblockable = true;
         }
 
         // Exaggerated on purpose: long, readable wind-ups that load the whole body, big torso drive, a lunge,
@@ -455,6 +600,9 @@ namespace IronFauna.Boxing
             _punch = null;
             _vel = Vector3.zero;
             _stagger = 0f;
+            stamina = staminaMax;
+            Exhausted = false;
+            _riposteT = _guardBrokenT = 0f;
             transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
             _builtVersion = -1;
         }
@@ -542,7 +690,7 @@ namespace IronFauna.Boxing
             }
         }
 
-        public bool Blocking => _guardBlend > 0.5f && _punch == null && !IsKO;
+        public bool Blocking => _guardBlend > 0.5f && _punch == null && !IsKO && !GuardBroken && _stagger <= 0f;
 
         // ------------------------------------------------------------------ frame
         private void LateUpdate()
@@ -573,7 +721,8 @@ namespace IronFauna.Boxing
             Vector3 oppFwd = dist > 0.01f && dist < float.MaxValue ? toOpp / dist : transform.forward;
 
             Vector2 m = IsKO || suppressed ? Vector2.zero : Vector2.ClampMagnitude(intent.move, 1f);
-            bool sprinting = intent.sprint && m.sqrMagnitude > 0.05f && _punch == null && _guardBlend < 0.5f;
+            bool sprinting = intent.sprint && m.sqrMagnitude > 0.05f && _punch == null && _guardBlend < 0.5f && !Exhausted && stamina > 0f && !Dodging;
+            TickStamina(dt, sprinting);
 
             // squared up (fighting stance, always facing the opponent) only when someone is close and we are not running
             bool engage = lockOn && opponent != null && !opponent.IsKO && dist < lockOnRange && !sprinting;
@@ -607,6 +756,12 @@ namespace IronFauna.Boxing
             _vel = Vector3.MoveTowards(_vel, want, rate * dt);
 
             Vector3 p = transform.position + _vel * dt;
+            if (_slipT > 0f && !IsKO)
+            {
+                // the dodge: a quick committed step (sidestep, or a backstep without a direction)
+                float k = Mathf.Sin(Mathf.PI * (1f - _slipT / DodgeTime)) * 1.25f;
+                p += _dodgeDir * dodgeSpeed * k * dt;
+            }
             if (opponent != null && !opponent.IsKO)
             {
                 Vector3 d = p - opponent.transform.position;
@@ -660,9 +815,23 @@ namespace IronFauna.Boxing
             if (intent.punch != PunchType.None) { _buffer = intent.punch; _bufferT = 0.28f; }
             else _bufferT -= Time.deltaTime;
             if (_bufferT <= 0f) _buffer = PunchType.None;
-            if (intent.slip != 0 && _punch == null && _slipT <= 0f && !IsKO) { _slipT = 0.42f; _slipDir = intent.slip; }
+            if (intent.slip != 0 && _punch == null && _slipT <= 0f && !IsKO && !suppressed && !Exhausted && stamina > 0f && _stagger <= 0f && !holding)
+            {
+                SpendStamina(dodgeCost);
+                _slipT = DodgeTime;
+                Vector3 f;
+                if (moveReference != null) f = Vector3.ProjectOnPlane(moveReference.forward, Vector3.up);
+                else if (opponent != null) f = Vector3.ProjectOnPlane(opponent.transform.position - transform.position, Vector3.up);
+                else f = transform.forward;
+                f = f.sqrMagnitude > 1e-4f ? f.normalized : transform.forward;
+                Vector3 r = Vector3.Cross(Vector3.up, f);
+                Vector2 m = intent.move;
+                _dodgeDir = m.sqrMagnitude > 0.09f ? (r * m.x + f * m.y).normalized : transform.right * Mathf.Sign(intent.slip);
+                float side = Vector3.Dot(_dodgeDir, transform.right);
+                _slipDir = Mathf.Abs(side) > 0.3f ? Mathf.Sign(side) : 0f;
+            }
 
-            bool canStart = !IsKO && !suppressed && _stagger <= 0f && _slipT < 0.15f &&
+            bool canStart = !IsKO && !suppressed && _stagger <= 0f && _slipT < 0.15f && !Exhausted && stamina > 0f &&
                             (_punch == null || (_phase == Phase.Recover && _phaseT > _punch.recover * 0.35f));
             if (_buffer != PunchType.None && canStart)
             {
@@ -737,6 +906,9 @@ namespace IronFauna.Boxing
             _phase = Phase.Windup;
             _phaseT = 0f;
             _connected = _blockedHit = false;
+            _punchIsRiposte = _riposteT > 0f;
+            _riposteT = 0f;
+            SpendStamina(spec.staminaCost * (spec.kick && LegsLeft < 2 ? 1.3f : 1f));
             _aim = AimPoint(spec);
             PunchSerial++;
             PunchThrown?.Invoke(this, Power(spec));
@@ -799,14 +971,14 @@ namespace IronFauna.Boxing
                     if (_phaseT >= s.hold * (_connected ? 0.7f : 1.6f)) { _phase = Phase.Recover; _phaseT = 0f; }
                     break;
                 case Phase.Recover:
-                    if (_phaseT >= s.recover * (_connected ? 1f : 1.35f)) _punch = null;   // whiffs cost more
+                    if (_phaseT >= s.recover * (_blockedHit ? 1.35f : _connected ? 1f : 1.45f)) _punch = null;   // whiffs and blocked blows are punishable
                     break;
             }
         }
 
         private void Resolve(PunchSpec s)
         {
-            if (physicsDriven) { _connected = true; return; }
+            if (physicsDriven) return;   // the ragdoll reports contact (OnStrikeLanded)
             var arm = ArmFor(s.lead);
             Vector3 fist = arm != null ? arm.rig.fore.TransformPoint(arm.rig.tip - arm.rig.elbow) : _aim;
             if (opponent == null || opponent.IsKO)
@@ -930,7 +1102,7 @@ namespace IronFauna.Boxing
 
             _slipT = Mathf.Max(0f, _slipT - dt);
             float slip = _slipT > 0f ? Mathf.Sin(Mathf.PI * (1f - _slipT / 0.42f)) : 0f;   // in and back out
-            _guardBlend = Mathf.MoveTowards(_guardBlend, intent.guard && _punch == null && !IsKO ? 1f : 0f, dt * 7f);
+            _guardBlend = Mathf.MoveTowards(_guardBlend, intent.guard && _punch == null && !IsKO && !GuardBroken && _stagger <= 0f ? 1f : 0f, dt * 9f);
             bool wantSit = (intent.sit || LegsLeft == 0) && !IsKO;
             bool oppGrounded = opponent != null && (opponent.LegsLeft == 0 || opponent.IsSeated || opponent.suppressed);
             bool groundPound = oppGrounded && _punch != null && !_punch.kick && LegsLeft > 0;

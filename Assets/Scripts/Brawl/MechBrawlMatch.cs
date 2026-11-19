@@ -90,7 +90,9 @@ namespace IronFauna.Brawl
         private MechLoadout _loadout;
         private Camera _camera;
         private Transform _arena;
-        private RectTransform _hpBar, _hpGhostBar, _poiseBar;
+        private RectTransform _hpBar, _hpGhostBar, _poiseBar, _staminaBar;
+        private Image _staminaFill;
+        private Text _staminaValueText;
         private Text _hpValueText, _poiseValueText, _scoreboardTitle;
         private readonly Image[] _limbBadgeImgs = new Image[4];
         private readonly Text[] _limbBadgeTexts = new Text[4];
@@ -378,6 +380,8 @@ namespace IronFauna.Brawl
             f.ragdoll.ArmorShed += (who, at) => BoxingSfx.Clank(0.3f);
             f.ragdoll.KnockedOut += who => { if (who == _fighters[0].ragdoll) Banner("K.O.", 2.5f); };
             f.ragdoll.GrappleEvent += OnGrapple;
+            f.ragdoll.CombatCue += OnCombatCue;
+            if (player) f.ghost.CombatCue += (who, cue) => { if (cue == "EXHAUSTED") SpawnPopup(who.ChestPoint() + Vector3.up * 1.2f, "EXHAUSTED", IronFaunaPalette.CrimsonFront, 24); };
             f.ragdoll.LimbRipped += (who, limb) =>
             {
                 if (_announcer != null && who.ghost != null)
@@ -454,7 +458,7 @@ namespace IronFauna.Brawl
 
             // 1. Top-Left Framed Player Card (Stage Header, Animated Hull + Ghost Bar, Balance Bar, 4 Limb Pills, Posture)
             var playerCard = MenuUI.Panel(root, "PlayerHudCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
-            MenuUI.Place(playerCard.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.30f, 1f), new Vector2(0f, -264f), new Vector2(0f, -20f));
+            MenuUI.Place(playerCard.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.30f, 1f), new Vector2(0f, -318f), new Vector2(0f, -20f));
             var cardEdge = MenuUI.Panel(playerCard.transform, "LeftStripe", IronFaunaPalette.CrimsonFront);
             MenuUI.Place(cardEdge.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, 0f));
             var cardTop = MenuUI.Panel(playerCard.transform, "TopRule", IronFaunaPalette.HazardYellow);
@@ -464,14 +468,17 @@ namespace IronFauna.Brawl
             MenuUI.Place(_stageHeader.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -40f), new Vector2(-12f, -8f));
 
             _hpBar = BarWithGhost(playerCard.transform, "HULL INTEGRITY", -78f, IronFaunaPalette.CrimsonFront, out _hpGhostBar, out _hpValueText);
-            _poiseBar = BarWithGhost(playerCard.transform, "BALANCE / POISE", -140f, IronFaunaPalette.CyanEnergy, out _, out _poiseValueText);
+            _poiseBar = BarWithGhost(playerCard.transform, "BALANCE / POISE", -134f, IronFaunaPalette.CyanEnergy, out _, out _poiseValueText);
+            _staminaBar = BarWithGhost(playerCard.transform, "STAMINA", -190f, IronFaunaPalette.HazardYellow, out var stGhost, out _staminaValueText);
+            if (stGhost != null) stGhost.gameObject.SetActive(false);
+            _staminaFill = _staminaBar != null ? _staminaBar.GetComponent<Image>() : null;
 
             string[] limbLabels = { "L-ARM", "R-ARM", "L-LEG", "R-LEG" };
             for (int i = 0; i < 4; i++)
             {
                 float xMin = 0.03f + i * 0.24f;
                 var pill = MenuUI.Panel(playerCard.transform, "Limb_" + limbLabels[i], IronFaunaPalette.UiSelect);
-                MenuUI.Place(pill.rectTransform, new Vector2(xMin, 1f), new Vector2(xMin + 0.22f, 1f), new Vector2(0f, -204f), new Vector2(0f, -176f));
+                MenuUI.Place(pill.rectTransform, new Vector2(xMin, 1f), new Vector2(xMin + 0.22f, 1f), new Vector2(0f, -258f), new Vector2(0f, -230f));
                 _limbBadgeImgs[i] = pill;
                 var txt = MenuUI.Label(pill.transform, limbLabels[i] + " OK", 14, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
                 MenuUI.Fill(txt.rectTransform);
@@ -502,7 +509,7 @@ namespace IronFauna.Brawl
             var controlsTop = MenuUI.Panel(controlsBar.transform, "ControlsEdge", IronFaunaPalette.UiButton);
             MenuUI.Place(controlsTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -2f), Vector2.zero);
             var help = MenuUI.Label(controlsBar.transform,
-                "WASD MOVE · CTRL SPRINT · X CROUCH · Z JIU-JITSU SIT & FLOOR SCOOT · LMB JAB · RMB CROSS · Q HOOK · E UPPERCUT · F/R/V KICKS\nHOLD G GRAB (Z/X DRAG ON MAT · LMB THROW · RMB JOINT-CRANK/TEAR LIMB · SPACE SUPLEX/SLAM) · TAB STAGE · F2 SPLIT-SCREEN · F5 RESTART · ESC MENU",
+                "WASD MOVE · CTRL SPRINT · SHIFT GUARD (TAP JUST BEFORE A HIT = PARRY) · C DODGE · X CROUCH · Z JIU-JITSU SIT & FLOOR SCOOT · LMB JAB · RMB CROSS · Q HOOK · E UPPERCUT · F/R/V KICKS\nHOLD G GRAB (Z/X DRAG ON MAT · LMB THROW · RMB JOINT-CRANK/TEAR LIMB · SPACE SUPLEX/SLAM) · TAB STAGE · F2 SPLIT-SCREEN · F5 RESTART · ESC MENU",
                 16, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Fill(help.rectTransform);
 
@@ -706,6 +713,43 @@ namespace IronFauna.Brawl
             }
         }
 
+        /// <summary>Technical-fighting feedback: parries, blocks, guard breaks, counters, ripostes and dodges.</summary>
+        private void OnCombatCue(MechRagdoll victim, MechRagdoll attacker, Vector3 point, string cue)
+        {
+            var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
+            bool mine = victim == me || attacker == me;
+            switch (cue)
+            {
+                case "PARRY":
+                    BoxingSfx.Clank(1f);
+                    SpawnPopup(point, "PARRY", IronFaunaPalette.CyanEnergy, 34);
+                    if (mine) { BoxingFeel.HitStop(0.18f); BoxingFeel.Shake(0.35f); BoxingFeel.FovKick = 3f; }
+                    if (victim == me) Banner("PARRY - RIPOSTE!", 0.9f);
+                    break;
+                case "BLOCK":
+                    BoxingSfx.Clank(0.45f);
+                    if (mine) { BoxingFeel.HitStop(0.035f); BoxingFeel.Shake(0.12f); }
+                    break;
+                case "GUARD BREAK":
+                    BoxingSfx.Clank(0.9f);
+                    BoxingSfx.Impact(0.6f);
+                    SpawnPopup(point, "GUARD BREAK", IronFaunaPalette.OrangeJointCore, 32);
+                    if (mine) { BoxingFeel.HitStop(0.12f); BoxingFeel.Shake(0.4f); }
+                    break;
+                case "COUNTER":
+                    SpawnPopup(point + Vector3.up * 0.5f, "COUNTER", IronFaunaPalette.HazardYellow, 28);
+                    if (mine) BoxingFeel.HitStop(0.06f);
+                    break;
+                case "RIPOSTE":
+                    SpawnPopup(point + Vector3.up * 0.5f, "RIPOSTE", IronFaunaPalette.CrimsonFront, 36);
+                    if (mine) { BoxingFeel.HitStop(0.2f); BoxingFeel.Shake(0.6f); BoxingFeel.FovKick = 5f; }
+                    break;
+                case "EVADE":
+                    if (mine) SpawnPopup(point, "EVADE", IronFaunaPalette.UiAccent, 22);
+                    break;
+            }
+        }
+
         private void OnGrapple(MechRagdoll who, string what)
         {
             var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
@@ -892,6 +936,13 @@ namespace IronFauna.Brawl
 
                 if (_hpValueText != null) _hpValueText.text = $"{Mathf.CeilToInt(me.health)} / {Mathf.CeilToInt(me.maxHealth)} HP";
                 if (_poiseValueText != null) _poiseValueText.text = $"{Mathf.RoundToInt(me.Poise01 * 100f)}%";
+                if (me.ghost != null)
+                {
+                    SetBar(_staminaBar, me.ghost.Stamina01);
+                    bool tired = me.ghost.Exhausted;
+                    if (_staminaFill != null) _staminaFill.color = tired ? IronFaunaPalette.CrimsonFront : me.ghost.RiposteReady ? IronFaunaPalette.CyanEnergy : IronFaunaPalette.HazardYellow;
+                    if (_staminaValueText != null) _staminaValueText.text = tired ? "EXHAUSTED" : me.ghost.RiposteReady ? "RIPOSTE!" : me.ghost.GuardBroken ? "GUARD BROKEN" : $"{Mathf.RoundToInt(me.ghost.stamina)}";
+                }
 
                 if (me.ghost != null)
                 {

@@ -12,7 +12,7 @@ namespace IronFauna.Brawl
     [RequireComponent(typeof(Rigidbody))]
     public class FallingTree : MonoBehaviour
     {
-        public float toughness = 78f;
+        public float toughness = 260f;   // a few committed heavy blows fell a redwood
         public float height = 13f;
         public float trunkRadius = 0.65f;
         public static event System.Action<Vector3> TreeFelled;
@@ -83,7 +83,7 @@ namespace IronFauna.Brawl
         {
             if (_fallen)
             {
-                if (Time.time - _fallTime > 2.6f) SplinterFallenTrunk(point, velocity);
+                if (Time.time - _fallTime > 2.6f && damage > 100f) SplinterFallenTrunk(point, velocity);   // only heavy blows splinter a trunk
                 return;
             }
             _damage += damage;
@@ -150,6 +150,7 @@ namespace IronFauna.Brawl
                 float hit = c.impulse.magnitude;
                 if (hitByMech)
                 {
+                    if (c.relativeVelocity.magnitude < 4f) return;   // brushing past a trunk does nothing
                     hit = Mathf.Max(hit, 24f + c.relativeVelocity.magnitude * 28f);
                 }
                 if (hit < 20f) return;
