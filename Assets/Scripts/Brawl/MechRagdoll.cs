@@ -85,6 +85,10 @@ namespace IronFauna.Brawl
         private float _recoverT;
         private float _lastHitT;
         private const float LimbHealth = 80f, HeadHealth = 90f;
+        /// <summary>Strikes tear a limb off only below this fraction of hull (grapple tears are separate).</summary>
+        private const float LimbRipHull = 0.5f;
+        /// <summary>Global strike damage (owner: still too chaotic): every fist/foot/knee/head/shoulder hit.</summary>
+        private const float StrikeDamageScale = 0.75f;
         private float _koElapsed;
         private bool _koCleared;
         private readonly Dictionary<MechRagdoll, int> _struckBy = new Dictionary<MechRagdoll, int>();
@@ -628,7 +632,7 @@ namespace IronFauna.Brawl
         public void ReceiveStrike(MechRagdoll attacker, Segment seg, Vector3 point, Vector3 dir, float damage, float power, float poiseMult = 1f)
         {
             if (seg.detached) return;
-            damage = Mathf.Clamp(damage, 0f, 40f);
+            damage = Mathf.Clamp(damage, 0f, 30f);
             if (damage < 1.5f) return;
             dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : -transform.forward;
 
@@ -650,7 +654,7 @@ namespace IronFauna.Brawl
             LimbId targetLimb = seg.limb;   // torso hits wear down the hull, not a random limb
             if (targetLimb != LimbId.None && !_lost.Contains(targetLimb))
             {
-                float limbDmg = damage * (seg.limb != LimbId.None ? (headShot ? 0.9f : 1.35f) : 0.65f) * tearMult;
+                float limbDmg = damage * (seg.limb != LimbId.None ? (headShot ? 0.8f : 0.9f) : 0.5f) * tearMult;
                 _limbHealth[targetLimb] -= limbDmg;
                 float lh = _limbHealth[targetLimb];
                 Segment armorSeg = seg.limb == targetLimb ? seg : null;
@@ -673,6 +677,12 @@ namespace IronFauna.Brawl
                         _limbHealth[targetLimb] = 16f;
                         if (armorSeg != null) ShedArmor(armorSeg, dir, 2);
                         Knockdown(2.0f);
+                    }
+                    else if (targetLimb != LimbId.Head && health > maxHealth * LimbRipHull)
+                    {
+                        // a limb only comes off a fighter that is already badly damaged; before that it is wrecked but holds
+                        _limbHealth[targetLimb] = 12f;
+                        if (armorSeg != null) ShedArmor(armorSeg, dir, 2);
                     }
                     else
                     {
@@ -955,7 +965,7 @@ namespace IronFauna.Brawl
                     dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : ghost.transform.forward;
                     var victim = otherPart.owner;
                     float before = victim.health;
-                    victim.ReceiveFighterStrike(this, otherPart.segment, tipPos, dir + Vector3.up * 0.1f, ghost.PunchDamage, ghost.PunchPower);
+                    victim.ReceiveFighterStrike(this, otherPart.segment, tipPos, dir + Vector3.up * 0.1f, ghost.PunchDamage * StrikeDamageScale, ghost.PunchPower);
                     if (ghost.StrikeSweeps && !victim.IsDown && victim.health < before - 3f)
                     {
                         victim.Knockdown(1.25f);
@@ -999,7 +1009,7 @@ namespace IronFauna.Brawl
             dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : transform.forward;
             float speed = c.relativeVelocity.magnitude;
-            float damage = ghost.PunchDamage * Mathf.Clamp(speed / 8f, 0.7f, 1.4f);
+            float damage = ghost.PunchDamage * StrikeDamageScale * Mathf.Clamp(speed / 8f, 0.8f, 1.1f);
             float hpBefore = otherPart.owner.health;
             otherPart.owner.ReceiveFighterStrike(this, otherPart.segment, point, dir + Vector3.up * 0.1f, damage, ghost.PunchPower);
             if (ghost.StrikeSweeps && !otherPart.owner.IsDown && otherPart.owner.health < hpBefore - 3f)
@@ -1040,16 +1050,20 @@ namespace IronFauna.Brawl
 
         private void ApplyFallDamage(Segment seg, Vector3 point, float damage, MechRagdoll attacker)
         {
-            damage = Mathf.Clamp(damage, 0f, 40f);
+            damage = Mathf.Clamp(damage, 0f, 25f);
             if (damage < 2f || IsKO) return;
             health -= damage;
             _lastHitT = Time.time;
             bool ripped = false;
             if (seg.limb != LimbId.None && !_lost.Contains(seg.limb))
             {
-                _limbHealth[seg.limb] -= damage * 0.8f;
+                _limbHealth[seg.limb] -= damage * 0.4f;
                 if (_limbHealth[seg.limb] < 30f) ShedArmor(seg, Vector3.up, 1);
-                if (_limbHealth[seg.limb] <= 0f) { RipLimb(seg.limb, Vector3.up * damage); ripped = true; }
+                if (_limbHealth[seg.limb] <= 0f)
+                {
+                    if (health > maxHealth * LimbRipHull) _limbHealth[seg.limb] = 12f;
+                    else { RipLimb(seg.limb, Vector3.up * damage); ripped = true; }
+                }
             }
             else ShedArmor(seg, Vector3.up, 1);
             if (health <= 0f) KnockOut();

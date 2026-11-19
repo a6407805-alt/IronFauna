@@ -202,8 +202,10 @@ namespace IronFauna.Brawl
                           : stage == BrawlStageId.FoundryCrucible ? IronFaunaPalette.FoundryRust
                           : stage == BrawlStageId.OrbitalDish ? IronFaunaPalette.OffWhitePanel
                           : rockCol;
-                BreakableProp.Create(arena, "DestructiblePillar", new Vector3(p.x, gy + h * 0.5f - 0.3f, p.z),
+                var pillar = BreakableProp.Create(arena, "DestructiblePillar", new Vector3(p.x, gy + h * 0.5f - 0.3f, p.z),
                     new Vector3(1.8f, h, 1.8f), col, 220f, true, new Vector3Int(2, 5, 2));
+                if (stage == BrawlStageId.BasaltMesa || stage == BrawlStageId.ScrapyardColosseum || stage == BrawlStageId.GlacierTrench)
+                    pillar.DressAsRock(rng.Next());   // natural stages: a rock spire, not a box
             }
 
             // 2. Destructible walls, shipping containers & barriers
@@ -234,7 +236,7 @@ namespace IronFauna.Brawl
             }
 
             // 4. Loose crates (explosive cells removed at the owner's request, 2026-11-18)
-            for (int i = 0; i < 14; i++)
+            for (int i = 0; i < 8; i++)
             {
                 Vector3 p = new Vector3(Random.Range(-21f, 21f), 0f, Random.Range(-21f, 21f));
                 if (p.magnitude < 5.5f) p = p.normalized * 7.5f;

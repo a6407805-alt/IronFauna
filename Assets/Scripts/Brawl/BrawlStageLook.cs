@@ -54,10 +54,10 @@ namespace IronFauna.Brawl
                     return new Look
                     {
                         zenith = P.OrbitalSkyZenith, horizon = P.OrbitalSkyHorizon, below = P.OrbitalCloud, sun = P.KeyLightWarm,
-                        sunPitch = 56f, sunYaw = -20f, sunIntensity = 2.7f, fillIntensity = 0.35f,
-                        ambSky = P.Lerp(P.OrbitalSkyHorizon, P.OrbitalSkyZenith, 0.45f), ambEquator = P.OrbitalSkyHorizon, ambGround = P.OrbitalCloud * 0.75f,
+                        sunPitch = 56f, sunYaw = -20f, sunIntensity = 1.8f, fillIntensity = 0.25f,
+                        ambSky = P.Lerp(P.OrbitalSkyHorizon, P.OrbitalSkyZenith, 0.55f), ambEquator = P.OrbitalSkyHorizon * 0.7f, ambGround = P.OrbitalSeam * 0.6f,
                         fog = P.Lerp(P.OrbitalSkyHorizon, P.OrbitalCloud, 0.45f), fogStart = 70f, fogEnd = 420f, clouds = 0f, filter = P.StageWhite,
-                        exposure = 0f, contrast = 20f, saturation = 4f, bloom = 0.6f, bloomThreshold = 1f, vignette = 0.3f, temperature = -6f,
+                        exposure = -0.45f, contrast = 20f, saturation = 4f, bloom = 0.35f, bloomThreshold = 1.2f, vignette = 0.3f, temperature = -6f,
                         groundMetal = 0.25f, sky = SkyKind.Space, fx = Fx.Sparkle,
                     };
                 case BrawlStageId.ScrapyardColosseum:
@@ -301,7 +301,7 @@ namespace IronFauna.Brawl
                     float fs = a01 - si;
                     float arc = 2f * Mathf.PI * Mathf.Max(rr, 0.5f) / segs;
                     float edge = Mathf.Min(Mathf.Min(fr, 1f - fr) * ring, Mathf.Min(fs, 1f - fs) * arc);
-                    col = P.OrbitalPanel * (0.9f + 0.12f * Hash(ri, si, 5));
+                    col = P.OrbitalPanel * (0.68f + 0.1f * Hash(ri, si, 5));   // a mid-grey ceramic: pure white blew out under the high sun
                     float grime = Ramp(0.55f, 0.8f, Fbm(nx * 0.09f, nz * 0.09f));
                     col = L(col, P.OrbitalSeam, grime * 0.35f);
                     float scorch = Ramp(0.22f, 0.04f, r) * Ramp(0.4f, 0.7f, Fbm(nx * 0.4f, nz * 0.4f));

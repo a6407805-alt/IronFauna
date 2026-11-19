@@ -41,6 +41,23 @@ namespace IronFauna.Brawl
             return p;
         }
 
+        /// <summary>Hides the box and wraps the prop in a lumpy rock so stone pillars stop reading as plain boxes.</summary>
+        public void DressAsRock(int seed)
+        {
+            var box = GetComponent<BoxCollider>();
+            if (box == null) return;
+            if (TryGetComponent<Renderer>(out var r)) r.enabled = false;
+            Vector3 s = box.size;
+            var skin = new GameObject("RockSkin");
+            skin.transform.SetParent(transform, false);
+            Vector3 scale = new Vector3(s.x * 1.3f, s.y * 1.35f, s.z * 1.3f);
+            skin.transform.localPosition = new Vector3(0f, -s.y * 0.23f - 0.3f, 0f);
+            skin.transform.localRotation = Quaternion.Euler(0f, (seed % 360), 0f);
+            skin.transform.localScale = scale;
+            skin.AddComponent<MeshFilter>().sharedMesh = BrawlTerrain.RockMesh(seed);
+            skin.AddComponent<MeshRenderer>().sharedMaterial = IronFaunaMaterials.GetTerrain(color);
+        }
+
         public void ApplyStrike(Vector3 point, Vector3 velocity, float damage)
         {
             if (_broken) return;
@@ -100,7 +117,7 @@ namespace IronFauna.Brawl
                 float near = Mathf.Clamp01(1.5f - away.magnitude / Mathf.Max(0.5f, size.magnitude * 0.5f));
                 rb.linearVelocity = (parentRb.isKinematic ? Vector3.zero : parentRb.linearVelocity) + away.normalized * near * 6f + velocity * 0.15f * near;
                 rb.angularVelocity = Random.insideUnitSphere * 4f;
-                Destroy(go, Random.Range(22f, 30f));
+                go.AddComponent<DebrisFade>().life = Random.Range(6f, 9f);   // debris clears quickly so the floor stays readable
             }
             // If this was a supporting building story, un-anchor ALL stories in the column above it so the entire skyscraper cascades downward!
             foreach (var col in Physics.OverlapBox(transform.position + Vector3.up * (size.y * 2.5f), new Vector3(size.x * 0.45f, size.y * 2.5f, size.z * 0.45f), transform.rotation, ~0, QueryTriggerInteraction.Ignore))
