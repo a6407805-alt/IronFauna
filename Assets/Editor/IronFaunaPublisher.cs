@@ -48,22 +48,48 @@ namespace IronFauna.EditorTools
         private volatile bool _failed;
         private CancellationTokenSource _cts;
 
-        [MenuItem("IronFauna/Publish Update...", priority = 0)]
+        [MenuItem("IronFauna/Publish Update... %#&p", priority = 0)]   // Ctrl+Shift+Alt+P
         private static void Open()
         {
             var w = GetWindow<IronFaunaPublisher>(true, "Publish IronFauna Update");
             w.minSize = new Vector2(520, 560);
         }
 
-        [MenuItem("IronFauna/Capture Launcher Art (Play mode)", priority = 1)]
+        [MenuItem("IronFauna/Capture Launcher Art (Play mode) %#&k", priority = 1)]   // Ctrl+Shift+Alt+K
         private static void CaptureArt()
         {
+            // Render the main camera on its own (no HUD: screen-space overlay canvases aren't drawn by Camera.Render)
+            Camera cam = Camera.main;
+            if (cam == null) { Debug.LogWarning("[IronFauna] No main camera to capture."); return; }
             Directory.CreateDirectory("Builds");
-            ScreenCapture.CaptureScreenshot(ArtPath, 2);
+            const int w = 2560, h = 1440;
+            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32) { antiAliasing = 4 };
+            RenderTexture prevTarget = cam.targetTexture, prevActive = RenderTexture.active;
+            Rect prevRect = cam.rect;
+            try
+            {
+                cam.rect = new Rect(0f, 0f, 1f, 1f);
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                File.WriteAllBytes(ArtPath, tex.EncodeToPNG());
+                DestroyImmediate(tex);
+            }
+            finally
+            {
+                cam.targetTexture = prevTarget;
+                cam.rect = prevRect;
+                RenderTexture.active = prevActive;
+                rt.Release();
+                DestroyImmediate(rt);
+            }
             Debug.Log("[IronFauna] Launcher art saved to " + ArtPath + " (it goes up with the next Publish Update).");
         }
 
-        [MenuItem("IronFauna/Capture Launcher Art (Play mode)", true)]
+        [MenuItem("IronFauna/Capture Launcher Art (Play mode) %#&k", true)]
         private static bool CaptureArtValid() => Application.isPlaying;
 
         private void OnEnable()
