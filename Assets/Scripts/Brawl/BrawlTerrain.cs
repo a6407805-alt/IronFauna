@@ -172,7 +172,7 @@ namespace IronFauna.Brawl
             return root;
         }
 
-        /// <summary>Spawns stage-specific destructible structures, walls, pillars, buildings, falling trees and explosive cells.</summary>
+        /// <summary>Spawns stage-specific destructible structures, walls, pillars, buildings, falling trees and crates.</summary>
         public static void PopulateDestructibles(Transform arena, BrawlStageId stage, int seed)
         {
             var rng = new System.Random(seed);
@@ -233,13 +233,13 @@ namespace IronFauna.Brawl
                     new Vector3(2.4f, 11f, 2.4f), IronFaunaPalette.OffWhitePanel, 240f, true, new Vector3Int(2, 6, 2));
             }
 
-            // 4. Loose crates & explosive fuel/plasma cells
+            // 4. Loose crates (explosive cells removed at the owner's request, 2026-11-18)
             for (int i = 0; i < 14; i++)
             {
                 Vector3 p = new Vector3(Random.Range(-21f, 21f), 0f, Random.Range(-21f, 21f));
                 if (p.magnitude < 5.5f) p = p.normalized * 7.5f;
                 if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
-                bool explosive = (i % 5 == 0) || (stage == BrawlStageId.FoundryCrucible && i % 4 == 1);   // a few hazards, not a minefield
+                const bool explosive = false;
                 float sz = explosive ? 1.35f : Random.Range(1.1f, 1.9f);
                 Color col = explosive ? IronFaunaPalette.OrangeJointCore : IronFaunaPalette.HazardYellow;
                 BreakableProp.Create(arena, explosive ? "ExplosiveCell" : "Crate",
@@ -295,7 +295,7 @@ namespace IronFauna.Brawl
                     new Vector3(0f, 3.25f, 0f), Quaternion.identity, IronFaunaPalette.HazardYellow, true);
             }
 
-            // 3. Parked street cars / vehicles (cabin roof + glowing headlights/taillights; explosive when smashed!)
+            // 3. Parked street cars / vehicles (cabin roof + glowing headlights/taillights)
             for (int i = 0; i < 8; i++)
             {
                 Vector3 p = new Vector3(Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()), 0f, Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()));
@@ -303,7 +303,7 @@ namespace IronFauna.Brawl
                 if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
                 Color carCol = (i % 3 == 0) ? IronFaunaPalette.CrimsonFront : (i % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.CobaltFront;
                 var car = BreakableProp.Create(arena, "StreetCar", new Vector3(p.x, gy + 0.72f, p.z),
-                    new Vector3(2.1f, 0.95f, 4.1f), carCol, 85f, false, new Vector3Int(2, 2, 3), i % 4 == 0);
+                    new Vector3(2.1f, 0.95f, 4.1f), carCol, 85f, false, new Vector3Int(2, 2, 3), false);
                 var cab = ClamshellParts.Spawn(car.transform, "CarCabin",
                     ClamshellMeshFactory.BeveledBox(new Vector3(1.75f, 0.68f, 2.1f), 0.08f),
                     new Vector3(0f, 0.76f, -0.15f), Quaternion.identity, IronFaunaPalette.CityGlass);
