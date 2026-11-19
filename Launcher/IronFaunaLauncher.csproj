@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- IronFauna Launcher: a Warframe-style installer / updater / PLAY button for the game.
+       Built on GitHub's Windows runner by .github/workflows/launcher.yml and published to the "latest" release as
+       IronFauna-Launcher.exe. Self-contained single file, so friends don't need to install .NET first.
+       The game itself is uploaded to the same release from Unity (IronFauna > Publish Update). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>IronFauna-Launcher</AssemblyName>
+    <RootNamespace>IronFaunaLauncher</RootNamespace>
+    <ApplicationIcon>Assets\launcher.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <Product>IronFauna Launcher</Product>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\background.png" />
+    <Resource Include="Assets\emblem.png" />
+  </ItemGroup>
+
+</Project>
