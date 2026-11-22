@@ -36,7 +36,7 @@ When building gameplay, feel, audio, shell, or live features, load the `craft-ga
 - `Assets/Scripts/Menu/` — `IronFaunaMenuRoot` (title: FIGHT / GARAGE / QUIT; garage: paint, weight classes, armored/skeleton view, per-slot sets, stats Armor/Speed/Power/Stamina; FIGHT saves and starts a brawl), `MechShowcaseStage` (turntable, studio lights, orbit camera), `MenuUI` (code-built uGUI kit).
 - `Assets/Scripts/Gameplay/MechGaitAnimator.cs` — the walk cycle (hips + legs) of every fighter.
 - `Assets/Scripts/Boxing/` — `MechBoxer` (fighter brain + upper body), `MechBoxerAI`, `MechBoxerPlayerInput`, `BoxingFeel` (hit-stop, trauma), `BoxingSfx` (synthesised impact/clank/whoosh).
-- `Assets/Scripts/Brawl/` — `MechRagdoll`, `MechRagdollPart`, `MechBrawlMatch`, `MechBrawlCamera`, `MechBrawlNet`, `BrawlAnnouncer`, `BrawlTerrain` (heights, rocks, destructibles), `BrawlStageLook` (baked ground, sky, lighting, post, backdrop, set dressing, ambient particles), `BreakableProp`, `FallingTree`.
+- `Assets/Scripts/Brawl/` — `MechRagdoll`, `MechRagdollPart`, `MechBrawlMatch`, `MechBrawlCamera`, `MechBrawlNet`, `BrawlAnnouncer` (banner for everything; TTS voice only for round/bout start, limb torn, KO, ring out, match end, champion — owner 2026-11-22), `BrawlTerrain` (heights, rocks, destructibles), `BrawlStageLook` (baked ground, sky, lighting, post, backdrop, set dressing, ambient particles), `BreakableProp`, `FallingTree`.
 - `Assets/Editor/` — `IronFaunaMenuSceneSetup` (creates MainMenu, only build scene, rebuilds mechs in open scenes, toon upgrade menu), `IronFaunaModelDrop` (bulk FBX zip import), `ClamshellModelImporter`.
 
 ## 5. Leg Clearance Rules (verified numerically)

@@ -181,7 +181,7 @@ namespace IronFauna.Brawl
                         break;
                 }
             }
-            Announce(line, 3.6f, 2, 0, 0.9f);
+            Announce(line, 3.6f, 2, 0, 0.9f, spoken: "Fight!");
         }
 
         public void OnHeavyHit(string attacker, string victim, float damage)
@@ -189,7 +189,7 @@ namespace IronFauna.Brawl
             if (!_firstBloodDone && damage >= 8f)
             {
                 _firstBloodDone = true;
-                Announce($"FIRST BLOOD! {attacker} ROCKS {victim}!", 2.5f, 2, 1, 0.8f);
+                Announce($"FIRST BLOOD! {attacker} ROCKS {victim}!", 2.5f, 2, 1, 0.8f);   // banner only
                 return;
             }
             if (damage >= 18f && _cooldown <= 0f)
@@ -218,7 +218,10 @@ namespace IronFauna.Brawl
                     ? $"NO ARMS LEFT! {victim} CAN ONLY HEADBUTT AND KICK!"
                     : $"ARM TORN OUT AT THE SOCKET ON {victim}!";
             }
-            Announce(call, 3.2f, 3, 2, 1.0f);
+            string say = limb == LimbId.Head ? "Decapitation!"
+                : limb == LimbId.LegL || limb == LimbId.LegR ? "Leg ripped off!"
+                : "Arm torn off!";
+            Announce(call, 3.2f, 3, 2, 1.0f, spoken: say);
         }
 
         public void OnGrappleMove(string who, string moveCode)
@@ -250,17 +253,17 @@ namespace IronFauna.Brawl
         public void OnElimination(string who, bool ringOut, int aliveRemaining)
         {
             if (ringOut)
-                Announce($"RING OUT! {who} IS HURLED INTO THE ABYSS!", 2.8f, 3, 3, 1.0f);
+                Announce($"RING OUT! {who} IS HURLED INTO THE ABYSS!", 2.8f, 3, 3, 1.0f, spoken: "Ring out!");
             else if (aliveRemaining == 2)
-                Announce($"{who} IS OUT — DOWN TO THE FINAL TWO!", 2.8f, 3, 0, 0.95f);
+                Announce($"{who} IS OUT — DOWN TO THE FINAL TWO!", 2.8f, 3, 0, 0.95f, spoken: "Final two!");
             else
-                Announce($"KNOCKOUT! {who} IS REDUCED TO SCRAP!", 2.5f, 2, 1, 0.9f);
+                Announce($"KNOCKOUT! {who} IS REDUCED TO SCRAP!", 2.5f, 2, 1, 0.9f, spoken: "Knockout!");
         }
 
         public void OnMatchEnd(string headline)
         {
             BoxingSfx.AnnouncerBell();
-            Announce($"MATCH OVER — {headline}!", 3.8f, 4, 0, 1.0f);
+            Announce($"MATCH OVER — {headline}!", 3.8f, 4, 0, 1.0f, spoken: "That's the match!");
         }
 
         public void OnTournamentBoutStart(string roundName, string opponentName, string opponentStyle, BrawlStageId stage, bool isBoss)
@@ -272,16 +275,21 @@ namespace IronFauna.Brawl
             string line = isBoss
                 ? $"{roundName} AT {stageName} — CHALLENGER VERSUS DEFENDING CHAMPION {opponentName} — FIGHT!"
                 : $"{roundName} AT {stageName} — YOU VERSUS {opponentName}, {opponentStyle} — LET'S SCRAP!";
-            Announce(line, 4.2f, 3, 0, 1.0f);
+            Announce(line, 4.2f, 3, 0, 1.0f, spoken: isBoss ? "The grand final. Fight!" : $"{roundName.ToLowerInvariant()}. Fight!");
         }
 
         public void OnTournamentChampion()
         {
             BoxingSfx.AnnouncerBell();
-            Announce("UNBELIEVABLE! WE HAVE A NEW IRONFAUNA GRAND TOURNAMENT CHAMPION!", 4.6f, 5, 0, 1.0f);
+            Announce("UNBELIEVABLE! WE HAVE A NEW IRONFAUNA GRAND TOURNAMENT CHAMPION!", 4.6f, 5, 0, 1.0f, spoken: "We have a new champion!");
         }
 
-        private void Announce(string text, float duration, int priority, int voiceStyle, float hype)
+        /// <summary>
+        /// Shows a line in the broadcast banner. Only key moments (round/bout start, limb torn off, knockout, ring out,
+        /// match end, champion) pass <paramref name="spoken"/>, a short call for the voice; everything else is
+        /// banner-only so the TTS never narrates every hit, grapple or smashed prop.
+        /// </summary>
+        private void Announce(string text, float duration, int priority, int voiceStyle, float hype, string spoken = null)
         {
             if (_holdT > 0.2f && priority < _lastPriority) return;
             _lastPriority = priority;
@@ -290,8 +298,7 @@ namespace IronFauna.Brawl
             _cooldown = 1.6f;
             if (_lineText != null) _lineText.text = text;
             if (_panel != null) _panel.gameObject.SetActive(true);
-            BoxingSfx.AnnouncerVoice(voiceStyle, hype * 0.45f);
-            SpeakTts(text);
+            if (!string.IsNullOrEmpty(spoken)) SpeakTts(spoken);
         }
 
         private void Update()
