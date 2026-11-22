@@ -93,6 +93,14 @@ namespace IronFauna.Brawl
         /// <summary>Local player <paramref name="slot"/>'s pilot loadout, or null (then a preset is used).</summary>
         private static IronFauna.Pilots.PilotProfile PilotFor(int slot) => IronFauna.Pilots.PilotStore.ForSlot(slot);
 
+        private static Vector3 RingOutReturnSpot()
+        {
+            float a = Random.Range(0f, Mathf.PI * 2f), d = Random.Range(4f, 9f);
+            Vector3 p = new Vector3(Mathf.Cos(a) * d, 0f, Mathf.Sin(a) * d);
+            p.y = MechBoxer.TryGround(p + Vector3.up * 25f, out float gy) ? gy : ArenaTop;
+            return p;
+        }
+
         private Fighter FighterOf(MechRagdoll r)
         {
             if (r == null) return null;
@@ -976,6 +984,11 @@ namespace IronFauna.Brawl
             if (what == "SLAM" || what == "SUPLEX" || what == "TORN" || what == "JOINT CRANK") { BoxingFeel.Shake(0.6f); BoxingFeel.HitStop(0.1f); }
             if (finisher) { BoxingFeel.Shake(0.9f); BoxingFeel.HitStop(0.16f); BoxingFeel.FovKick = 6f; }
             if (who == me && finisher) Banner(what + "!", 1.5f);
+            if (what == "BROKE FREE")
+            {
+                SpawnPopup(who.HeadPosition + Vector3.up * 0.6f, "BROKE FREE!", IronFaunaPalette.CyanEnergy, 28);
+                if (who == me) Banner("BROKE FREE!", 1.1f);
+            }
             if (what == "THROW" || what.Contains("OFF BALANCE")) BoxingFeel.Shake(0.35f);
             if (who == me && (what == "TORN" || what == "SLAM" || what == "SUPLEX" || what == "THROW" || what == "JOINT CRANK" || what.Contains("NO ") || what.Contains("OFF BALANCE")))
                 Banner(what == "TORN" ? "LIMB TORN" : what, 1.25f);
@@ -1126,6 +1139,17 @@ namespace IronFauna.Brawl
             {
                 Vector3 fp = f.ragdoll != null ? f.ragdoll.Position : Vector3.zero;
                 bool ringOut = fp.y < ArenaTop - 8f || ((fp.x * fp.x + fp.z * fp.z > (IslandRadius * 0.91f) * (IslandRadius * 0.91f)) && fp.y < ArenaTop - 2.2f);
+                // Ring out is no longer an instant win (owner: "won the whole tournament throwing them off the cliff"):
+                // the robot loses 30% hull and is put back in the arena; only a fall that empties the hull knocks it out.
+                if (ringOut && !f.out_ && !f.ragdoll.IsKO)
+                {
+                    if (!f.ragdoll.RingOutPenalty(0.3f, RingOutReturnSpot()))
+                    {
+                        ringOut = false;
+                        if (f.player) Banner("RING OUT  -30% HULL", 1.8f);
+                        if (_announcer != null) _announcer.OnRingOutPenalty(f.name);
+                    }
+                }
                 if (!f.out_ && (f.ragdoll.IsKO || ringOut))
                 {
                     f.out_ = true;

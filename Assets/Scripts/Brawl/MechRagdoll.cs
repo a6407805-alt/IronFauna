@@ -527,6 +527,7 @@ namespace IronFauna.Brawl
             }
 
             Grapple(dt);
+            if (_grabbedBy != null) TickStruggle(dt);
         }
 
         /// <summary>Floor (not a mech or a steep cliff wall) under this point, accounting for hills and slopes.</summary>
@@ -1081,6 +1082,91 @@ namespace IronFauna.Brawl
         private MechRagdoll _thrownBy;
         private float _thrownT = -10f, _slammedT = -10f;
         private float _slamMult = 1.8f;
+        private bool _impactUsed;
+
+        // ------------------------------------------------------------------ grab balance (owner 2026-11-22: "grab-throw
+        // over and over, no struggle, no way out, way too much damage - won the tournament throwing them off the cliff")
+        private const float HoldStaminaPerSecond = 9f;
+        private const float GrabImmunity = 2.5f, GrabCooldown = 1.2f;
+        private float _grabImmuneUntil, _grabCooldownUntil;
+        private float _struggle;
+        private int _mashSeen;
+        private int _grabStreak;
+        private float _lastGrabbedT = -99f;
+        private bool? _isHuman;
+        private float _aiSkill = 0.5f;
+
+        /// <summary>0..1 progress of breaking out of a grab (HUD meter).</summary>
+        public float Struggle01 => Mathf.Clamp01(_struggle);
+
+        /// <summary>Grabbed again and again within 10 s: each throw / slam / piledriver does 30% less.</summary>
+        internal float RepeatGrabFactor => Mathf.Pow(0.7f, Mathf.Max(0, _grabStreak - 1));
+
+        /// <summary>The held robot fights back: players mash any attack / dodge key, AI struggles by skill; more stamina
+        /// = faster; an exhausted grabber loses the grip twice as fast. Full meter = break free.</summary>
+        private void TickStruggle(float dt)
+        {
+            if (_grabbedBy == null || IsKO || ghost == null) return;
+            if (_isHuman == null)
+            {
+                _isHuman = ghost.GetComponent<MechBoxerPlayerInput>() != null;
+                var ai = ghost.GetComponent<MechBoxerAI>();
+                if (ai != null) _aiSkill = ai.skill;
+            }
+            float rate = 0.16f;
+            if (_isHuman == true)
+            {
+                int presses = ghost.mashCount - _mashSeen;
+                _mashSeen = ghost.mashCount;
+                _struggle += presses * 0.11f;
+            }
+            else rate += 0.25f + _aiSkill * 0.45f;
+            rate *= Mathf.Lerp(0.6f, 1.3f, ghost.Stamina01);
+            if (_grabbedBy.ghost != null && _grabbedBy.ghost.Exhausted) rate *= 2f;
+            _struggle += rate * dt;
+            if (_struggle >= 1f) _grabbedBy.BreakFree(this);
+        }
+
+        /// <summary>The held robot escapes: both are shoved apart, the grabber loses stamina and can't re-grab them for a bit.</summary>
+        internal void BreakFree(MechRagdoll victim)
+        {
+            if (_held != victim) return;
+            DropHold();
+            if (ghost != null) ghost.SpendStamina(20f);
+            Vector3 away = victim.Position - Position;
+            away.y = 0f;
+            away = away.sqrMagnitude > 1e-4f ? away.normalized : -transform.forward;
+            foreach (var s in victim._segs) if (!s.detached && !s.rb.isKinematic) s.rb.linearVelocity = away * 4f + Vector3.up * 1.5f;
+            victim._downT = Mathf.Min(victim._downT, 0.35f);
+            GrappleEvent?.Invoke(victim, "BROKE FREE");
+        }
+
+        // ------------------------------------------------------------------ ring out (no more instant wins off the cliff)
+        /// <summary>
+        /// Fell off the arena: lose <paramref name="hullFraction"/> of max hull and get put back on the arena at
+        /// <paramref name="spot"/>, knocked down. Returns true if the fall knocked the robot out instead.
+        /// </summary>
+        public bool RingOutPenalty(float hullFraction, Vector3 spot)
+        {
+            if (IsKO) return true;
+            if (_heldSeg != null) DropHold();
+            health -= maxHealth * hullFraction;
+            _lastHitT = Time.time;
+            if (health <= 0f) { KnockOut(); return true; }
+            Vector3 delta = spot + Vector3.up * 1.2f - _pelvis.rb.position;
+            foreach (var s in _segs)
+            {
+                if (s.detached || s.rb == null) continue;
+                s.rb.position += delta;
+                s.phys.transform.position += delta;
+                s.rb.linearVelocity = Vector3.zero;
+                s.rb.angularVelocity = Vector3.zero;
+            }
+            if (ghost != null) ghost.Teleport(spot);
+            _downT = Mathf.Max(_downT, 1.2f);
+            _grabImmuneUntil = Time.time + GrabImmunity;
+            return false;
+        }
 
         // ------------------------------------------------------------------ WWE-style grab finishers (owner 2026-11-22)
         // While holding a robot: E powerbomb, Q chokeslam, F piledriver, R giant swing (LMB throw, RMB tear, Space slam).
@@ -1143,7 +1229,7 @@ namespace IronFauna.Brawl
                         foreach (var s in victim._segs)
                             if (!s.rb.isKinematic) { s.rb.linearVelocity = Vector3.down * 30f; s.rb.angularVelocity = Vector3.zero; }
                         if (victim._head != null && !victim._head.detached)
-                            victim.ReceiveStrike(this, victim._head, victim._head.rb.position, Vector3.down, 24f, 0.9f, 2f);
+                            victim.ReceiveStrike(this, victim._head, victim._head.rb.position, Vector3.down, 24f * victim.RepeatGrabFactor, 0.9f, 2f);
                         ReleaseFinisher(victim, 1.6f, 3.0f, "PILEDRIVER", 2.2f);
                         return true;
                     }
@@ -1162,6 +1248,7 @@ namespace IronFauna.Brawl
                             if (!s.rb.isKinematic) { s.rb.linearVelocity = tangent * speed + Vector3.up * 6f; s.rb.angularVelocity = UnityEngine.Random.insideUnitSphere * 4f; }
                         victim._thrownBy = this;
                         victim._thrownT = Time.time;
+                        victim._impactUsed = false;
                         ghost.forcedSpin = 0f;
                         DropHold();
                         victim.Knockdown(2f);
@@ -1181,6 +1268,7 @@ namespace IronFauna.Brawl
             victim._thrownBy = this;
             victim._slammedT = Time.time;
             victim._slamMult = slamMult;
+            victim._impactUsed = false;
             Vector3 impact = victim.Position;
             DropHold();
             victim.Knockdown(downTime);
@@ -1217,8 +1305,14 @@ namespace IronFauna.Brawl
             _impactT = Time.time;
             bool slammed = Time.time - _slammedT < 2f;
             bool thrown = Time.time - _thrownT < 3f;
+            if ((slammed || thrown) && _impactUsed) return;   // bounces after the first landing don't hurt
             Vector3 point = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
             float damage = (speed - 8.5f) * 2.4f * (slammed ? _slamMult : 1f);
+            if (slammed || thrown)
+            {
+                _impactUsed = true;
+                damage *= (thrown && !slammed ? 0.7f : 1f) * RepeatGrabFactor;
+            }
             var attacker = thrown || slammed ? _thrownBy : null;
 
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
@@ -1369,16 +1463,23 @@ namespace IronFauna.Brawl
             }
             else rb.AddForce(acc * _heldMass * 0.75f - Physics.gravity * _heldMass * 0.9f, ForceMode.Force);
 
-            if (_held != null && _fin == Finisher.None)
+            if (_held != null)
             {
-                _holdT += dt;
-                if (_holdT > 2.8f && !_held.IsKO) { var h = _held; DropHold(); h.Knockdown(0.6f); GrappleEvent?.Invoke(this, "BROKE FREE"); }
+                // holding a whole robot is tiring: no free stamina while you hold, and an empty tank loses the grip
+                ghost.SpendStamina(HoldStaminaPerSecond * dt);
+                if (ghost.stamina <= 0.5f && !_held.IsKO) { BreakFree(_held); return; }
+                if (_fin == Finisher.None)
+                {
+                    _holdT += dt;
+                    if (_holdT > 3.2f && !_held.IsKO) { BreakFree(_held); return; }
+                }
             }
         }
 
         private void TryGrab()
         {
             if (ghost.Exhausted || ghost.stamina <= 0f) return;   // too spent to clinch
+            if (Time.time < _grabCooldownUntil) return;            // can't chain grabs
             Segment best = null;
             MechRagdoll bestOwner = null;
             float bestD = 1.4f;
@@ -1394,6 +1495,7 @@ namespace IronFauna.Brawl
                     if (part == null || part.owner == null || part.owner == this || part.segment == null || part.segment.heldBy != null) continue;
                     if (team != 0 && !part.segment.detached && part.owner.team == team) continue;
                     if (!part.segment.detached && part.owner._grabbedBy != null) continue;
+                    if (!part.segment.detached && Time.time < part.owner._grabImmuneUntil) continue;   // just escaped / was thrown
                     if (!part.segment.detached && part.owner.ghost != null && part.owner.ghost.Evading) continue;   // dodged the clinch
                     float d = Vector3.Distance(col.ClosestPoint(tip), tip);
                     if (d < bestD) { bestD = d; best = part.segment; bestOwner = part.owner; }
@@ -1428,6 +1530,11 @@ namespace IronFauna.Brawl
         {
             if (_heldSeg != null) _heldSeg.heldBy = null;
             if (_held != null && _held._grabbedBy == this) _held.ReleasedBy(this);
+            if (_held != null)
+            {
+                _held._grabImmuneUntil = Time.time + GrabImmunity;
+                _grabCooldownUntil = Time.time + GrabCooldown;
+            }
             if (_held != null && isActiveAndEnabled && !_restoreCollision.ContainsKey(_held))
                 _restoreCollision[_held] = StartCoroutine(RestoreBodyCollisionLater(_held));
             _held = null;
@@ -1443,10 +1550,12 @@ namespace IronFauna.Brawl
 
         private void Throw()
         {
-            Vector3 v = ghost.transform.forward * 16f + Vector3.up * 7.5f + ghost.Velocity;
+            Vector3 v = ghost.transform.forward * 11f + Vector3.up * 5.5f + ghost.Velocity * 0.5f;
             if (_held != null)
             {
                 var victim = _held;
+                ghost.SpendStamina(10f);
+                victim._impactUsed = false;
                 foreach (var s in victim._segs) if (!s.rb.isKinematic) { s.rb.linearVelocity = v; s.rb.angularVelocity = UnityEngine.Random.insideUnitSphere * 3f; }
                 victim._thrownBy = this;
                 victim._thrownT = Time.time;
@@ -1476,6 +1585,7 @@ namespace IronFauna.Brawl
             victim._thrownBy = this;
             victim._slammedT = Time.time;
             victim._slamMult = 1.8f;
+            victim._impactUsed = false;
             DropHold();
             victim.Knockdown(2.2f);
             GrappleEvent?.Invoke(this, suplex ? "SUPLEX" : "SLAM");
@@ -1553,6 +1663,10 @@ namespace IronFauna.Brawl
 
         internal void GrabbedBy(MechRagdoll attacker)
         {
+            _grabStreak = Time.time - _lastGrabbedT < 10f ? _grabStreak + 1 : 1;
+            _lastGrabbedT = Time.time;
+            _struggle = 0f;
+            _mashSeen = ghost != null ? ghost.mashCount : 0;
             _grabbedBy = attacker;
             _downT = Mathf.Max(_downT, 999f);
             _recoverT = 0f;

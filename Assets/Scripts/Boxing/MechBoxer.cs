@@ -549,6 +549,15 @@ namespace IronFauna.Boxing
         /// <summary>Grapple finishers (set by the ragdoll): extra lift height (m) and reach (m) of the hold point, and a
         /// forced spin (deg/s) that overrides facing - the giant swing.</summary>
         [NonSerialized] public float holdExtraHeight, holdExtraReach, forcedSpin;
+        /// <summary>Counts button presses from the player (for struggling out of a grab).</summary>
+        [NonSerialized] public int mashCount;
+
+        /// <summary>Moves the ghost (ring-out recovery) and stops its momentum.</summary>
+        public void Teleport(Vector3 p)
+        {
+            transform.position = p;
+            _vel = Vector3.zero;
+        }
         public bool Reaching => intent.grab && ArmsLeft > 0 && !holding && _punch == null && !IsKO && !suppressed;
 
         /// <summary>Where a held thing is carried: out in front of the chest, dragged low on the mat when crouching/seated, raised overhead for a slam, swung in an arc.</summary>

@@ -67,11 +67,33 @@ namespace IronFauna.Brawl
             return IronFaunaPalette.UiStatusBad;
         }
 
+        private GameObject _struggleRoot;
+        private RectTransform _struggleFill;
+        private Text _struggleText;
+
         public void Build(Transform root)
         {
             _root = root;
             BuildKeyboard(root);
             BuildDolls(root);
+            BuildStruggle(root);
+        }
+
+        /// <summary>"GRABBED! MASH ANY ATTACK KEY TO BREAK FREE" with a meter, shown while you are held.</summary>
+        private void BuildStruggle(Transform root)
+        {
+            var panel = MenuUI.Panel(root, "StrugglePrompt", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.9f));
+            MenuUI.Place(panel.rectTransform, new Vector2(0.36f, 0.2f), new Vector2(0.64f, 0.27f), Vector2.zero, Vector2.zero);
+            _struggleText = MenuUI.Label(panel.transform, "GRABBED!  MASH ANY ATTACK KEY TO BREAK FREE", 22, IronFaunaPalette.CrimsonFront, TextAnchor.MiddleCenter, FontStyle.Bold);
+            MenuUI.Place(_struggleText.rectTransform, new Vector2(0f, 0.42f), Vector2.one, new Vector2(10f, 0f), new Vector2(-10f, 0f));
+            MenuUI.Fit(_struggleText, 10);
+            var track = MenuUI.Panel(panel.transform, "Track", IronFaunaPalette.ShadowSlate);
+            MenuUI.Place(track.rectTransform, new Vector2(0.05f, 0.14f), new Vector2(0.95f, 0.36f), Vector2.zero, Vector2.zero);
+            var fill = MenuUI.Panel(track.transform, "Fill", IronFaunaPalette.HazardYellow);
+            _struggleFill = fill.rectTransform;
+            MenuUI.Place(_struggleFill, Vector2.zero, new Vector2(0f, 1f), Vector2.zero, Vector2.zero);
+            _struggleRoot = panel.gameObject;
+            _struggleRoot.SetActive(false);
         }
 
         // ================================================================= keyboard
@@ -306,6 +328,13 @@ namespace IronFauna.Brawl
                 k.key.color = lit ? IronFaunaPalette.DarkIron : IronFaunaPalette.UiText;
                 k.action.color = lit ? IronFaunaPalette.DarkIron : IronFaunaPalette.UiTextDim;
                 k.bg.rectTransform.localScale = lit ? new Vector3(0.94f, 0.94f, 1f) : Vector3.one;
+            }
+
+            bool held = me != null && me.IsHeld && !me.IsKO;
+            if (_struggleRoot != null)
+            {
+                _struggleRoot.SetActive(held);
+                if (held) _struggleFill.anchorMax = new Vector2(me.Struggle01, 1f);
             }
 
             UpdateDoll(_myDoll, me, "YOU");

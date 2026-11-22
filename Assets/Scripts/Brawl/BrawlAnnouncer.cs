@@ -362,6 +362,7 @@ namespace IronFauna.Brawl
             BoxingSfx.AnnouncerBell();
             Announce($"{headline} THE MINI-BOSS IS SCRAP!", 3.6f, 4, "boss_down");
         }
+        public void OnRingOutPenalty(string who) => Announce($"RING OUT! {who} CLAWS BACK IN - MINUS 30% HULL", 2.2f, 2, "ring_out", 2f);
         public void OnSpear() => Announce("SPEAR!", 2f, 3, "spear", 3f);
         public void OnInspectionBust() => Announce("BUSTED! ILLEGAL MODS CONFISCATED", 3f, 4, "busted");
 
