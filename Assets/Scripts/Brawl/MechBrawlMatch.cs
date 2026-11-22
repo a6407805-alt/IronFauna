@@ -81,6 +81,43 @@ namespace IronFauna.Brawl
             public int team; // 0 = FFA, 1 = Allies, 2 = Enemies
             public bool isBoss;
             public bool out_;
+            public IronFauna.Pilots.PilotProfile pilot;   // a local player's personal fighter (null for bots)
+            public float damageDealt;
+            public int kos;
+        }
+
+        private bool _pilotsPaid;
+        private Text _rewardText;
+        private float _rewardT;
+
+        /// <summary>Local player <paramref name="slot"/>'s pilot loadout, or null (then a preset is used).</summary>
+        private static IronFauna.Pilots.PilotProfile PilotFor(int slot) => IronFauna.Pilots.PilotStore.ForSlot(slot);
+
+        private Fighter FighterOf(MechRagdoll r)
+        {
+            if (r == null) return null;
+            foreach (var f in _fighters) if (f.ragdoll == r) return f;
+            return null;
+        }
+
+        /// <summary>End of a round: every local pilot earns SCRAP / XP for damage dealt, knockouts and the result.</summary>
+        private void PayPilots()
+        {
+            if (_pilotsPaid) return;
+            _pilotsPaid = true;
+            var lines = new List<string>();
+            foreach (var f in _fighters)
+            {
+                if (f.pilot == null) continue;
+                bool won = config.mode == BrawlGameMode.FreeForAll ? !f.out_ : _roundWon;
+                string line = IronFauna.Pilots.PilotUpgrades.AwardMatch(f.pilot, f.damageDealt, f.kos, won);
+                if (line != null) lines.Add(line);
+            }
+            if (lines.Count > 0 && _rewardText != null)
+            {
+                _rewardText.text = string.Join("\n", lines);
+                _rewardT = 5f;
+            }
         }
 
         private readonly List<Fighter> _fighters = new List<Fighter>();
@@ -205,6 +242,7 @@ namespace IronFauna.Brawl
         private void StartRound()
         {
             _lastHitBy.Clear();
+            _pilotsPaid = false;
             foreach (var f in _fighters)
             {
                 if (f.physGo != null) Destroy(f.physGo);
@@ -273,7 +311,13 @@ namespace IronFauna.Brawl
                 MechLoadout l;
                 string label;
                 float hpMult = 1f;
-                if (i == 0)
+                var pilot = isLocalPlayer ? PilotFor(i) : null;
+                if (pilot != null)
+                {
+                    l = pilot.loadout.Clone();
+                    label = localCount > 1 ? $"P{i + 1} {pilot.name}" : pilot.name;
+                }
+                else if (i == 0)
                 {
                     l = _loadout.Clone();
                     label = localCount > 1 ? "P1" : "YOU";
@@ -305,6 +349,11 @@ namespace IronFauna.Brawl
 
                 Camera playerCam = isLocalPlayer && i < _playerCams.Count ? _playerCams[i].GetComponent<Camera>() : null;
                 var spawned = Spawn(label, l, pos, yaw, isLocalPlayer, isLocalPlayer ? i : -1, team, isBoss, hpMult, playerCam);
+                if (pilot != null)
+                {
+                    spawned.pilot = pilot;
+                    IronFauna.Pilots.PilotUpgrades.ApplyToFighter(pilot, spawned.ragdoll);
+                }
                 _fighters.Add(spawned);
                 _ragdollList.Add(spawned.ragdoll);
                 if (isLocalPlayer && i < _playerCams.Count)
@@ -412,7 +461,13 @@ namespace IronFauna.Brawl
 
                 MechLoadout l;
                 string label;
-                if (i == 0)
+                var pilot = PilotFor(i);
+                if (pilot != null)
+                {
+                    l = pilot.loadout.Clone();
+                    label = localCount > 1 ? $"P{i + 1} {pilot.name}" : pilot.name;
+                }
+                else if (i == 0)
                 {
                     l = _loadout.Clone();
                     label = localCount > 1 ? "P1" : "YOU";
@@ -426,6 +481,11 @@ namespace IronFauna.Brawl
 
                 Camera playerCam = i < _playerCams.Count ? _playerCams[i].GetComponent<Camera>() : null;
                 var spawned = Spawn(label, l, pos, 0f, true, i, 1, false, 1f, playerCam);
+                if (pilot != null)
+                {
+                    spawned.pilot = pilot;
+                    IronFauna.Pilots.PilotUpgrades.ApplyToFighter(pilot, spawned.ragdoll);   // permanent pilot upgrades first
+                }
                 if (i == 0) _tournament.garage.ApplyToFighter(spawned.ragdoll);   // mods + damage carried from earlier bouts
                 _fighters.Add(spawned);
                 _ragdollList.Add(spawned.ragdoll);
@@ -619,6 +679,11 @@ namespace IronFauna.Brawl
             //      with your stamina under your own bar, and the robot damage outlines sit top-left; see BrawlHudExtras)
 
             // 3. Upper-Center Match Callout Banner (positioned above the fighters so it never occludes combat!)
+            // pilot rewards toast (end of round): "+340 SCRAP  //  LEVEL 4!"
+            _rewardText = MenuUI.Label(root, "", 26, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
+            MenuUI.Place(_rewardText.rectTransform, new Vector2(0.25f, 0.56f), new Vector2(0.75f, 0.70f), Vector2.zero, Vector2.zero);
+            _rewardText.gameObject.SetActive(false);
+
             _banner = MenuUI.Label(root, "", 68, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(_banner.rectTransform, new Vector2(0.24f, 0.72f), new Vector2(0.76f, 0.86f), Vector2.zero, Vector2.zero);
 
@@ -823,6 +888,8 @@ namespace IronFauna.Brawl
             if (victim != null && attacker != null && attacker != victim)
             {
                 _lastHitBy[victim] = (attacker, Time.time);
+                var af = FighterOf(attacker);
+                if (af != null && af.pilot != null && _resetT < 0f) af.damageDealt += damage;
                 if (_announcer != null && damage >= 3f) _announcer.NoteHit(attacker == me, victim == me);
                 if (_announcer != null && attacker.ghost != null && attacker.ghost.ActiveMove == PunchType.Spear) _announcer.OnSpear();
             }
@@ -1074,6 +1141,11 @@ namespace IronFauna.Brawl
                             && lh.by != null && lh.by == _fighters[0].ragdoll)
                             _announcer.NotePlayerKnockout();
                     }
+                    if (_lastHitBy.TryGetValue(f.ragdoll, out var lastHit) && Time.time - lastHit.t < 8f)
+                    {
+                        var killer = FighterOf(lastHit.by);
+                        if (killer != null && killer.pilot != null) killer.kos++;
+                    }
                 }
                 if (!f.out_)
                 {
@@ -1257,6 +1329,7 @@ namespace IronFauna.Brawl
 
             if (_resetT > 0f)
             {
+                PayPilots();
                 _resetT -= Time.unscaledDeltaTime;
                 if (_resetT <= 0f)
                 {
@@ -1274,6 +1347,12 @@ namespace IronFauna.Brawl
                     }
                     StartRound();
                 }
+            }
+
+            if (_rewardText != null)
+            {
+                _rewardT -= Time.unscaledDeltaTime;
+                _rewardText.gameObject.SetActive(_rewardT > 0f);
             }
 
             if (_bannerT > 0f)

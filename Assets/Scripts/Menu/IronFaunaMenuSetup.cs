@@ -72,6 +72,7 @@ namespace IronFauna.Menu
         // ================================================================ screen switching
         private void HideSetupScreens()
         {
+            if (_pilotsCanvas != null) _pilotsCanvas.SetActive(false);
             if (_tournamentSetupCanvas != null) _tournamentSetupCanvas.SetActive(false);
             if (_brawlSetupCanvas != null) _brawlSetupCanvas.SetActive(false);
         }
@@ -85,6 +86,7 @@ namespace IronFauna.Menu
             _tournamentSetupCanvas.SetActive(true);
             _tPlayers.selected = Mathf.Clamp(_matchConfig.localPlayers - 1, 0, 3);
             _tPlayers.Refresh();
+            RefreshPilotPickers(_tPilotPickers);
         }
 
         private void ShowBrawlSetup()
@@ -205,7 +207,10 @@ namespace IronFauna.Menu
             _tPlayers = OptionRow(content,
                 new[] { "SOLO", "2P CO-OP", "3P CO-OP", "4P CO-OP" },
                 new[] { "1 V 1 EVERY ROUND", "SPLIT SCREEN TAG TEAM", "SPLIT SCREEN TAG TEAM", "SPLIT SCREEN TAG TEAM" },
-                92f, i => _matchConfig.localPlayers = i + 1);
+                92f, i => { _matchConfig.localPlayers = i + 1; RefreshPilotPickers(_tPilotPickers); });
+
+            SectionLabel(content, "PILOTS  (EACH PLAYER FIGHTS AS THEIR OWN SAVED ROBOT)");
+            _tPilotPickers = BuildPilotPickers(content);
 
             SectionLabel(content, "THE GAUNTLET");
             var gauntlet = MenuUI.Panel(content, "Gauntlet", IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.9f));
@@ -309,6 +314,7 @@ namespace IronFauna.Menu
                 new[] { "SOLO", "2P SPLIT", "3P SPLIT", "4P SPLIT" },
                 new[] { "YOU + 7 BOTS", "SPLIT SCREEN", "SPLIT SCREEN", "SPLIT SCREEN" },
                 76f, i => { _matchConfig.localPlayers = i + 1; RefreshBrawlSetup(); });
+            _bPilotPickers = BuildPilotPickers(content);
 
             SectionLabel(content, "ONLINE");
             _bOnline = OptionRow(content,
@@ -355,6 +361,57 @@ namespace IronFauna.Menu
             return field;
         }
 
+        // ---------------------------------------------------------------- per-player pilot pickers
+        private sealed class PilotPicker { public GameObject root; public Text value; }
+        private List<PilotPicker> _tPilotPickers, _bPilotPickers;
+
+        private List<PilotPicker> BuildPilotPickers(Transform parent)
+        {
+            var list = new List<PilotPicker>();
+            var row = MenuUI.NewRect(parent, "PilotPickers");
+            MenuUI.Size(row, 52f);
+            var h = MenuUI.HStack(row.gameObject, 10f, 0);
+            h.childForceExpandWidth = true;
+            for (int slot = 0; slot < 4; slot++)
+            {
+                int s = slot;
+                var cell = MenuUI.Panel(row, "Pilot_P" + (slot + 1), IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.9f));
+                MenuUI.Size(cell, 52f, 0f, 1f);
+                var prev = MenuUI.CreateButton(cell.transform, "<", 20, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, () => CycleSlotPilot(s, -1));
+                MenuUI.Place((RectTransform)prev.transform, Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(36f, 0f));
+                var next = MenuUI.CreateButton(cell.transform, ">", 20, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, () => CycleSlotPilot(s, 1));
+                MenuUI.Place((RectTransform)next.transform, new Vector2(1f, 0f), Vector2.one, new Vector2(-36f, 0f), Vector2.zero);
+                var val = MenuUI.Label(cell.transform, "", 17, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+                MenuUI.Place(val.rectTransform, Vector2.zero, Vector2.one, new Vector2(40f, 0f), new Vector2(-40f, 0f));
+                MenuUI.Fit(val, 9);
+                list.Add(new PilotPicker { root = cell.gameObject, value = val });
+            }
+            return list;
+        }
+
+        private void CycleSlotPilot(int slot, int d)
+        {
+            int n = IronFauna.Pilots.PilotStore.Count;
+            int cur = IronFauna.Pilots.PilotStore.SlotPilotIndex(slot);
+            if (cur < 0) cur = 0;
+            IronFauna.Pilots.PilotStore.SetSlotPilot(slot, ((cur + d) % n + n) % n);
+            RefreshPilotPickers(_tPilotPickers);
+            RefreshPilotPickers(_bPilotPickers);
+        }
+
+        private void RefreshPilotPickers(List<PilotPicker> pickers)
+        {
+            if (pickers == null) return;
+            for (int slot = 0; slot < pickers.Count; slot++)
+            {
+                bool on = slot < _matchConfig.localPlayers;
+                pickers[slot].root.SetActive(on);
+                if (!on) continue;
+                var p = IronFauna.Pilots.PilotStore.ForSlot(slot);
+                pickers[slot].value.text = p != null ? $"P{slot + 1}: {p.name}  (LV {p.Level})" : $"P{slot + 1}: PRESET ROBOT";
+            }
+        }
+
         private void RefreshBrawlSetup()
         {
             if (_bMode == null) return;
@@ -368,6 +425,7 @@ namespace IronFauna.Menu
             if (_bPreviewName != null) _bPreviewName.text = BrawlTerrain.StageName(stage);
             if (_bPreviewBlurb != null) _bPreviewBlurb.text = MapBlurb(stage);
             if (_bIpRow != null) _bIpRow.SetActive(_matchConfig.netRole == BrawlNetRole.Client);
+            RefreshPilotPickers(_bPilotPickers);
 
             string mode = _matchConfig.mode == BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8P FREE-FOR-ALL";
             string who = _matchConfig.localPlayers == 1 ? "SOLO" : $"{_matchConfig.localPlayers} PLAYERS SPLIT SCREEN";

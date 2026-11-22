@@ -73,6 +73,7 @@ namespace IronFauna.Menu
         private MenuUI.Cycler _legWeightCycler;
         private MenuUI.Cycler _viewCycler;
         private GameObject _tournamentSetupCanvas;
+        private GameObject _pilotsCanvas;
         private GameObject _brawlSetupCanvas;
         private bool _skeletonView;
         private MenuUI.Cycler _fullSetCycler;
@@ -89,7 +90,7 @@ namespace IronFauna.Menu
 
         private void Start()
         {
-            _loadout = MechLoadoutStore.Load();
+            _loadout = IronFauna.Pilots.PilotStore.GaragePilot.loadout.Clone();   // the garage edits the selected pilot's robot
             _loadout.legPose = LegPosePreset.Pose1_HumanLeg;   // fighters stand on human legs
 
             _stage = new GameObject("MechShowcaseStage").AddComponent<MechShowcaseStage>();
@@ -101,6 +102,7 @@ namespace IronFauna.Menu
             BuildGarage();
             BuildTournamentSetup();
             BuildBrawlSetup();
+            BuildPilots();
 
             if (startInGarage) ShowGarage(); else ShowTitle();
         }
@@ -114,7 +116,7 @@ namespace IronFauna.Menu
 #else
             back = Input.GetKeyDown(KeyCode.Escape);
 #endif
-            if (back && (_inGarage || (_tournamentSetupCanvas != null && _tournamentSetupCanvas.activeSelf)
+            if (back && (_inGarage || (_pilotsCanvas != null && _pilotsCanvas.activeSelf) || (_tournamentSetupCanvas != null && _tournamentSetupCanvas.activeSelf)
                          || (_brawlSetupCanvas != null && _brawlSetupCanvas.activeSelf))) ShowTitle();
         }
 
@@ -180,6 +182,7 @@ namespace IronFauna.Menu
         {
             _inGarage = true;
             _titleCanvas.SetActive(false);
+            HideSetupScreens();
             _garageCanvas.SetActive(true);
             _stage.autoSpin = false;
             _stage.allowUserOrbit = true;
@@ -234,6 +237,7 @@ namespace IronFauna.Menu
 
             AddTitleButton(content, "TOURNAMENT CAMPAIGN", ShowTournamentSetup, IronFaunaPalette.CrimsonFront);
             AddTitleButton(content, "FIGHT (BRAWL)", ShowBrawlSetup);
+            AddTitleButton(content, "PILOTS & UPGRADES", ShowPilots);
             AddTitleButton(content, "GARAGE", ShowGarage);
             AddTitleButton(content, "QUIT", Quit);
 
@@ -509,6 +513,8 @@ namespace IronFauna.Menu
         private void Save()
         {
             MechLoadoutStore.Save(_loadout);
+            var pilot = IronFauna.Pilots.PilotStore.GaragePilot;
+            if (pilot != null) { pilot.loadout = _loadout.Clone(); IronFauna.Pilots.PilotStore.Save(); }
             _dirty = false;
             RefreshAll();
         }
@@ -559,7 +565,7 @@ namespace IronFauna.Menu
             SetStat("Power", stats.firepower, 240f);
             SetStat("Stamina", stats.cooling, 240f);
 
-            _headerInfo.text = $"{_loadout.torsoWeight.ToString().ToUpperInvariant()} FRAME   //   {IronFaunaPalette.GetPaint(_loadout.paintScheme).name.ToUpperInvariant()}   //   {stats.cost} CR";
+            _headerInfo.text = $"PILOT: {IronFauna.Pilots.PilotStore.GaragePilot?.name}   //   {_loadout.torsoWeight.ToString().ToUpperInvariant()} FRAME   //   {IronFaunaPalette.GetPaint(_loadout.paintScheme).name.ToUpperInvariant()}   //   {stats.cost} CR";
             _saveStatus.text = _dirty ? "UNSAVED CHANGES" : "LOADOUT SAVED";
         }
 
