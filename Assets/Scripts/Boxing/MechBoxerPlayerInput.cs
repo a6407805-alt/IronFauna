@@ -13,7 +13,8 @@ namespace IronFauna.Boxing
     ///   Q / B    hook       E / A    uppercut
     ///   F front kick        R roundhouse      V low calf kick
     ///   Shift / LB (hold)   high guard
-    ///   G / LT (hold)       grab - drag on the floor with Z/X, LMB throw, RMB joint-crank/tear limb, Space suplex/slam
+    ///   G / LT (hold)       grab - drag on the floor with Z/X, LMB throw, RMB joint-crank/tear limb, Space suplex/slam,
+    ///                       E powerbomb, Q chokeslam, F piledriver, R giant swing
     ///   Scroll / D-pad L/R  pick a martial-arts special (20 moves)      Space / RT   throw it
     ///   C / RB              slip
     /// </summary>

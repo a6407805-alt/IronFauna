@@ -119,15 +119,15 @@ namespace IronFauna.Brawl
             }
 
             // row 0
-            K("Q", "HOOK", 1f, 0f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().qKey.isPressed);
+            K("Q", "HOOK", 1f, 0f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().qKey.isPressed, "CHOKESLAM");
             K("W", "FORWARD", 2f, 0f, 1f, 1f, KeyKind.Move, () => kb() != null && kb().wKey.isPressed);
-            K("E", "UPPERCUT", 3f, 0f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().eKey.isPressed);
-            K("R", "ROUNDHOUSE", 4f, 0f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().rKey.isPressed);
+            K("E", "UPPERCUT", 3f, 0f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().eKey.isPressed, "POWERBOMB");
+            K("R", "ROUNDHOUSE", 4f, 0f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().rKey.isPressed, "GIANT SWING");
             // row 1
             K("A", "LEFT", 1.25f, 1f, 1f, 1f, KeyKind.Move, () => kb() != null && kb().aKey.isPressed);
             K("S", "BACK", 2.25f, 1f, 1f, 1f, KeyKind.Move, () => kb() != null && kb().sKey.isPressed);
             K("D", "RIGHT", 3.25f, 1f, 1f, 1f, KeyKind.Move, () => kb() != null && kb().dKey.isPressed);
-            K("F", "FRONT KICK", 4.25f, 1f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().fKey.isPressed);
+            K("F", "FRONT KICK", 4.25f, 1f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().fKey.isPressed, "PILEDRIVER");
             K("G", "GRAB (HOLD)", 5.25f, 1f, 1.35f, 1f, KeyKind.Grapple, () => kb() != null && kb().gKey.isPressed, "LET GO = THROW");
             // row 2
             K("SHIFT", "GUARD / PARRY", 0f, 2f, 1.75f, 1f, KeyKind.Defend, () => kb() != null && kb().leftShiftKey.isPressed);
@@ -162,7 +162,7 @@ namespace IronFauna.Brawl
         private static string NormalTitle =>
             $"CONTROLS  //  <color=#{Hex(IronFaunaPalette.CrimsonFront)}>HOLD G NEAR A ROBOT TO GRAB IT</color>";
         private static string GrappleTitle =>
-            $"<color=#{Hex(IronFaunaPalette.CrimsonFront)}>GRAPPLING!</color>  LMB THROW · RMB TEAR LIMB · SPACE SLAM · LET GO OF G = THROW";
+            $"<color=#{Hex(IronFaunaPalette.CrimsonFront)}>GRAPPLING!</color>  E POWERBOMB · Q CHOKESLAM · F PILEDRIVER · R GIANT SWING · LMB THROW · RMB TEAR";
 
         private static Color KindColor(KeyKind k)
         {

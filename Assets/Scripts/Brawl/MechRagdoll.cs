@@ -1080,6 +1080,131 @@ namespace IronFauna.Brawl
         private float _impactT;
         private MechRagdoll _thrownBy;
         private float _thrownT = -10f, _slammedT = -10f;
+        private float _slamMult = 1.8f;
+
+        // ------------------------------------------------------------------ WWE-style grab finishers (owner 2026-11-22)
+        // While holding a robot: E powerbomb, Q chokeslam, F piledriver, R giant swing (LMB throw, RMB tear, Space slam).
+        private enum Finisher { None, Powerbomb, Chokeslam, Piledriver, GiantSwing }
+        private Finisher _fin;
+        private float _finT;
+
+        private void StartFinisher(Finisher f)
+        {
+            if (_held == null || ghost == null) return;
+            if (ghost.Exhausted) return;
+            ghost.SpendStamina(f == Finisher.GiantSwing ? 26f : 22f);
+            _fin = f;
+            _finT = 0f;
+            _slamT = -1f;
+            BoxingSfx.Whoosh(0.8f);
+        }
+
+        /// <summary>Runs the finisher timeline; returns true once the victim has been released.</summary>
+        private bool TickFinisher(float dt)
+        {
+            var victim = _held;
+            if (victim == null) { _fin = Finisher.None; return false; }
+            _finT += dt;
+            Vector3 fwd = ghost.transform.forward, right = ghost.transform.right;
+            switch (_fin)
+            {
+                case Finisher.Powerbomb:
+                    // hoist overhead, then crash them down back-first with a shockwave
+                    ghost.holdLift = Mathf.Clamp01(_finT / 0.6f);
+                    ghost.holdExtraHeight = 0.9f * ghost.holdLift;
+                    if (_finT >= 0.68f)
+                    {
+                        foreach (var s in victim._segs)
+                            if (!s.rb.isKinematic) { s.rb.linearVelocity = fwd * 4f + Vector3.down * 34f; s.rb.angularVelocity = right * -7f; }
+                        ReleaseFinisher(victim, 2.4f, 2.8f, "POWERBOMB", 3.6f);
+                        return true;
+                    }
+                    break;
+                case Finisher.Chokeslam:
+                    // one-handed lift by the neck plate, high and fast, then straight down
+                    ghost.holdLift = Mathf.Clamp01(_finT / 0.42f);
+                    ghost.holdExtraHeight = 1.4f * ghost.holdLift;
+                    ghost.holdExtraReach = 0.3f * ghost.holdLift;
+                    if (_finT >= 0.52f)
+                    {
+                        foreach (var s in victim._segs)
+                            if (!s.rb.isKinematic) { s.rb.linearVelocity = fwd * 2f + Vector3.down * 38f; s.rb.angularVelocity = right * -4f; }
+                        ReleaseFinisher(victim, 2.1f, 2.5f, "CHOKESLAM", 2.8f);
+                        return true;
+                    }
+                    break;
+                case Finisher.Piledriver:
+                    // flip them upside down, then drive them head-first into the floor
+                    ghost.holdLift = Mathf.Clamp01(_finT / 0.5f) * 0.7f;
+                    if (_finT < 0.45f)
+                        foreach (var s in victim._segs) if (!s.rb.isKinematic) s.rb.angularVelocity = right * 7.5f;
+                    if (_finT >= 0.62f)
+                    {
+                        foreach (var s in victim._segs)
+                            if (!s.rb.isKinematic) { s.rb.linearVelocity = Vector3.down * 30f; s.rb.angularVelocity = Vector3.zero; }
+                        if (victim._head != null && !victim._head.detached)
+                            victim.ReceiveStrike(this, victim._head, victim._head.rb.position, Vector3.down, 24f, 0.9f, 2f);
+                        ReleaseFinisher(victim, 1.6f, 3.0f, "PILEDRIVER", 2.2f);
+                        return true;
+                    }
+                    break;
+                case Finisher.GiantSwing:
+                    // grab the legs and spin them round, faster and faster, then let fly
+                    float spin = Mathf.Lerp(120f, 420f, Mathf.Clamp01(_finT / 1.1f));
+                    ghost.forcedSpin = spin;
+                    ghost.holdExtraReach = 0.9f;
+                    ghost.holdExtraHeight = -0.35f;
+                    if (_finT >= 1.7f)
+                    {
+                        Vector3 tangent = Vector3.Cross(Vector3.up, (victim.Position - Position).normalized);
+                        float speed = spin * Mathf.Deg2Rad * 3f;
+                        foreach (var s in victim._segs)
+                            if (!s.rb.isKinematic) { s.rb.linearVelocity = tangent * speed + Vector3.up * 6f; s.rb.angularVelocity = UnityEngine.Random.insideUnitSphere * 4f; }
+                        victim._thrownBy = this;
+                        victim._thrownT = Time.time;
+                        ghost.forcedSpin = 0f;
+                        DropHold();
+                        victim.Knockdown(2f);
+                        GrappleEvent?.Invoke(this, "GIANT SWING");
+                        BoxingSfx.Whoosh(1f);
+                        return true;
+                    }
+                    break;
+            }
+            return false;
+        }
+
+        /// <summary>Lets go of a finisher victim: they land with a damage multiplier, stay down, and anyone close to
+        /// the impact gets knocked down by the shockwave.</summary>
+        private void ReleaseFinisher(MechRagdoll victim, float slamMult, float downTime, string name, float shockRadius)
+        {
+            victim._thrownBy = this;
+            victim._slammedT = Time.time;
+            victim._slamMult = slamMult;
+            Vector3 impact = victim.Position;
+            DropHold();
+            victim.Knockdown(downTime);
+            GrappleEvent?.Invoke(this, name);
+            BoxingSfx.Impact(1f);
+            Shockwave(impact, shockRadius, victim);
+        }
+
+        private void Shockwave(Vector3 point, float radius, MechRagdoll except)
+        {
+            var hitOwners = new HashSet<MechRagdoll>();
+            foreach (var col in Physics.OverlapSphere(point, radius, ~0, QueryTriggerInteraction.Ignore))
+            {
+                var rb = col.attachedRigidbody;
+                var part = rb != null ? rb.GetComponent<MechRagdollPart>() : null;
+                if (part == null || part.owner == null || part.owner == this || part.owner == except || part.segment == null || part.segment.detached) continue;
+                if (team != 0 && part.owner.team == team) continue;
+                if (!hitOwners.Add(part.owner)) continue;
+                Vector3 dir = part.owner.Position - point;
+                dir.y = 0f;
+                part.owner.ReceiveStrike(this, part.segment, part.segment.rb.position, dir.normalized + Vector3.up * 0.4f, 7f, 0.6f);
+                if (!part.owner.IsDown) part.owner.Knockdown(1.1f);
+            }
+        }
 
         /// <summary>A body that is down (thrown, slammed, knocked flying) takes damage from hard landings, and
         /// bowls over anyone it crashes into.</summary>
@@ -1093,7 +1218,7 @@ namespace IronFauna.Brawl
             bool slammed = Time.time - _slammedT < 2f;
             bool thrown = Time.time - _thrownT < 3f;
             Vector3 point = c.contactCount > 0 ? c.GetContact(0).point : mine.rb.position;
-            float damage = (speed - 8.5f) * 2.4f * (slammed ? 1.8f : 1f);
+            float damage = (speed - 8.5f) * 2.4f * (slammed ? _slamMult : 1f);
             var attacker = thrown || slammed ? _thrownBy : null;
 
             var otherPart = c.rigidbody != null ? c.rigidbody.GetComponent<MechRagdollPart>() : null;
@@ -1193,9 +1318,18 @@ namespace IronFauna.Brawl
                 {
                     if (_swingT < 0f) { _swingT = 0f; _swingSerial++; BoxingSfx.Whoosh(1f); }
                 }
+                else if (_fin != Finisher.None) { }                                   // finisher in progress
                 else if (act == PunchType.Jab) { Throw(); return; }
-                else if (act == PunchType.Cross || act == PunchType.Hook) { Tug(); if (_heldSeg == null) return; }
+                else if (act == PunchType.Cross) { Tug(); if (_heldSeg == null) return; }
+                else if (act == PunchType.Uppercut) StartFinisher(Finisher.Powerbomb);
+                else if (act == PunchType.Hook) StartFinisher(Finisher.Chokeslam);
+                else if (act == PunchType.FrontKick) StartFinisher(Finisher.Piledriver);
+                else if (act == PunchType.Roundhouse) StartFinisher(Finisher.GiantSwing);
                 else { _slamT = 0f; }
+            }
+            if (_fin != Finisher.None)
+            {
+                if (TickFinisher(dt)) return;   // released
             }
 
             if (_slamT >= 0f)
@@ -1204,7 +1338,7 @@ namespace IronFauna.Brawl
                 ghost.holdLift = Mathf.Clamp01(_slamT / 0.4f);
                 if (_slamT >= 0.48f) { Slam(); return; }
             }
-            else ghost.holdLift = Mathf.MoveTowards(ghost.holdLift, 0f, dt * 3f);
+            else if (_fin == Finisher.None) ghost.holdLift = Mathf.MoveTowards(ghost.holdLift, 0f, dt * 3f);
 
             if (_swingT >= 0f)
             {
@@ -1218,7 +1352,7 @@ namespace IronFauna.Brawl
             Vector3 hp = ghost.HoldPoint;
             float w = 2f * Mathf.PI * (weapon ? 5f : 3f), zeta = 0.85f;
             Vector3 acc = w * w * (hp - rb.position) + 2f * zeta * w * (ghost.Velocity - rb.linearVelocity);
-            acc = Vector3.ClampMagnitude(acc, weapon ? 260f : 110f);
+            acc = Vector3.ClampMagnitude(acc, weapon ? 260f : _fin == Finisher.GiantSwing ? 240f : 110f);
             if (_held != null)
             {
                 // Anti-explosion: move the whole held body as one (same acceleration on every segment) instead of
@@ -1228,13 +1362,14 @@ namespace IronFauna.Brawl
                 {
                     if (hs.detached || hs.rb == null || hs.rb.isKinematic) continue;
                     hs.rb.AddForce(a, ForceMode.Acceleration);
-                    if (hs.rb.linearVelocity.sqrMagnitude > HeldMaxSpeed * HeldMaxSpeed) hs.rb.linearVelocity = hs.rb.linearVelocity.normalized * HeldMaxSpeed;
+                    float cap = _fin == Finisher.GiantSwing ? 26f : HeldMaxSpeed;
+                    if (hs.rb.linearVelocity.sqrMagnitude > cap * cap) hs.rb.linearVelocity = hs.rb.linearVelocity.normalized * cap;
                     if (hs.rb.angularVelocity.sqrMagnitude > HeldMaxSpin * HeldMaxSpin) hs.rb.angularVelocity = hs.rb.angularVelocity.normalized * HeldMaxSpin;
                 }
             }
             else rb.AddForce(acc * _heldMass * 0.75f - Physics.gravity * _heldMass * 0.9f, ForceMode.Force);
 
-            if (_held != null)
+            if (_held != null && _fin == Finisher.None)
             {
                 _holdT += dt;
                 if (_holdT > 2.8f && !_held.IsKO) { var h = _held; DropHold(); h.Knockdown(0.6f); GrappleEvent?.Invoke(this, "BROKE FREE"); }
@@ -1298,7 +1433,12 @@ namespace IronFauna.Brawl
             _held = null;
             _heldSeg = null;
             _slamT = _swingT = -1f;
-            if (ghost != null) { ghost.holding = false; ghost.holdLift = 0f; ghost.holdSwing = -1f; }
+            _fin = Finisher.None;
+            if (ghost != null)
+            {
+                ghost.holding = false; ghost.holdLift = 0f; ghost.holdSwing = -1f;
+                ghost.holdExtraHeight = ghost.holdExtraReach = ghost.forcedSpin = 0f;
+            }
         }
 
         private void Throw()
@@ -1335,6 +1475,7 @@ namespace IronFauna.Brawl
             foreach (var s in victim._segs) if (!s.rb.isKinematic) s.rb.linearVelocity = v;
             victim._thrownBy = this;
             victim._slammedT = Time.time;
+            victim._slamMult = 1.8f;
             DropHold();
             victim.Knockdown(2.2f);
             GrappleEvent?.Invoke(this, suplex ? "SUPLEX" : "SLAM");

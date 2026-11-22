@@ -14,6 +14,8 @@ namespace IronFauna.Boxing
         // MMA, Kickboxing, Muay Thai & Jiu-Jitsu additions
         LowCalfKick, QuestionMarkKick, TornadoKick, CapoeiraSweep,
         DoubleLegTakedown, FlyingScissor, Upkick, ClinchKnee,
+        // WWE-style wrestling strikes (owner 2026-11-22)
+        Spear, RunningDropkick, Clothesline, DivingSplash, DivingElbowDrop,
     }
 
     /// <summary>
@@ -313,6 +315,11 @@ namespace IronFauna.Boxing
             Specs[PunchType.DoubleLegTakedown].unblockable = true;
             Specs[PunchType.FlyingScissor].unblockable = true;
             Specs[PunchType.CapoeiraSweep].unblockable = true;
+            Specs[PunchType.Spear].unblockable = true;
+            Specs[PunchType.DivingSplash].unblockable = true;
+            Specs[PunchType.RunningDropkick].guardBreak = 2.2f;
+            Specs[PunchType.Clothesline].guardBreak = 2.0f;
+            Specs[PunchType.DivingElbowDrop].guardBreak = 1.8f;
         }
 
         // Exaggerated on purpose: long, readable wind-ups that load the whole body, big torso drive, a lunge,
@@ -472,6 +479,39 @@ namespace IronFauna.Boxing
                 twist = 25f, load = -15f, lean = -8f, roll = 6f, dip = 0.2f, lunge = 0.65f, lungeImpulse = 4.5f,
                 damage = 19f, knock = 4.2f, stop = 0.16f, shake = 0.85f, aimDrop = 1.1f,
             },
+            // ---------------- WWE-style wrestling strikes (owner 2026-11-22: "flashy moves, fun to look at")
+            [PunchType.Spear] = new PunchSpec
+            {
+                type = PunchType.Spear, name = "SPEAR", lead = true, body = true, sweep = true, windup = 0.3f, strike = 0.36f, hold = 0.12f, recover = 0.62f,
+                twist = 10f, load = -15f, lean = 58f, roll = 0f, dip = 1.05f, lunge = 1.6f, lungeImpulse = 20f,
+                damage = 20f, knock = 9f, stop = 0.2f, shake = 1.05f, aimDrop = 1.4f,
+            },
+            [PunchType.RunningDropkick] = new PunchSpec
+            {
+                type = PunchType.RunningDropkick, name = "RUNNING DROPKICK", lead = false, kick = true, windup = 0.3f, strike = 0.2f, hold = 0.16f, recover = 0.72f,
+                twist = -5f, load = 10f, lean = -44f, roll = 0f, dip = 0.4f, lunge = 1.2f, rise = 1.25f, lungeImpulse = 13f, kickUp = 0.5f,
+                damage = 19f, knock = 9.5f, stop = 0.18f, shake = 1f, aimDrop = 0.9f,
+            },
+            [PunchType.Clothesline] = new PunchSpec
+            {
+                type = PunchType.Clothesline, name = "RUNNING CLOTHESLINE", lead = true, sweep = true, windup = 0.28f, strike = 0.26f, hold = 0.14f, recover = 0.56f,
+                twist = 85f, load = -20f, lean = 16f, roll = -6f, dip = 0.1f, lunge = 1.4f, lungeImpulse = 15f,
+                damage = 18f, knock = 6f, stop = 0.17f, shake = 0.95f,
+                pull = new Vector3(-0.6f, 0.15f, -0.3f), arc = new Vector3(2.2f, 0.4f, -0.4f), elbow = new Vector3(0f, -1f, 0f),
+            },
+            [PunchType.DivingSplash] = new PunchSpec
+            {
+                type = PunchType.DivingSplash, name = "DIVING SPLASH", lead = true, body = true, sweep = true, windup = 0.36f, strike = 0.32f, hold = 0.2f, recover = 0.85f,
+                twist = 0f, load = 0f, lean = 72f, roll = 0f, dip = 0.45f, lunge = 1.4f, rise = 1.6f, lungeImpulse = 9f,
+                damage = 24f, knock = 4f, stop = 0.2f, shake = 1.1f, aimDrop = 2.6f,
+            },
+            [PunchType.DivingElbowDrop] = new PunchSpec
+            {
+                type = PunchType.DivingElbowDrop, name = "DIVING ELBOW DROP", lead = false, windup = 0.34f, strike = 0.26f, hold = 0.16f, recover = 0.75f,
+                twist = -40f, load = 35f, lean = 55f, roll = 10f, dip = 0.4f, lunge = 1.2f, rise = 1.5f, lungeImpulse = 8f, reach = 0.42f,
+                damage = 22f, knock = 3f, stop = 0.19f, shake = 1f, aimDrop = 2.7f,
+                pull = new Vector3(0.4f, 0.6f, -0.1f), arc = new Vector3(0.6f, 1.6f, 0f), elbow = new Vector3(1f, 0.8f, 0.2f),
+            },
         };
 
         /// <summary>The scroll-wheel specials, in order.</summary>
@@ -482,6 +522,7 @@ namespace IronFauna.Boxing
             PunchType.QuestionMarkKick, PunchType.AxeKick, PunchType.SpinningHookKick, PunchType.TornadoKick,
             PunchType.CapoeiraSweep, PunchType.FlyingKnee, PunchType.ClinchKnee, PunchType.DoubleLegTakedown,
             PunchType.FlyingScissor, PunchType.Upkick, PunchType.Headbutt, PunchType.ShoulderCharge,
+            PunchType.Spear, PunchType.RunningDropkick, PunchType.Clothesline, PunchType.DivingSplash, PunchType.DivingElbowDrop,
         };
 
         public static string MoveName(PunchType t) => Specs.TryGetValue(t, out var s) ? s.name : "";
@@ -505,6 +546,9 @@ namespace IronFauna.Boxing
         [NonSerialized] public float holdSwing = -1f;
         /// <summary>A strike button pressed while holding (LMB throw, RMB rip, Space slam ...): the ragdoll consumes it.</summary>
         [NonSerialized] public PunchType holdAction;
+        /// <summary>Grapple finishers (set by the ragdoll): extra lift height (m) and reach (m) of the hold point, and a
+        /// forced spin (deg/s) that overrides facing - the giant swing.</summary>
+        [NonSerialized] public float holdExtraHeight, holdExtraReach, forcedSpin;
         public bool Reaching => intent.grab && ArmsLeft > 0 && !holding && _punch == null && !IsKO && !suppressed;
 
         /// <summary>Where a held thing is carried: out in front of the chest, dragged low on the mat when crouching/seated, raised overhead for a slam, swung in an arc.</summary>
@@ -514,8 +558,8 @@ namespace IronFauna.Boxing
             {
                 if (_b == null || _b.bodyRoot == null) return transform.position + transform.forward * 2f + Vector3.up * 3f;
                 float floorDrag = Mathf.Clamp01(_crouchBlend * 0.65f + _seatedBlend);
-                float yOffset = Mathf.Lerp(_chestB + 0.1f, _chestB - 1.15f, floorDrag) + holdLift * 2.6f;
-                float zOffset = Mathf.Lerp(1.9f, 2.25f, floorDrag) - holdLift * 0.9f;
+                float yOffset = Mathf.Lerp(_chestB + 0.1f, _chestB - 1.15f, floorDrag) + holdLift * 2.6f + holdExtraHeight;
+                float zOffset = Mathf.Lerp(1.9f, 2.25f, floorDrag) - holdLift * 0.9f + holdExtraReach;
                 Vector3 local = new Vector3(0f, yOffset, zOffset);
                 if (holdSwing >= 0f)
                 {
@@ -778,7 +822,11 @@ namespace IronFauna.Boxing
             if (followGround && TryGround(p, out float gy)) p.y = Mathf.Lerp(transform.position.y, gy, 1f - Mathf.Exp(-14f * dt));
             transform.position = p;
 
-            if (!IsKO)
+            if (!IsKO && Mathf.Abs(forcedSpin) > 0.01f)
+            {
+                transform.rotation = Quaternion.Euler(0f, transform.eulerAngles.y + forcedSpin * dt, 0f);   // giant swing
+            }
+            else if (!IsKO)
             {
                 Vector3 face = transform.forward;
                 if (_fight > 0.5f && dist > 0.01f) face = oppFwd;

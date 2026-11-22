@@ -86,6 +86,11 @@ namespace IronFauna.Brawl
             ("match_over", "That's the match!"),
             ("champion", "We have a new champion!"),
             ("busted", "Busted!"),
+            ("powerbomb", "Powerbomb!"),
+            ("chokeslam", "Chokeslam!"),
+            ("piledriver", "Piledriver!"),
+            ("giant_swing", "Giant swing!"),
+            ("spear", "Spear! Spear! Spear!"),
         };
 
         private void Awake()
@@ -241,6 +246,14 @@ namespace IronFauna.Brawl
                 Announce($"WHAT A THROW! {who} LANDS A BACK-ARCH SUPLEX!", 2.7f, 2);
             else if (moveCode == "SLAM")
                 Announce($"OVERHEAD SLAM BY {who} SHAKES THE ARENA!", 2.5f, 2);
+            else if (moveCode == "POWERBOMB")
+                Announce($"POWERBOMB! {who} DRIVES THEM THROUGH THE FLOOR!", 2.8f, 3, "powerbomb", 2f);
+            else if (moveCode == "CHOKESLAM")
+                Announce($"CHOKESLAM FROM {who}!", 2.6f, 3, "chokeslam", 2f);
+            else if (moveCode == "PILEDRIVER")
+                Announce($"PILEDRIVER! {who} SPIKES THEM HEAD-FIRST!", 2.8f, 3, "piledriver", 2f);
+            else if (moveCode == "GIANT SWING")
+                Announce($"GIANT SWING! {who} SENDS THEM FLYING!", 2.6f, 3, "giant_swing", 2f);
             else if (moveCode == "JOINT CRANK")
                 Announce($"JIU-JITSU SUBMISSION CRANK ON THE MAT BY {who}!", 2.5f, 2);
             else if (moveCode.Contains("NO LEGS"))
@@ -349,6 +362,7 @@ namespace IronFauna.Brawl
             BoxingSfx.AnnouncerBell();
             Announce($"{headline} THE MINI-BOSS IS SCRAP!", 3.6f, 4, "boss_down");
         }
+        public void OnSpear() => Announce("SPEAR!", 2f, 3, "spear", 3f);
         public void OnInspectionBust() => Announce("BUSTED! ILLEGAL MODS CONFISCATED", 3f, 4, "busted");
 
         /// <summary>

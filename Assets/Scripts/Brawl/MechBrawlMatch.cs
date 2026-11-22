@@ -824,6 +824,7 @@ namespace IronFauna.Brawl
             {
                 _lastHitBy[victim] = (attacker, Time.time);
                 if (_announcer != null && damage >= 3f) _announcer.NoteHit(attacker == me, victim == me);
+                if (_announcer != null && attacker.ghost != null && attacker.ghost.ActiveMove == PunchType.Spear) _announcer.OnSpear();
             }
             float k = Mathf.Clamp01(damage / 25f);
             BoxingSfx.Impact(Mathf.Max(k, ripped ? 1f : 0f));
@@ -904,7 +905,10 @@ namespace IronFauna.Brawl
         private void OnGrapple(MechRagdoll who, string what)
         {
             var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
+            bool finisher = what == "POWERBOMB" || what == "CHOKESLAM" || what == "PILEDRIVER" || what == "GIANT SWING";
             if (what == "SLAM" || what == "SUPLEX" || what == "TORN" || what == "JOINT CRANK") { BoxingFeel.Shake(0.6f); BoxingFeel.HitStop(0.1f); }
+            if (finisher) { BoxingFeel.Shake(0.9f); BoxingFeel.HitStop(0.16f); BoxingFeel.FovKick = 6f; }
+            if (who == me && finisher) Banner(what + "!", 1.5f);
             if (what == "THROW" || what.Contains("OFF BALANCE")) BoxingFeel.Shake(0.35f);
             if (who == me && (what == "TORN" || what == "SLAM" || what == "SUPLEX" || what == "THROW" || what == "JOINT CRANK" || what.Contains("NO ") || what.Contains("OFF BALANCE")))
                 Banner(what == "TORN" ? "LIMB TORN" : what, 1.25f);

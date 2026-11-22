@@ -237,9 +237,14 @@ namespace IronFauna.Boxing
                 {
                     _holdActed = true;
                     float r = Random.value;
-                    if (r < 0.28f) _grabT = 0f;                                    // let go = throw
-                    else if (r < 0.58f) _me.intent.punch = PunchType.Uppercut;      // suplex / slam
-                    else if (r < 0.80f) _me.intent.punch = PunchType.Cross;         // standing limb tear
+                    if (r >= 0.18f) _grabT = Mathf.Max(_grabT, 2.1f);               // keep hold long enough to finish the move
+                    if (r < 0.18f) _grabT = 0f;                                    // let go = throw
+                    else if (r < 0.30f) _me.intent.punch = PunchType.Jab;           // throw
+                    else if (r < 0.42f) _me.intent.punch = PunchType.Uppercut;      // powerbomb
+                    else if (r < 0.52f) _me.intent.punch = PunchType.Hook;          // chokeslam
+                    else if (r < 0.60f) _me.intent.punch = PunchType.FrontKick;     // piledriver
+                    else if (r < 0.68f) _me.intent.punch = PunchType.Roundhouse;    // giant swing
+                    else if (r < 0.84f) _me.intent.punch = PunchType.Cross;         // standing limb tear
                     else
                     {
                         // Jiu-Jitsu ground drag & joint crank on the floor!
@@ -247,7 +252,7 @@ namespace IronFauna.Boxing
                         _me.intent.punch = PunchType.Cross;
                     }
                 }
-                if (_holdActed && _holdT > 2.2f) { _grabT = 0f; _me.intent.sit = false; }
+                if (_holdActed && _holdT > 3.2f) { _grabT = 0f; _me.intent.sit = false; }   // finishers run up to ~1.7 s
             }
             else if (_grabT > 0f && _grabT < 0.4f) _grabT = 0f;
             _me.intent.grab = _grabT > 0f;
