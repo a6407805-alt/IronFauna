@@ -945,7 +945,8 @@ namespace IronFauna.Boxing
                         // run out to the (pretend) ropes, away from the opponent
                         SpendStamina(Specs[PunchType.RopeRebound].staminaCost * 0.5f);
                         _reboundT = 0f;
-                        _reboundDir = opponent != null && !opponent.IsKO ? -oppFwd : -transform.forward;
+                        Vector3 toOpp = opponent != null && !opponent.IsKO ? Vector3.ProjectOnPlane(opponent.transform.position - transform.position, Vector3.up) : Vector3.zero;
+                        _reboundDir = toOpp.sqrMagnitude > 0.0001f ? -toOpp.normalized : -transform.forward;
                     }
                 }
                 else StartPunch(Specs[chosen]);
