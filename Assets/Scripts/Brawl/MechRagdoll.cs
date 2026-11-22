@@ -46,6 +46,8 @@ namespace IronFauna.Brawl
         public bool IsDown => _downT > 0f || IsKO;
         public Rigidbody Pelvis => _pelvis != null ? _pelvis.rb : null;
         public Vector3 Position => _pelvis != null ? _pelvis.rb.position : transform.position;
+        /// <summary>World position of the head (falls back to the pelvis once the head is gone).</summary>
+        public Vector3 HeadPosition => _head != null && !_head.detached && _head.rb != null ? _head.rb.position : Position + Vector3.up * 2f;
         public float Poise01 => Mathf.Clamp01(_poise / poiseMax);
         public float GetLimbHealth01(LimbId id) => _lost.Contains(id) ? 0f : (_limbHealth.TryGetValue(id, out float v) ? Mathf.Clamp01(v / LimbMax(id)) : 1f);
 

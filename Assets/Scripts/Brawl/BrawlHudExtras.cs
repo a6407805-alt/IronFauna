@@ -11,7 +11,7 @@ namespace IronFauna.Brawl
     /// Extra brawl HUD, built with MenuUI and coloured from IronFaunaPalette:
     ///  - a live keyboard + mouse diagram (bottom-right) whose keys light up while held,
     ///  - robot damage outlines for you and your current target (green healthy, yellow injured, red critical, grey gone),
-    ///  - overhead health bars over every other fighter.
+    ///  - overhead health bars over every fighter's head (yours also shows stamina).
     /// </summary>
     public sealed class BrawlHudExtras
     {
@@ -46,6 +46,9 @@ namespace IronFauna.Brawl
             public RectTransform fill;
             public Image fillImg;
             public Text name;
+            public GameObject staminaRoot;
+            public RectTransform staminaFill;
+            public Image staminaImg;
         }
 
         private readonly Dictionary<MechRagdoll, OverheadBar> _bars = new Dictionary<MechRagdoll, OverheadBar>();
@@ -74,7 +77,7 @@ namespace IronFauna.Brawl
             float w = cols * u + pad * 2f, h = rows * u + pad * 2f + header;
 
             var panel = MenuUI.Panel(root, "KeyboardDiagram", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.86f));
-            MenuUI.Place(panel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-w - 30f, 14f), new Vector2(-30f, 14f + h));
+            MenuUI.Place(panel.rectTransform, Vector2.zero, Vector2.zero, new Vector2(30f, 14f), new Vector2(30f + w, 14f + h));   // bottom-left
             var top = MenuUI.Panel(panel.transform, "TopRule", IronFaunaPalette.CyanEnergy);
             MenuUI.Place(top.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -4f), Vector2.zero);
             var title = MenuUI.Label(panel.transform, "CONTROLS  //  LIVE INPUT", 13, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -164,7 +167,7 @@ namespace IronFauna.Brawl
         private void BuildDolls(Transform root)
         {
             var panel = MenuUI.Panel(root, "DamagePanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.86f));
-            MenuUI.Place(panel.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.18f, 1f), new Vector2(0f, -540f), new Vector2(0f, -330f));
+            MenuUI.Place(panel.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.18f, 1f), new Vector2(0f, -250f), new Vector2(0f, -20f));
             var top = MenuUI.Panel(panel.transform, "TopRule", IronFaunaPalette.UiStatusGood);
             MenuUI.Place(top.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -4f), Vector2.zero);
 
@@ -193,8 +196,10 @@ namespace IronFauna.Brawl
             MenuUI.Fit(d.hull, 9);
 
             // body silhouette inside a fixed-aspect box (on-screen left = the robot's left side)
-            var body = MenuUI.NewRect(area, "Body");
-            MenuUI.Place(body, Vector2.zero, Vector2.one, new Vector2(0f, 0f), new Vector2(0f, -40f));
+            // the fitter sizes "Body" inside "BodyArea", so the silhouette never overlaps the title / hull text
+            var bodyArea = MenuUI.NewRect(area, "BodyArea");
+            MenuUI.Place(bodyArea, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(0f, -40f));
+            var body = MenuUI.NewRect(bodyArea, "Body");
             var fit = body.gameObject.AddComponent<AspectRatioFitter>();
             fit.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
             fit.aspectRatio = 0.72f;
@@ -241,13 +246,19 @@ namespace IronFauna.Brawl
             if (_bars.TryGetValue(r, out var b) && b.root != null) return b;
             b = new OverheadBar();
             b.root = MenuUI.NewRect(_root, "Overhead");
-            b.root.sizeDelta = new Vector2(120f, 24f);
+            b.root.sizeDelta = new Vector2(130f, 24f);
             b.root.SetAsFirstSibling();   // behind the HUD cards
             var back = MenuUI.Panel(b.root, "Back", IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.9f));
             MenuUI.Place(back.rectTransform, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 8f));
             b.fillImg = MenuUI.Panel(back.transform, "Fill", IronFaunaPalette.UiStatusGood);
             b.fill = b.fillImg.rectTransform;
             MenuUI.Place(b.fill, Vector2.zero, Vector2.one, new Vector2(1f, 1f), new Vector2(-1f, -1f));
+            var st = MenuUI.Panel(b.root, "StaminaBack", IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.9f));
+            MenuUI.Place(st.rectTransform, Vector2.zero, new Vector2(1f, 0f), new Vector2(0f, -6f), new Vector2(0f, -1f));
+            b.staminaRoot = st.gameObject;
+            b.staminaImg = MenuUI.Panel(st.transform, "Fill", IronFaunaPalette.HazardYellow);
+            b.staminaFill = b.staminaImg.rectTransform;
+            MenuUI.Place(b.staminaFill, Vector2.zero, Vector2.one, new Vector2(1f, 1f), new Vector2(-1f, -1f));
             b.name = MenuUI.Label(b.root, "", 11, IronFaunaPalette.UiText, TextAnchor.LowerCenter, FontStyle.Bold);
             MenuUI.Place(b.name.rectTransform, new Vector2(0f, 0f), Vector2.one, new Vector2(-30f, 9f), new Vector2(30f, 0f));
             _bars[r] = b;
@@ -282,10 +293,11 @@ namespace IronFauna.Brawl
             {
                 foreach (var o in others)
                 {
-                    if (o.r == null || o.r == me) continue;
+                    if (o.r == null) continue;
+                    bool isMe = o.r == me;
                     seen.Add(o.r);
                     var bar = GetBar(o.r);
-                    Vector3 vp = cam.WorldToViewportPoint(o.r.Position + Vector3.up * 2.35f);
+                    Vector3 vp = cam.WorldToViewportPoint(o.r.HeadPosition + Vector3.up * 0.9f);
                     bool show = !o.out_ && !o.r.IsKO && vp.z > 0f && vp.x > -0.05f && vp.x < 1.05f && vp.y > -0.05f && vp.y < 1.05f;
                     bar.root.gameObject.SetActive(show);
                     if (!show) continue;
@@ -294,8 +306,14 @@ namespace IronFauna.Brawl
                     float t = Mathf.Clamp01(o.r.health / Mathf.Max(1f, o.r.maxHealth));
                     bar.fill.anchorMax = new Vector2(t, 1f);
                     bar.fillImg.color = StatusColor(t, false);
-                    bar.name.text = o.name;
-                    bar.name.color = o.team == 2 ? IronFaunaPalette.OrangeJointCore : o.team == 1 ? IronFaunaPalette.CyanEnergy : IronFaunaPalette.UiText;
+                    bar.name.text = isMe ? "YOU" : o.name;
+                    bar.staminaRoot.SetActive(isMe && o.r.ghost != null);
+                    if (isMe && o.r.ghost != null)
+                    {
+                        bar.staminaFill.anchorMax = new Vector2(Mathf.Clamp01(o.r.ghost.Stamina01), 1f);
+                        bar.staminaImg.color = o.r.ghost.Exhausted ? IronFaunaPalette.CrimsonFront : IronFaunaPalette.HazardYellow;
+                    }
+                    bar.name.color = isMe ? IronFaunaPalette.CyanEnergy : o.team == 2 ? IronFaunaPalette.OrangeJointCore : o.team == 1 ? IronFaunaPalette.CyanEnergy : IronFaunaPalette.UiText;
                     float s = o.r == target ? 1.15f : 1f;
                     bar.root.localScale = new Vector3(s, s, 1f);
                 }

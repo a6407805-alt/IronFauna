@@ -577,38 +577,8 @@ namespace IronFauna.Brawl
             Transform root = canvas.transform;
             _hudRoot = root as RectTransform;
 
-            // 1. Top-Left Framed Player Card (Stage Header, Animated Hull + Ghost Bar, Balance Bar, 4 Limb Pills, Posture)
-            var playerCard = MenuUI.Panel(root, "PlayerHudCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
-            MenuUI.Place(playerCard.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.30f, 1f), new Vector2(0f, -318f), new Vector2(0f, -20f));
-            var cardEdge = MenuUI.Panel(playerCard.transform, "LeftStripe", IronFaunaPalette.CrimsonFront);
-            MenuUI.Place(cardEdge.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, 0f));
-            var cardTop = MenuUI.Panel(playerCard.transform, "TopRule", IronFaunaPalette.HazardYellow);
-            MenuUI.Place(cardTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
-
-            _stageHeader = MenuUI.Label(playerCard.transform, "", 17, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
-            MenuUI.Place(_stageHeader.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -40f), new Vector2(-12f, -8f));
-
-            _hpBar = BarWithGhost(playerCard.transform, "HULL INTEGRITY", -78f, IronFaunaPalette.CrimsonFront, out _hpGhostBar, out _hpValueText);
-            _poiseBar = BarWithGhost(playerCard.transform, "BALANCE / POISE", -134f, IronFaunaPalette.CyanEnergy, out _, out _poiseValueText);
-            _staminaBar = BarWithGhost(playerCard.transform, "STAMINA", -190f, IronFaunaPalette.HazardYellow, out var stGhost, out _staminaValueText);
-            if (stGhost != null) stGhost.gameObject.SetActive(false);
-            _staminaFill = _staminaBar != null ? _staminaBar.GetComponent<Image>() : null;
-
-            // (limb status now lives in the robot damage outline below the card: BrawlHudExtras)
-
-            _postureLabel = MenuUI.Label(playerCard.transform, "", 17, IronFaunaPalette.HazardYellow, TextAnchor.MiddleLeft, FontStyle.Bold);
-            MenuUI.Place(_postureLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(18f, 8f), new Vector2(-12f, 40f));
-
-            // 2. Top-Right Framed Scoreboard Card
-            var scoreCard = MenuUI.Panel(root, "ScoreboardCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.86f));
-            MenuUI.Place(scoreCard.rectTransform, new Vector2(0.72f, 1f), new Vector2(0.98f, 1f), new Vector2(0f, -334f), new Vector2(0f, -18f));
-            var scoreTop = MenuUI.Panel(scoreCard.transform, "ScoreTopRule", IronFaunaPalette.CyanEnergy);
-            MenuUI.Place(scoreTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
-            _scoreboardTitle = MenuUI.Label(scoreCard.transform, "ARENA ROSTER (8/8)", 17, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleRight, FontStyle.Bold);
-            MenuUI.Place(_scoreboardTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -36f), new Vector2(-16f, -8f));
-
-            _alive = MenuUI.Label(scoreCard.transform, "", 18, IronFaunaPalette.UiText, TextAnchor.UpperRight, FontStyle.Bold);
-            MenuUI.Place(_alive.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 10f), new Vector2(-16f, -42f));
+            // 1-2. (top-left player card and top-right roster removed, owner 2026-11-22: HP now floats over each robot's head
+            //      with your stamina under your own bar, and the robot damage outlines sit top-left; see BrawlHudExtras)
 
             // 3. Upper-Center Match Callout Banner (positioned above the fighters so it never occludes combat!)
             _banner = MenuUI.Label(root, "", 68, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
@@ -618,8 +588,8 @@ namespace IronFauna.Brawl
 
             // 5. Bottom-Right Framed Martial-Arts Special Selector Card
             var movePanel = MenuUI.Panel(root, "SpecialPanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
-            // sits above the live keyboard diagram (bottom-right corner)
-            MenuUI.Place(movePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-497f, 282f), new Vector2(-30f, 420f));
+            // sits above the live keyboard diagram (bottom-left corner)
+            MenuUI.Place(movePanel.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(30f, 282f), new Vector2(497f, 420f));
             var moveStripe = MenuUI.Panel(movePanel.transform, "MoveStripe", IronFaunaPalette.HazardYellow);
             MenuUI.Place(moveStripe.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, 0f));
             var moveTop = MenuUI.Panel(movePanel.transform, "MoveTopRule", IronFaunaPalette.UiSelect);
@@ -635,10 +605,7 @@ namespace IronFauna.Brawl
             _hudExtras = new BrawlHudExtras();
             _hudExtras.Build(root);
 
-            // 7. 3D Target Reticle Bracket
-            _targetBracket = MenuUI.Label(root, "", 18, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
-            _targetBracket.rectTransform.sizeDelta = new Vector2(340f, 52f);
-            _targetBracket.enabled = false;
+            // 7. (floating target text removed, owner 2026-11-22; the target's HP bar is the overhead bar)
         }
 
         private Text _targetBracket;
