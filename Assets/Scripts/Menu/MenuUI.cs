@@ -116,7 +116,33 @@ namespace IronFauna.Menu
 
             var text = Label(rt, label, fontSize, textColor, TextAnchor.MiddleCenter, FontStyle.Bold);
             Fill(text.rectTransform);
+            text.rectTransform.offsetMin = new Vector2(10f, 0f);
+            text.rectTransform.offsetMax = new Vector2(-10f, 0f);
+            Fit(text, 10);
             return btn;
+        }
+
+        /// <summary>Makes a single-line label shrink (never grow past its authored size) to fit its rect.</summary>
+        public static AutoFitText Fit(Text text, int minSize = 10, float fill = 0.92f)
+        {
+            var fit = text.GetComponent<AutoFitText>();
+            if (fit == null) fit = text.gameObject.AddComponent<AutoFitText>();
+            fit.maxSize = text.fontSize;
+            fit.minSize = Mathf.Min(minSize, text.fontSize);
+            fit.fill = fill;
+            fit.Fit();
+            return fit;
+        }
+
+        /// <summary>A layout child that soaks up spare height (flexible) or adds a fixed gap.</summary>
+        public static RectTransform Spacer(Transform parent, float height, bool flexible = false)
+        {
+            var rt = NewRect(parent, flexible ? "FlexSpacer" : "Gap");
+            var le = rt.gameObject.AddComponent<LayoutElement>();
+            le.minHeight = flexible ? 0f : height;
+            le.preferredHeight = height;
+            le.flexibleHeight = flexible ? 1f : 0f;
+            return rt;
         }
 
         public static LayoutElement Size(Component c, float preferredHeight, float preferredWidth = -1f, float flexibleWidth = -1f)
@@ -189,15 +215,17 @@ namespace IronFauna.Menu
             bg.color = IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.55f);
 
             var name = Label(row, label.ToUpperInvariant(), 20, IronFaunaPalette.UiTextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
-            Size(name, 46f, 190f);
-            name.GetComponent<LayoutElement>().minWidth = 190f;
+            var nameLe = Size(name, 46f, 190f, 0.6f);
+            nameLe.minWidth = 70f;   // shrinks with the panel; AutoFitText scales the words down
+            Fit(name, 10, 0.96f);
 
             Color btnColor = IronFaunaPalette.UiButton;
             Color btnHover = IronFaunaPalette.UiSelect;
             var prev = CreateButton(row, "<", 24, btnColor, btnHover, IronFaunaPalette.UiText, onPrev);
             Size(prev, 46f, 52f);
             var value = Label(row, "-", 22, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
-            Size(value, 46f, 220f, 1f);
+            Size(value, 46f, 220f, 1f).minWidth = 90f;
+            Fit(value, 10);
             var next = CreateButton(row, ">", 24, btnColor, btnHover, IronFaunaPalette.UiText, onNext);
             Size(next, 46f, 52f);
 
@@ -212,6 +240,7 @@ namespace IronFauna.Menu
 
             var name = Label(row, label.ToUpperInvariant(), 18, IronFaunaPalette.UiTextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
             Place(name.rectTransform, new Vector2(0f, 0f), new Vector2(0.32f, 1f), Vector2.zero, Vector2.zero);
+            Fit(name, 10, 0.96f);
 
             var track = Panel(row, "Track", IronFaunaPalette.DarkIron);
             Place(track.rectTransform, new Vector2(0.32f, 0.25f), new Vector2(0.84f, 0.75f), Vector2.zero, Vector2.zero);
@@ -220,6 +249,7 @@ namespace IronFauna.Menu
 
             valueText = Label(row, "0", 18, IronFaunaPalette.UiText, TextAnchor.MiddleRight, FontStyle.Bold);
             Place(valueText.rectTransform, new Vector2(0.84f, 0f), new Vector2(1f, 1f), Vector2.zero, Vector2.zero);
+            Fit(valueText, 10, 0.96f);
             return fill.rectTransform;
         }
     }

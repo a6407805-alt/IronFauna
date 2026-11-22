@@ -157,20 +157,6 @@ namespace IronFauna.Menu
             StartBrawl();
         }
 
-        public void StartCampaign()
-        {
-            _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.CoopCampaign;
-            _matchConfig.campaignAct = 0;
-            StartBrawl();
-        }
-
-        public void StartStage(IronFauna.Brawl.BrawlStageId stage)
-        {
-            _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.FreeForAll;
-            _matchConfig.stage = stage;
-            StartBrawl();
-        }
-
         private void ShowGarage()
         {
             _inGarage = true;
@@ -193,54 +179,84 @@ namespace IronFauna.Menu
             _titleCanvas = canvas.gameObject;
             var root = canvas.transform;
 
+            // Side column: width follows the window (full width on narrow / portrait windows).
             var column = MenuUI.Panel(root, "TitleColumn", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.72f));
-            MenuUI.Place(column.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(760f, 0f));
+            MenuUI.Place(column.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(760f, 0f));
+            column.gameObject.AddComponent<ResponsiveColumn>();
             var stripe = MenuUI.Panel(column.transform, "HazardEdge", IronFaunaPalette.UiAccent);
             MenuUI.Place(stripe.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-8f, 0f), Vector2.zero);
 
-            var title = MenuUI.Label(column.transform, "IRONFAUNA", 124, IronFaunaPalette.UiText, TextAnchor.LowerLeft, FontStyle.Bold);
-            title.horizontalOverflow = HorizontalWrapMode.Overflow;
-            MenuUI.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(80f, -360f), new Vector2(-40f, -170f));
+            // Everything stacks top-to-bottom in one layout; the viewport scales it down on short windows.
+            var viewport = MenuUI.NewRect(column.transform, "TitleViewport");
+            MenuUI.Place(viewport, Vector2.zero, Vector2.one, new Vector2(72f, 40f), new Vector2(-48f, -56f));
+            var content = MenuUI.NewRect(viewport, "TitleContent");
+            var stack = MenuUI.VStack(content.gameObject, 10f, 0);
+            stack.childAlignment = TextAnchor.UpperLeft;
+            var fitter = viewport.gameObject.AddComponent<FitContentToViewport>();
+            fitter.content = content;
+            fitter.Configure();
 
-            var bar = MenuUI.Panel(column.transform, "TitleBar", IronFaunaPalette.UiSelect);
-            MenuUI.Place(bar.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -380f), new Vector2(560f, -368f));
+            MenuUI.Spacer(content, 80f, flexible: true).GetComponent<LayoutElement>().minHeight = 20f;
 
-            var tagline = MenuUI.Label(column.transform, "BUILD IT. BREAK THEM. TEAR THEM APART.", 26, IronFaunaPalette.UiAccent, TextAnchor.UpperLeft, FontStyle.Bold);
-            MenuUI.Place(tagline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(84f, -440f), new Vector2(-40f, -396f));
+            var title = MenuUI.Label(content, "IRONFAUNA", 150, IronFaunaPalette.UiText, TextAnchor.LowerLeft, FontStyle.Bold);
+            MenuUI.Size(title, 150f);
+            MenuUI.Fit(title, 40, 0.98f);
 
-            var buttons = MenuUI.NewRect(column.transform, "TitleButtons");
-            MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -860f), new Vector2(676f, -445f));
-            MenuUI.VStack(buttons.gameObject, 8f, 0);
+            var barRow = MenuUI.NewRect(content, "TitleBarRow");
+            MenuUI.Size(barRow, 12f);
+            var bar = MenuUI.Panel(barRow, "TitleBar", IronFaunaPalette.UiSelect);
+            MenuUI.Place(bar.rectTransform, Vector2.zero, new Vector2(0.8f, 1f), Vector2.zero, Vector2.zero);
 
-            AddTitleButton(buttons, "TOURNAMENT CAMPAIGN", StartTournamentCampaign, IronFaunaPalette.CrimsonFront);
-            AddTitleButton(buttons, "FIGHT (BRAWL)", StartBrawl);
-            AddTitleButton(buttons, "GARAGE", ShowGarage);
-            AddTitleButton(buttons, "QUIT", Quit);
+            var tagline = MenuUI.Label(content, "BUILD IT. BREAK THEM. TEAR THEM APART.", 30, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
+            MenuUI.Size(tagline, 44f);
+            MenuUI.Fit(tagline, 12, 0.98f);
 
-            var setupCard = MenuUI.Panel(column.transform, "MatchSetupCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.88f));
-            MenuUI.Place(setupCard.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(72f, -1245f), new Vector2(688f, -875f));
+            MenuUI.Spacer(content, 18f);
+
+            AddTitleButton(content, "TOURNAMENT CAMPAIGN", StartTournamentCampaign, IronFaunaPalette.CrimsonFront);
+            AddTitleButton(content, "FIGHT (BRAWL)", StartBrawl);
+            AddTitleButton(content, "GARAGE", ShowGarage);
+            AddTitleButton(content, "QUIT", Quit);
+
+            MenuUI.Spacer(content, 24f);
+
+            // Match setup card: header + cyclers, sized by its own layout.
+            var setupCard = MenuUI.Panel(content, "MatchSetupCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.88f));
+            var cardStack = MenuUI.VStack(setupCard.gameObject, 6f, 14);
+            cardStack.padding.top = 10;
             var setupRule = MenuUI.Panel(setupCard.transform, "SetupTopRule", IronFaunaPalette.OrangeJointCore);
+            setupRule.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
             MenuUI.Place(setupRule.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
-            var setupTitle = MenuUI.Label(setupCard.transform, "MATCH CONFIGURATION  //  7 STAGES  //  LIVE TTS ANNOUNCER", 16, IronFaunaPalette.OrangeJointCore, TextAnchor.MiddleLeft, FontStyle.Bold);
-            MenuUI.Place(setupTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -34f), new Vector2(-16f, -6f));
-
-            var setupBox = MenuUI.NewRect(setupCard.transform, "MatchSetup");
-            MenuUI.Place(setupBox, Vector2.zero, Vector2.one, new Vector2(12f, 12f), new Vector2(-12f, -40f));
-            MenuUI.VStack(setupBox.gameObject, 6f, 0);
-            _modeCycler = MenuUI.CreateCycler(setupBox, "Mode", () => CycleMode(-1), () => CycleMode(1));
-            _stageCycler = MenuUI.CreateCycler(setupBox, "Stage", () => CycleStage(-1), () => CycleStage(1));
-            _localPlayersCycler = MenuUI.CreateCycler(setupBox, "Local Co-Op", () => CycleLocalPlayers(-1), () => CycleLocalPlayers(1));
-            _netRoleCycler = MenuUI.CreateCycler(setupBox, "Online 8P", () => CycleNetRole(-1), () => CycleNetRole(1));
+            var setupTitle = MenuUI.Label(setupCard.transform, "MATCH CONFIGURATION  //  7 STAGES  //  LIVE TTS ANNOUNCER", 18, IronFaunaPalette.OrangeJointCore, TextAnchor.MiddleLeft, FontStyle.Bold);
+            MenuUI.Size(setupTitle, 30f);
+            MenuUI.Fit(setupTitle, 10, 0.98f);
+            _modeCycler = MenuUI.CreateCycler(setupCard.transform, "Mode", () => CycleMode(-1), () => CycleMode(1));
+            _stageCycler = MenuUI.CreateCycler(setupCard.transform, "Stage", () => CycleStage(-1), () => CycleStage(1));
+            _localPlayersCycler = MenuUI.CreateCycler(setupCard.transform, "Local Co-Op", () => CycleLocalPlayers(-1), () => CycleLocalPlayers(1));
+            _netRoleCycler = MenuUI.CreateCycler(setupCard.transform, "Online 8P", () => CycleNetRole(-1), () => CycleNetRole(1));
             RefreshTitleSetup();
 
-            _titleFooter = MenuUI.Label(column.transform, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft);
-            MenuUI.Place(_titleFooter.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(84f, 40f), new Vector2(-40f, 80f));
+            MenuUI.Spacer(content, 80f, flexible: true).GetComponent<LayoutElement>().minHeight = 16f;
+
+            _titleFooter = MenuUI.Label(content, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft);
+            MenuUI.Size(_titleFooter, 28f);
+            MenuUI.Fit(_titleFooter, 10, 0.98f);
         }
+
+        // Title-screen MODE choices (8P co-op campaign removed from the menu).
+        private static readonly IronFauna.Brawl.BrawlGameMode[] TitleModes =
+        {
+            IronFauna.Brawl.BrawlGameMode.FreeForAll,
+            IronFauna.Brawl.BrawlGameMode.TeamBrawl,
+            IronFauna.Brawl.BrawlGameMode.TournamentCampaign,
+        };
 
         private void CycleMode(int d)
         {
-            int n = 4;
-            _matchConfig.mode = (IronFauna.Brawl.BrawlGameMode)((((int)_matchConfig.mode + d) % n + n) % n);
+            int n = TitleModes.Length;
+            int i = System.Array.IndexOf(TitleModes, _matchConfig.mode);
+            if (i < 0) i = 0;
+            _matchConfig.mode = TitleModes[((i + d) % n + n) % n];
             RefreshTitleSetup();
         }
 
@@ -269,7 +285,6 @@ namespace IronFauna.Menu
             if (_modeCycler.Value != null)
             {
                 _modeCycler.Value.text = _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TournamentCampaign ? "TOURNAMENT CAMPAIGN"
-                    : _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.CoopCampaign ? "8P CO-OP CAMPAIGN"
                     : _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8P FREE-FOR-ALL";
             }
             if (_stageCycler.Value != null)
@@ -299,8 +314,8 @@ namespace IronFauna.Menu
         private static void AddTitleButton(Transform parent, string label, UnityEngine.Events.UnityAction action, Color? normalOverride = null)
         {
             Color normal = normalOverride ?? IronFaunaPalette.UiButton;
-            var b = MenuUI.CreateButton(parent, label, 24, normal, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
-            MenuUI.Size(b, 50f);
+            var b = MenuUI.CreateButton(parent, label, 28, normal, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
+            MenuUI.Size(b, 64f);
         }
 
         // ------------------------------------------------------------------
