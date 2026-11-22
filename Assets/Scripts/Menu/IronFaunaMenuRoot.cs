@@ -157,6 +157,21 @@ namespace IronFauna.Menu
             StartBrawl();
         }
 
+        // Not on the title screen any more; kept for the IronFauna editor menu's play-mode test shortcuts.
+        public void StartCampaign()
+        {
+            _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.CoopCampaign;
+            _matchConfig.campaignAct = 0;
+            StartBrawl();
+        }
+
+        public void StartStage(IronFauna.Brawl.BrawlStageId stage)
+        {
+            _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.FreeForAll;
+            _matchConfig.stage = stage;
+            StartBrawl();
+        }
+
         private void ShowGarage()
         {
             _inGarage = true;
