@@ -148,7 +148,9 @@ namespace IronFauna.Brawl
             ground.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = ground.AddComponent<MeshRenderer>();
             mr.sharedMaterial = BrawlStageLook.GroundMaterial(stage, mesh, n, half, top, radius, seed);
-            ground.AddComponent<MeshCollider>().sharedMesh = mesh;
+            var groundCol = ground.AddComponent<MeshCollider>();
+            groundCol.sharedMesh = mesh;
+            ActiveGround = groundCol;
 
             // ---------------- boulders and outcrops (static, half buried; omitted on paved Neo-Metro City streets)
             var placed = new List<Vector3>();
@@ -157,7 +159,7 @@ namespace IronFauna.Brawl
             for (int k = 0; k < boulderCount; k++)
             {
                 float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float r = Mathf.Lerp(0.36f, 0.84f, (float)rng.NextDouble()) * radius;
+                float r = Mathf.Lerp(0.36f, 0.74f, (float)rng.NextDouble()) * radius;   // all inside the arena wall
                 Vector3 p = new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
                 bool tooClose = false;
                 foreach (var q in placed) if ((q - p).sqrMagnitude < 36f) { tooClose = true; break; }
@@ -207,7 +209,7 @@ namespace IronFauna.Brawl
                 float ang = i / (float)pillarCount * Mathf.PI * 2f + 0.35f;
                 float dist = Mathf.Lerp(12f, 22f, (float)rng.NextDouble());
                 Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
-                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 float h = Mathf.Lerp(5.5f, 9f, (float)rng.NextDouble());
                 Color col = stage == BrawlStageId.GlacierTrench ? IronFaunaPalette.GlacierIce
                           : stage == BrawlStageId.FoundryCrucible ? IronFaunaPalette.FoundryRust
@@ -226,7 +228,7 @@ namespace IronFauna.Brawl
                 float ang = i / (float)wallCount * Mathf.PI * 2f + 0.8f;
                 float dist = Mathf.Lerp(9f, 18f, (float)rng.NextDouble());
                 Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
-                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 Vector3 size = stage == BrawlStageId.ScrapyardColosseum
                     ? new Vector3(5.2f, 3.2f, 2.2f) // shipping container
                     : new Vector3(4.6f, 3.6f, 1.1f); // blast wall / ice wall / radar screen
@@ -240,7 +242,7 @@ namespace IronFauna.Brawl
             }
 
             // 3. Orbital Dish central breakable antenna tower
-            if (stage == BrawlStageId.OrbitalDish && IronFauna.Boxing.MechBoxer.TryGround(Vector3.up * 25f, out float cy))
+            if (stage == BrawlStageId.OrbitalDish && TryTerrain(Vector3.up * 25f, out float cy))
             {
                 BreakableProp.Create(arena, "DishSpire", new Vector3(0f, cy + 5.5f, 0f),
                     new Vector3(2.4f, 11f, 2.4f), IronFaunaPalette.OffWhitePanel, 240f, true, new Vector3Int(2, 6, 2));
@@ -251,7 +253,7 @@ namespace IronFauna.Brawl
             {
                 Vector3 p = new Vector3(Random.Range(-21f, 21f), 0f, Random.Range(-21f, 21f));
                 if (p.magnitude < 5.5f) p = p.normalized * 7.5f;
-                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 const bool explosive = false;
                 float sz = explosive ? 1.35f : Random.Range(1.1f, 1.9f);
                 Color col = explosive ? IronFaunaPalette.OrangeJointCore : IronFaunaPalette.HazardYellow;
@@ -275,7 +277,7 @@ namespace IronFauna.Brawl
             for (int b = 0; b < buildingLots.Length; b++)
             {
                 Vector3 basePos = new Vector3(buildingLots[b].x, 0f, buildingLots[b].y);
-                if (!IronFauna.Boxing.MechBoxer.TryGround(basePos + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(basePos + Vector3.up * 25f, out float gy)) continue;
                 float w = Mathf.Lerp(4.2f, 5.4f, (float)rng.NextDouble());
                 float d = Mathf.Lerp(4.2f, 5.4f, (float)rng.NextDouble());
                 float floorH = 3.2f;
@@ -300,7 +302,7 @@ namespace IronFauna.Brawl
             {
                 float ang = i / 8f * Mathf.PI * 2f + 0.2f;
                 Vector3 p = new Vector3(Mathf.Cos(ang) * 9.5f, 0f, Mathf.Sin(ang) * 9.5f);
-                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 var post = BreakableProp.Create(arena, "Streetlight", new Vector3(p.x, gy + 3.2f, p.z),
                     new Vector3(0.55f, 6.4f, 0.55f), IronFaunaPalette.GunmetalFrame, 120f, true, new Vector3Int(1, 4, 1));
                 ClamshellParts.Spawn(post.transform, "StreetLampHead",
@@ -313,7 +315,7 @@ namespace IronFauna.Brawl
             {
                 Vector3 p = new Vector3(Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()), 0f, Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()));
                 if (p.magnitude < 5f) p = p.normalized * 6.5f;
-                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 Color carCol = (i % 3 == 0) ? IronFaunaPalette.CrimsonFront : (i % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.CobaltFront;
                 var car = BreakableProp.Create(arena, "StreetCar", new Vector3(p.x, gy + 0.72f, p.z),
                     new Vector3(2.1f, 0.95f, 4.1f), carCol, 85f, false, new Vector3Int(2, 2, 3), false);
@@ -347,7 +349,7 @@ namespace IronFauna.Brawl
                 bool tooClose = false;
                 foreach (var q in treePositions) if ((q - p).sqrMagnitude < 18f) { tooClose = true; break; }
                 if (tooClose) continue;
-                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 treePositions.Add(p);
                 float h = Mathf.Lerp(10.5f, 15.5f, (float)rng.NextDouble());
                 float rad = Mathf.Lerp(0.55f, 0.80f, (float)rng.NextDouble());
@@ -360,7 +362,7 @@ namespace IronFauna.Brawl
                 float ang = i / 8f * Mathf.PI * 2f + 0.4f;
                 float dist = Mathf.Lerp(9f, 18f, (float)rng.NextDouble());
                 Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
-                if (!IronFauna.Boxing.MechBoxer.TryGround(p + Vector3.up * 25f, out float gy)) continue;
+                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 var log = BreakableProp.Create(arena, "FallenTimberLog", new Vector3(p.x, gy + 0.7f, p.z),
                     new Vector3(1.3f, 1.3f, 4.8f), IronFaunaPalette.ForestBark, 110f, false, new Vector3Int(2, 2, 4));
                 log.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 180f, 0f);
@@ -448,6 +450,110 @@ namespace IronFauna.Brawl
             spot.intensity = 6f;
             spot.color = IronFaunaPalette.KeyLightWarm;
             spot.shadows = LightShadows.Soft;
+        }
+
+        /// <summary>The bare ground of the arena being built (not rocks, scenery or last round's arena).</summary>
+        public static Collider ActiveGround;
+
+        /// <summary>
+        /// Ground height under (x, z) on the bare terrain only. Scenery and props use this so nothing ends up perched on
+        /// a rock's collision hull, on top of other scenery, or on the previous round's arena (owner 2026-11-22: "floating objects everywhere").
+        /// </summary>
+        public static bool TryTerrain(Vector3 p, out float y)
+        {
+            y = 0f;
+            if (ActiveGround == null || !ActiveGround.enabled) return IronFauna.Boxing.MechBoxer.TryGround(p, out y);
+            var ray = new Ray(new Vector3(p.x, p.y + 60f, p.z), Vector3.down);
+            if (!ActiveGround.Raycast(ray, out RaycastHit hit, 200f)) return false;
+            y = hit.point.y;
+            return true;
+        }
+
+        /// <summary>Radius of the arena wall (inside the cliff rim everywhere).</summary>
+        public const float WallRadiusFrac = 0.82f;
+        public static float WallRadius(float islandRadius) => islandRadius * WallRadiusFrac;
+        public const float WallHeight = 3.4f, FenceHeight = 5.5f;
+
+        /// <summary>
+        /// A real wall around the arena (owner 2026-11-22: "you can still throw your opponent out... prevent it, an actual
+        /// physical wall, not an invisible one"): an armoured gunmetal base with a hazard stripe that follows the ground,
+        /// steel posts with cyan beacons, and a three-bar energy fence on top. The base, posts and fence all collide, so
+        /// throws, slams and knockbacks bounce off it. Built after the scenery so nothing is placed on top of it.
+        /// </summary>
+        public static void BuildArenaWall(Transform parent, float top, float radius, int seed, BrawlStageId stage)
+        {
+            var rng = new System.Random(seed);
+            float ox = (float)rng.NextDouble() * 100f, oz = (float)rng.NextDouble() * 100f;   // same terrain offsets as Build
+            var root = new GameObject("ArenaWall").transform;
+            root.SetParent(parent, false);
+
+            Material plate = IronFaunaMaterials.Get(IronFaunaPalette.GunmetalFrame, false);
+            Material dark = IronFaunaMaterials.Get(IronFaunaPalette.DarkIron, false);
+            Material stripe = IronFaunaMaterials.Get(IronFaunaPalette.HazardYellow, false);
+            Material glow = IronFaunaMaterials.Get(IronFaunaPalette.CyanEnergy, true);
+
+            float R = WallRadius(radius);
+            const int segs = 48;
+            const float thick = 0.9f;
+            float segLen = 2f * Mathf.PI * R / segs + 0.25f;   // slight overlap: no gaps between panels
+
+            GameObject Box(string name, Vector3 pos, Quaternion rot, Vector3 size, Material m, bool collider)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = name;
+                go.transform.SetParent(root, false);
+                go.transform.SetPositionAndRotation(pos, rot);
+                go.transform.localScale = size;
+                var mr = go.GetComponent<MeshRenderer>();
+                if (m != null) mr.sharedMaterial = m; else mr.enabled = false;
+                if (!collider) Object.DestroyImmediate(go.GetComponent<Collider>());
+                return go;
+            }
+
+            float GroundAt(float ang, float dist) => Height(Mathf.Cos(ang) * dist, Mathf.Sin(ang) * dist, top, radius, ox, oz, stage);
+
+            for (int i = 0; i < segs; i++)
+            {
+                float a0 = i * Mathf.PI * 2f / segs, a1 = (i + 1) * Mathf.PI * 2f / segs, am = (a0 + a1) * 0.5f;
+                float gMin = float.MaxValue, gMax = float.MinValue;
+                for (int k = 0; k <= 4; k++)
+                {
+                    float sa = Mathf.Lerp(a0, a1, k / 4f);
+                    foreach (float sr in new[] { R - thick, R, R + thick })
+                    {
+                        float g = GroundAt(sa, sr);
+                        gMin = Mathf.Min(gMin, g);
+                        gMax = Mathf.Max(gMax, g);
+                    }
+                }
+                Vector3 outward = new Vector3(Mathf.Cos(am), 0f, Mathf.Sin(am));
+                Quaternion rot = Quaternion.LookRotation(outward, Vector3.up);
+                float bottom = gMin - 2.5f, wallTop = gMax + WallHeight;
+                Vector3 c = outward * R;
+
+                // armoured base panel
+                Box("WallPanel", new Vector3(c.x, (bottom + wallTop) * 0.5f, c.z), rot, new Vector3(segLen, wallTop - bottom, thick), plate, true);
+                // inner face detail: dark recessed band, hazard stripe and a rail along the top
+                Box("WallBand", new Vector3(c.x, gMax + 0.9f, c.z) - outward * (thick * 0.5f + 0.02f), rot, new Vector3(segLen * 0.94f, 0.6f, 0.06f), dark, false);
+                Box("WallStripe", new Vector3(c.x, wallTop - 0.45f, c.z) - outward * (thick * 0.5f + 0.03f), rot, new Vector3(segLen * 0.96f, 0.28f, 0.06f), stripe, false);
+                Box("WallCap", new Vector3(c.x, wallTop + 0.09f, c.z), rot, new Vector3(segLen, 0.18f, thick + 0.25f), dark, false);
+
+                // energy fence above the panel: three glowing bars (visible) on one solid fence body
+                Box("Fence", new Vector3(c.x, wallTop + FenceHeight * 0.5f, c.z), rot, new Vector3(segLen, FenceHeight, 0.3f), null, true);
+                for (int b = 0; b < 3; b++)
+                {
+                    float barY = wallTop + 1.4f + b * 1.75f;
+                    Box("FenceBar", new Vector3(c.x, barY, c.z), rot, new Vector3(segLen, 0.12f, 0.12f), glow, false);
+                }
+
+                // post at the panel joint, with a beacon on top
+                Vector3 pd = new Vector3(Mathf.Cos(a0), 0f, Mathf.Sin(a0));
+                Vector3 pc = pd * R;
+                Quaternion prot = Quaternion.LookRotation(pd, Vector3.up);
+                float postTop = wallTop + FenceHeight + 0.3f;
+                Box("WallPost", new Vector3(pc.x, (bottom + postTop) * 0.5f, pc.z), prot, new Vector3(0.6f, postTop - bottom, thick + 0.4f), dark, true);
+                Box("PostBeacon", new Vector3(pc.x, postTop + 0.15f, pc.z), prot, new Vector3(0.4f, 0.3f, 0.4f), glow, false);
+            }
         }
 
         public static float Height(float x, float z, float top, float radius, float ox = 0f, float oz = 0f, BrawlStageId stage = BrawlStageId.BasaltMesa)

@@ -61,6 +61,8 @@ namespace IronFauna.Boxing
         public float braking = 9f;
         public float turnRate = 260f;
         public float ringHalfSize = 6.2f;
+        /// <summary>Brawl: the ghost cannot walk past this radius (the arena wall). 0 = no limit.</summary>
+        public float arenaRadius;
         [Tooltip("When set, intent.move is read in this transform's yaw frame (the camera) instead of relative to the opponent")]
         public Transform moveReference;
         [Tooltip("Squares up to the opponent inside this range; further out it turns to face where it walks")]
@@ -871,6 +873,11 @@ namespace IronFauna.Boxing
             }
             p.x = Mathf.Clamp(p.x, -ringHalfSize, ringHalfSize);
             p.z = Mathf.Clamp(p.z, -ringHalfSize, ringHalfSize);
+            if (arenaRadius > 0f)
+            {
+                float rr = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+                if (rr > arenaRadius) { p.x *= arenaRadius / rr; p.z *= arenaRadius / rr; }   // brawl: stop at the arena wall
+            }
             if (followGround && TryGround(p, out float gy)) p.y = Mathf.Lerp(transform.position.y, gy, 1f - Mathf.Exp(-14f * dt));
             transform.position = p;
 

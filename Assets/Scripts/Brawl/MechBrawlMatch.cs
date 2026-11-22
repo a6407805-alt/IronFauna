@@ -278,7 +278,7 @@ namespace IronFauna.Brawl
             _fighters.Clear();
             _ragdollList.Clear();
             _input = null;
-            if (_arena != null) Destroy(_arena.gameObject);
+            DiscardArena();
 
             if (config.mode == BrawlGameMode.CoopCampaign)
             {
@@ -647,6 +647,7 @@ namespace IronFauna.Brawl
             f.ghost = f.ghostGo.AddComponent<MechBoxer>();
             f.ghost.followGround = true;
             f.ghost.ringHalfSize = ArenaHalf + 30f;
+            f.ghost.arenaRadius = BrawlTerrain.WallRadius(IslandRadius) - 1.5f;   // standing robots stop at the wall
             f.ghost.minDistance = 2.3f;
             if (player)
             {
@@ -696,6 +697,19 @@ namespace IronFauna.Brawl
 
         private int _arenaSeed;
 
+        /// <summary>
+        /// Removes last round's arena right away. Destroy() only happens at the end of the frame, and the new arena's scenery
+        /// used to land on the old ground and rocks still in the scene: that was the "floating objects" on later rounds.
+        /// </summary>
+        private void DiscardArena()
+        {
+            if (_arena == null) return;
+            _arena.gameObject.SetActive(false);
+            Destroy(_arena.gameObject);
+            _arena = null;
+            BrawlTerrain.ActiveGround = null;
+        }
+
         private void BuildArena(BrawlStageId stage, int? fixedSeed = null)
         {
             BrawlStageLook.Release();
@@ -709,6 +723,8 @@ namespace IronFauna.Brawl
             BrawlTerrain.PopulateDestructibles(_arena, stage, seed + 7);
 
             BrawlStageLook.Dress(_arena, stage, ArenaTop, IslandRadius, seed + 13);
+            BrawlTerrain.BuildArenaWall(_arena, ArenaTop, IslandRadius, seed, stage);   // last, so no scenery lands on it
+            Physics.SyncTransforms();
             foreach (var l in FindObjectsByType<Light>())
                 if (!l.transform.IsChildOf(transform)) l.enabled = false;
             var cams = new List<Camera>();
@@ -1205,18 +1221,12 @@ namespace IronFauna.Brawl
             foreach (var f in _fighters)
             {
                 Vector3 fp = f.ragdoll != null ? f.ragdoll.Position : Vector3.zero;
-                bool ringOut = fp.y < ArenaTop - 8f || ((fp.x * fp.x + fp.z * fp.z > (IslandRadius * 0.91f) * (IslandRadius * 0.91f)) && fp.y < ArenaTop - 2.2f);
-                // Ring out is no longer an instant win (owner: "won the whole tournament throwing them off the cliff"):
-                // the robot loses 30% hull and is put back in the arena; only a fall that empties the hull knocks it out.
-                if (ringOut && !f.out_ && !f.ragdoll.IsKO)
-                {
-                    if (!f.ragdoll.RingOutPenalty(0.3f, RingOutReturnSpot()))
-                    {
-                        ringOut = false;
-                        PersonalBanner(f, "RING OUT  -30% HULL", 1.8f);
-                        if (_announcer != null) _announcer.OnRingOutPenalty(f.name);
-                    }
-                }
+                // No ring-outs (owner 2026-11-22: "you can still throw your opponent out... prevent them from even being able to"):
+                // the arena wall stops every throw. If a body ever slips past it (physics glitch), it is quietly put back, no damage.
+                float wallR = BrawlTerrain.WallRadius(IslandRadius) + 2.5f;
+                bool escaped = fp.y < ArenaTop - 16f || fp.x * fp.x + fp.z * fp.z > wallR * wallR;
+                if (escaped && !f.out_ && !f.ragdoll.IsKO) f.ragdoll.RingOutPenalty(0f, RingOutReturnSpot());
+                bool ringOut = false;
                 if (!f.out_ && (f.ragdoll.IsKO || ringOut))
                 {
                     f.out_ = true;

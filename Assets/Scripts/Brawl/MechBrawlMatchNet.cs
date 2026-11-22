@@ -171,7 +171,7 @@ namespace IronFauna.Brawl
             _ragdollList.Clear();
             _netOrder.Clear();
             _input = null;
-            if (_arena != null) Destroy(_arena.gameObject);
+            DiscardArena();
             _resetT = -1f;
 
             BuildArena(config.stage, seed);
