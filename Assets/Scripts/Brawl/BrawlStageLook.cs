@@ -113,6 +113,157 @@ namespace IronFauna.Brawl
             }
         }
 
+        // ------------------------------------------------------------------ menu map previews
+        private static readonly Dictionary<BrawlStageId, Texture2D> Previews = new Dictionary<BrawlStageId, Texture2D>();
+
+        /// <summary>
+        /// A small illustrated postcard of a stage for the map selector: its real sky gradient and sun, a landmark
+        /// silhouette (buttes, smokestacks, planet + dish, colosseum stands, ice spires, skyline, pines) and its ground.
+        /// Cached for the session; not released with the arena.
+        /// </summary>
+        public static Texture2D PreviewTexture(BrawlStageId stage)
+        {
+            if (Previews.TryGetValue(stage, out var cached) && cached != null) return cached;
+            const int W = 384, H = 216;
+            var look = Get(stage);
+            BrawlTerrain.StageColors(stage, out Color ground, out Color rock, out Color rim, out _, out _);
+            var px = new Color[W * H];
+            var rng = new System.Random(1000 + (int)stage);
+            float horizon = 0.38f;                          // fraction of height where the ground starts
+            float sunX = 0.5f + Mathf.Clamp(look.sunYaw / 90f, -0.4f, 0.4f);
+            float sunY = horizon + Mathf.Clamp01(look.sunPitch / 70f) * 0.5f;
+            Color far = L(look.below, look.horizon, 0.35f) * 0.55f;
+            far.a = 1f;
+            Color near = rock * 0.6f;
+            near.a = 1f;
+
+            // landmark silhouette heights per column (fraction of height above the horizon)
+            var skyline = new float[W];
+            var lit = new bool[W];
+            switch (stage)
+            {
+                case BrawlStageId.BasaltMesa:      // flat-topped buttes
+                    for (int k = 0; k < 4; k++)
+                    {
+                        int c = rng.Next(20, W - 20), half = rng.Next(18, 46);
+                        float top = 0.12f + (float)rng.NextDouble() * 0.16f;
+                        for (int x = Mathf.Max(0, c - half - 8); x < Mathf.Min(W, c + half + 8); x++)
+                        {
+                            float edge = Mathf.Clamp01(1f - (Mathf.Abs(x - c) - half) / 8f);
+                            skyline[x] = Mathf.Max(skyline[x], top * edge);
+                        }
+                    }
+                    break;
+                case BrawlStageId.FoundryCrucible:  // smokestacks + factory block
+                    for (int x = 0; x < W; x++) skyline[x] = 0.07f;
+                    for (int k = 0; k < 5; k++)
+                    {
+                        int c = rng.Next(10, W - 10), half = rng.Next(4, 9);
+                        float top = 0.25f + (float)rng.NextDouble() * 0.22f;
+                        for (int x = Mathf.Max(0, c - half); x < Mathf.Min(W, c + half); x++) skyline[x] = Mathf.Max(skyline[x], top);
+                    }
+                    break;
+                case BrawlStageId.ScrapyardColosseum: // stepped stands all round
+                    for (int x = 0; x < W; x++)
+                    {
+                        float t = Mathf.Abs(x / (float)W - 0.5f) * 2f;
+                        skyline[x] = 0.06f + t * t * 0.16f + ((x / 12) % 2 == 0 ? 0.012f : 0f);
+                        lit[x] = (x % 23) == 0;
+                    }
+                    break;
+                case BrawlStageId.GlacierTrench:    // ice spires
+                    for (int k = 0; k < 9; k++)
+                    {
+                        int c = rng.Next(0, W), half = rng.Next(10, 26);
+                        float top = 0.12f + (float)rng.NextDouble() * 0.24f;
+                        for (int x = Mathf.Max(0, c - half); x < Mathf.Min(W, c + half); x++)
+                            skyline[x] = Mathf.Max(skyline[x], top * (1f - Mathf.Abs(x - c) / (float)half));
+                    }
+                    break;
+                case BrawlStageId.NeoMetroCity:     // skyline with lit windows
+                    for (int x = 0; x < W;)
+                    {
+                        int bw = rng.Next(14, 34);
+                        float top = 0.10f + (float)rng.NextDouble() * 0.34f;
+                        for (int i = 0; i < bw && x < W; i++, x++) { skyline[x] = top; lit[x] = (i % 4) == 1; }
+                        x += rng.Next(2, 5);
+                    }
+                    break;
+                case BrawlStageId.RedwoodForest:    // tall pines
+                    for (int k = 0; k < 16; k++)
+                    {
+                        int c = rng.Next(0, W), half = rng.Next(8, 16);
+                        float top = 0.22f + (float)rng.NextDouble() * 0.3f;
+                        for (int x = Mathf.Max(0, c - half); x < Mathf.Min(W, c + half); x++)
+                            skyline[x] = Mathf.Max(skyline[x], top * (1f - Mathf.Abs(x - c) / (float)half * 0.85f));
+                    }
+                    break;
+                default:                             // Orbital Dish: low dish rim, planet in the sky
+                    for (int x = 0; x < W; x++)
+                    {
+                        float t = (x / (float)W - 0.5f) * 2f;
+                        skyline[x] = 0.04f + Mathf.Max(0f, 0.1f - Mathf.Abs(t) * 0.1f);
+                    }
+                    break;
+            }
+
+            for (int y = 0; y < H; y++)
+            {
+                float v = y / (float)(H - 1);
+                for (int x = 0; x < W; x++)
+                {
+                    float u = x / (float)(W - 1);
+                    Color c;
+                    if (v >= horizon)
+                    {
+                        float t = (v - horizon) / (1f - horizon);
+                        c = L(look.horizon, look.zenith, Mathf.Pow(t, 0.7f));
+                        // sun / planet
+                        float dx = (u - sunX) * (W / (float)H), dy = v - sunY;
+                        float d = Mathf.Sqrt(dx * dx + dy * dy);
+                        if (stage == BrawlStageId.OrbitalDish)
+                        {
+                            float pd = Mathf.Sqrt(((u - 0.28f) * (W / (float)H)) * ((u - 0.28f) * (W / (float)H)) + (v - 0.86f) * (v - 0.86f));
+                            if (pd < 0.2f) c = L(P.OrbitalPlanet, look.horizon, Mathf.Clamp01((pd - 0.12f) / 0.08f) * 0.6f);
+                            if (rng.NextDouble() < 0.002) c = P.OffWhitePanel;   // stars
+                        }
+                        c = L(c, look.sun, Mathf.Clamp01(1f - d / 0.07f) * 0.9f + Mathf.Clamp01(1f - d / 0.3f) * 0.18f);
+                        if (stage == BrawlStageId.GlacierTrench) c = L(c, P.GlacierAurora, Mathf.Clamp01(1f - Mathf.Abs(v - 0.78f - Mathf.Sin(u * 9f) * 0.04f) / 0.05f) * 0.35f);
+                        // landmark silhouette
+                        float sk = skyline[x];
+                        if (v - horizon < sk)
+                        {
+                            c = L(far, look.horizon, 0.15f);
+                            if (lit[x] && ((y / 5) % 2 == 0) && rng.NextDouble() < 0.6)
+                                c = stage == BrawlStageId.NeoMetroCity ? P.CityWindow : P.HazardYellow;
+                            if (stage == BrawlStageId.FoundryCrucible) c = L(c, P.FoundryMolten, Mathf.Clamp01(1f - (v - horizon) / 0.08f) * 0.45f);
+                        }
+                    }
+                    else
+                    {
+                        // ground: arena island in perspective, falling away to the rim
+                        float t = v / horizon;                    // 0 bottom .. 1 horizon
+                        float width = Mathf.Lerp(0.95f, 0.55f, t);
+                        bool island = Mathf.Abs(u - 0.5f) < width * 0.5f;
+                        c = island ? L(ground, far, t * 0.55f) : L(look.below, far, 0.4f);
+                        float n = (float)rng.NextDouble();
+                        c = L(c, rock, n < 0.05f ? 0.4f : 0f) * (0.92f + n * 0.12f);
+                        if (island && Mathf.Abs(Mathf.Abs(u - 0.5f) - width * 0.5f) < 0.006f) c = rim;
+                        if (stage == BrawlStageId.FoundryCrucible && island && Mathf.Abs(Mathf.Sin(u * 40f + t * 9f)) < 0.04f) c = P.FoundryMolten;
+                        if (stage == BrawlStageId.OrbitalDish && island && Mathf.Abs(Mathf.Sin(((u - 0.5f) / Mathf.Max(0.05f, width)) * 18f)) < 0.05f) c = P.CyanEnergy * 0.8f;
+                    }
+                    c.a = 1f;
+                    px[y * W + x] = c;
+                }
+            }
+
+            var tex = new Texture2D(W, H, TextureFormat.RGB24, false) { name = "MapPreview_" + stage, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            tex.SetPixels(px);
+            tex.Apply(false, true);
+            Previews[stage] = tex;
+            return tex;
+        }
+
         // Generated textures, materials and meshes of the current stage: released before the next one is built
         // (Tab cycles stages and every round rebuilds the arena).
         private static readonly List<Object> Owned = new List<Object>();

@@ -14,7 +14,7 @@ namespace IronFauna.Menu
     /// FIGHT starts a brawl (IronFauna.Brawl.MechBrawlMatch) in this scene; Escape in the brawl reloads it.
     /// Drop this on one GameObject in an otherwise empty scene (IronFauna > Setup Menu Scene does it for you).
     /// </summary>
-    public class IronFaunaMenuRoot : MonoBehaviour
+    public partial class IronFaunaMenuRoot : MonoBehaviour
     {
         [Tooltip("Open straight into the garage instead of the title screen.")]
         public bool startInGarage;
@@ -72,10 +72,8 @@ namespace IronFauna.Menu
         private MenuUI.Cycler _torsoWeightCycler;
         private MenuUI.Cycler _legWeightCycler;
         private MenuUI.Cycler _viewCycler;
-        private MenuUI.Cycler _modeCycler;
-        private MenuUI.Cycler _stageCycler;
-        private MenuUI.Cycler _localPlayersCycler;
-        private MenuUI.Cycler _netRoleCycler;
+        private GameObject _tournamentSetupCanvas;
+        private GameObject _brawlSetupCanvas;
         private bool _skeletonView;
         private MenuUI.Cycler _fullSetCycler;
         private Text _headerInfo;
@@ -101,6 +99,8 @@ namespace IronFauna.Menu
             MenuUI.EnsureEventSystem();
             BuildTitle();
             BuildGarage();
+            BuildTournamentSetup();
+            BuildBrawlSetup();
 
             if (startInGarage) ShowGarage(); else ShowTitle();
         }
@@ -114,7 +114,8 @@ namespace IronFauna.Menu
 #else
             back = Input.GetKeyDown(KeyCode.Escape);
 #endif
-            if (back && _inGarage) ShowTitle();
+            if (back && (_inGarage || (_tournamentSetupCanvas != null && _tournamentSetupCanvas.activeSelf)
+                         || (_brawlSetupCanvas != null && _brawlSetupCanvas.activeSelf))) ShowTitle();
         }
 
         // ------------------------------------------------------------------
@@ -126,6 +127,7 @@ namespace IronFauna.Menu
             _inGarage = false;
             _titleCanvas.SetActive(true);
             _garageCanvas.SetActive(false);
+            HideSetupScreens();
             _stage.autoSpin = true;
             _stage.allowUserOrbit = false;
             _stage.Frame(_stage.Mech.HipHeight + 0.6f, 10.5f, 2.2f);
@@ -138,6 +140,7 @@ namespace IronFauna.Menu
         {
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
+            HideSetupScreens();
             if (_stage != null)
             {
                 _stage.enabled = false;
@@ -154,6 +157,7 @@ namespace IronFauna.Menu
         public void StartTournamentCampaign()
         {
             _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.TournamentCampaign;
+            _matchConfig.netRole = IronFauna.Brawl.BrawlNetRole.Offline;   // the tournament is local only
             StartBrawl();
         }
 
@@ -228,93 +232,18 @@ namespace IronFauna.Menu
 
             MenuUI.Spacer(content, 18f);
 
-            AddTitleButton(content, "TOURNAMENT CAMPAIGN", StartTournamentCampaign, IronFaunaPalette.CrimsonFront);
-            AddTitleButton(content, "FIGHT (BRAWL)", StartBrawl);
+            AddTitleButton(content, "TOURNAMENT CAMPAIGN", ShowTournamentSetup, IronFaunaPalette.CrimsonFront);
+            AddTitleButton(content, "FIGHT (BRAWL)", ShowBrawlSetup);
             AddTitleButton(content, "GARAGE", ShowGarage);
             AddTitleButton(content, "QUIT", Quit);
 
             MenuUI.Spacer(content, 24f);
-
-            // Match setup card: header + cyclers, sized by its own layout.
-            var setupCard = MenuUI.Panel(content, "MatchSetupCard", IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.88f));
-            var cardStack = MenuUI.VStack(setupCard.gameObject, 6f, 14);
-            cardStack.padding.top = 10;
-            var setupRule = MenuUI.Panel(setupCard.transform, "SetupTopRule", IronFaunaPalette.OrangeJointCore);
-            setupRule.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
-            MenuUI.Place(setupRule.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), Vector2.zero);
-            var setupTitle = MenuUI.Label(setupCard.transform, "MATCH CONFIGURATION  //  7 STAGES  //  LIVE TTS ANNOUNCER", 18, IronFaunaPalette.OrangeJointCore, TextAnchor.MiddleLeft, FontStyle.Bold);
-            MenuUI.Size(setupTitle, 30f);
-            MenuUI.Fit(setupTitle, 10, 0.98f);
-            _modeCycler = MenuUI.CreateCycler(setupCard.transform, "Mode", () => CycleMode(-1), () => CycleMode(1));
-            _stageCycler = MenuUI.CreateCycler(setupCard.transform, "Stage", () => CycleStage(-1), () => CycleStage(1));
-            _localPlayersCycler = MenuUI.CreateCycler(setupCard.transform, "Local Co-Op", () => CycleLocalPlayers(-1), () => CycleLocalPlayers(1));
-            _netRoleCycler = MenuUI.CreateCycler(setupCard.transform, "Online 8P", () => CycleNetRole(-1), () => CycleNetRole(1));
-            RefreshTitleSetup();
 
             MenuUI.Spacer(content, 80f, flexible: true).GetComponent<LayoutElement>().minHeight = 16f;
 
             _titleFooter = MenuUI.Label(content, "", 18, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft);
             MenuUI.Size(_titleFooter, 28f);
             MenuUI.Fit(_titleFooter, 10, 0.98f);
-        }
-
-        // Title-screen MODE choices (8P co-op campaign removed from the menu).
-        private static readonly IronFauna.Brawl.BrawlGameMode[] TitleModes =
-        {
-            IronFauna.Brawl.BrawlGameMode.FreeForAll,
-            IronFauna.Brawl.BrawlGameMode.TeamBrawl,
-            IronFauna.Brawl.BrawlGameMode.TournamentCampaign,
-        };
-
-        private void CycleMode(int d)
-        {
-            int n = TitleModes.Length;
-            int i = System.Array.IndexOf(TitleModes, _matchConfig.mode);
-            if (i < 0) i = 0;
-            _matchConfig.mode = TitleModes[((i + d) % n + n) % n];
-            RefreshTitleSetup();
-        }
-
-        private void CycleStage(int d)
-        {
-            int n = IronFauna.Brawl.BrawlTerrain.StageCount;
-            _matchConfig.stage = (IronFauna.Brawl.BrawlStageId)((((int)_matchConfig.stage + d) % n + n) % n);
-            RefreshTitleSetup();
-        }
-
-        private void CycleLocalPlayers(int d)
-        {
-            _matchConfig.localPlayers = ((_matchConfig.localPlayers - 1 + d + 4) % 4) + 1;
-            RefreshTitleSetup();
-        }
-
-        private void CycleNetRole(int d)
-        {
-            int n = 3;
-            _matchConfig.netRole = (IronFauna.Brawl.BrawlNetRole)((((int)_matchConfig.netRole + d) % n + n) % n);
-            RefreshTitleSetup();
-        }
-
-        private void RefreshTitleSetup()
-        {
-            if (_modeCycler.Value != null)
-            {
-                _modeCycler.Value.text = _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TournamentCampaign ? "TOURNAMENT CAMPAIGN"
-                    : _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8P FREE-FOR-ALL";
-            }
-            if (_stageCycler.Value != null)
-            {
-                _stageCycler.Value.text = IronFauna.Brawl.BrawlTerrain.StageName(_matchConfig.stage);
-            }
-            if (_localPlayersCycler.Value != null)
-            {
-                _localPlayersCycler.Value.text = _matchConfig.localPlayers == 1 ? "1 PLAYER (SOLO)" : $"{_matchConfig.localPlayers}P SPLIT SCREEN";
-            }
-            if (_netRoleCycler.Value != null)
-            {
-                _netRoleCycler.Value.text = _matchConfig.netRole == IronFauna.Brawl.BrawlNetRole.Host ? "HOST 8P (:7777)"
-                    : _matchConfig.netRole == IronFauna.Brawl.BrawlNetRole.Client ? "JOIN 8P (:7777)" : "OFFLINE";
-            }
         }
 
         private static void Quit()
