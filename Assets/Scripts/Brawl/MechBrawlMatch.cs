@@ -96,6 +96,8 @@ namespace IronFauna.Brawl
         private Text _staminaValueText;
         private Text _hpValueText, _poiseValueText, _scoreboardTitle;
         private BrawlHudExtras _hudExtras;
+        // who last hit each fighter (for crediting knockouts to the player: multi-KO / spree callouts)
+        private readonly Dictionary<MechRagdoll, (MechRagdoll by, float t)> _lastHitBy = new Dictionary<MechRagdoll, (MechRagdoll by, float t)>();
         private readonly Image[] _limbBadgeImgs = new Image[4];
         private readonly Text[] _limbBadgeTexts = new Text[4];
         private float _hpGhostFill = 1f, _poiseSmoothFill = 1f;
@@ -194,6 +196,7 @@ namespace IronFauna.Brawl
             // Officials inspect the rig before every bout: black-market mods may be confiscated and fined.
             _inspectionNote = _tournament != null ? _tournament.garage.RunInspection() : null;
             if (_inspectionNote != null) _tournament.lastRoundFeed = _inspectionNote;
+            if (_inspectionNote != null && _announcer != null) _announcer.OnInspectionBust();
             StartRound();
             if (_inspectionNote != null) Banner("INSPECTION BUST! ILLEGAL MODS CONFISCATED", 3.2f);
         }
@@ -201,6 +204,7 @@ namespace IronFauna.Brawl
         // ------------------------------------------------------------------ round & campaign
         private void StartRound()
         {
+            _lastHitBy.Clear();
             foreach (var f in _fighters)
             {
                 if (f.physGo != null) Destroy(f.physGo);
@@ -782,6 +786,11 @@ namespace IronFauna.Brawl
         {
             var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
             bool mine = victim == me || attacker == me;
+            if (victim != null && attacker != null && attacker != victim)
+            {
+                _lastHitBy[victim] = (attacker, Time.time);
+                if (_announcer != null && damage >= 3f) _announcer.NoteHit(attacker == me, victim == me);
+            }
             float k = Mathf.Clamp01(damage / 25f);
             BoxingSfx.Impact(Mathf.Max(k, ripped ? 1f : 0f));
             if (mine)
@@ -829,7 +838,7 @@ namespace IronFauna.Brawl
                     BoxingSfx.Clank(1f);
                     SpawnPopup(point, "PARRY", IronFaunaPalette.CyanEnergy, 34);
                     if (mine) { BoxingFeel.HitStop(0.18f); BoxingFeel.Shake(0.35f); BoxingFeel.FovKick = 3f; }
-                    if (victim == me) Banner("PARRY - RIPOSTE!", 0.9f);
+                    if (victim == me) { Banner("PARRY - RIPOSTE!", 0.9f); if (_announcer != null) _announcer.OnPlayerParry(); }
                     break;
                 case "BLOCK":
                     BoxingSfx.Clank(0.45f);
@@ -839,14 +848,17 @@ namespace IronFauna.Brawl
                     BoxingSfx.Clank(0.9f);
                     BoxingSfx.Impact(0.6f);
                     SpawnPopup(point, "GUARD BREAK", IronFaunaPalette.OrangeJointCore, 32);
+                    if (attacker == me && _announcer != null) _announcer.OnPlayerGuardBreak();
                     if (mine) { BoxingFeel.HitStop(0.12f); BoxingFeel.Shake(0.4f); }
                     break;
                 case "COUNTER":
                     SpawnPopup(point + Vector3.up * 0.5f, "COUNTER", IronFaunaPalette.HazardYellow, 28);
+                    if (attacker == me && _announcer != null) _announcer.OnPlayerCounter();
                     if (mine) BoxingFeel.HitStop(0.06f);
                     break;
                 case "RIPOSTE":
                     SpawnPopup(point + Vector3.up * 0.5f, "RIPOSTE", IronFaunaPalette.CrimsonFront, 36);
+                    if (attacker == me && _announcer != null) _announcer.OnPlayerRiposte();
                     if (mine) { BoxingFeel.HitStop(0.2f); BoxingFeel.Shake(0.6f); BoxingFeel.FovKick = 5f; }
                     break;
                 case "EVADE":
@@ -1016,7 +1028,14 @@ namespace IronFauna.Brawl
                     if (ringOut && f.player) Banner("RING OUT", 2f);
                     int rem = 0;
                     foreach (var other in _fighters) if (!other.out_) rem++;
-                    if (_announcer != null) _announcer.OnElimination(f.name, ringOut, rem);
+                    if (_announcer != null)
+                    {
+                        _announcer.OnElimination(f.name, ringOut, rem);
+                        // credit the knockout to whoever hit them last (within 8 s) for Halo-style multi-KO / spree calls
+                        if (_lastHitBy.TryGetValue(f.ragdoll, out var lh) && Time.time - lh.t < 8f && _fighters.Count > 0
+                            && lh.by != null && lh.by == _fighters[0].ragdoll)
+                            _announcer.NotePlayerKnockout();
+                    }
                 }
                 if (!f.out_)
                 {
@@ -1154,7 +1173,7 @@ namespace IronFauna.Brawl
                         if (_announcer != null)
                         {
                             if (grandFinalWin) _announcer.OnTournamentChampion();
-                            else _announcer.OnMatchEnd(winText);
+                            else _announcer.OnMatchEnd(winText, true);
                         }
                         _resetT = 3.6f;
                     }
@@ -1162,7 +1181,7 @@ namespace IronFauna.Brawl
                     {
                         _roundWon = false;
                         Banner("KNOCKED OUT · BRACKET UPDATE", 3.0f);
-                        if (_announcer != null) _announcer.OnMatchEnd("CHALLENGER ELIMINATED");
+                        if (_announcer != null) _announcer.OnMatchEnd("CHALLENGER ELIMINATED", false);
                         _resetT = 3.4f;
                     }
                 }
@@ -1174,14 +1193,14 @@ namespace IronFauna.Brawl
                         bool campaignClear = config.mode == BrawlGameMode.CoopCampaign && config.campaignAct >= CampaignActStages.Length - 1;
                         string winText = campaignClear ? "CAMPAIGN CHAMPION!" : (config.mode == BrawlGameMode.CoopCampaign ? "STAGE CLEAR!" : "SQUAD VICTORY!");
                         Banner(winText, 3.2f);
-                        if (_announcer != null) _announcer.OnMatchEnd(winText);
+                        if (_announcer != null) _announcer.OnMatchEnd(winText, true);
                         _resetT = 4.2f;
                     }
                     else if (aliveAllies == 0)
                     {
                         _roundWon = false;
                         Banner("SQUAD WIPED · RETRYING", 3.2f);
-                        if (_announcer != null) _announcer.OnMatchEnd("SQUAD WIPED");
+                        if (_announcer != null) _announcer.OnMatchEnd("SQUAD WIPED", false);
                         _resetT = 4.2f;
                     }
                 }
@@ -1190,7 +1209,7 @@ namespace IronFauna.Brawl
                     _roundWon = last != null && last.player;
                     string winText = last != null && last.player ? $"{last.name} WINS" : last != null ? last.name + " WINS" : "DRAW";
                     Banner(winText, 3.5f);
-                    if (_announcer != null) _announcer.OnMatchEnd(winText);
+                    if (_announcer != null) _announcer.OnMatchEnd(winText, last != null ? last.player : (bool?)null);
                     _resetT = 4.5f;
                 }
             }
