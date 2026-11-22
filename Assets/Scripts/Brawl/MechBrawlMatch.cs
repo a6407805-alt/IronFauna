@@ -104,6 +104,8 @@ namespace IronFauna.Brawl
         private BrawlAnnouncer _announcer;
         private TournamentState _tournament;
         private TournamentBracketOverlay _bracketOverlay;
+        private TournamentRepairBay _repairBay;
+        private string _inspectionNote;
         private float _bannerT, _resetT = -1f, _targetT;
         private bool _roundWon;
         private float _savedFixedDt;
@@ -145,6 +147,8 @@ namespace IronFauna.Brawl
                 _tournament.GenerateNewBracket(_loadout);
                 _bracketOverlay = new TournamentBracketOverlay();
                 _bracketOverlay.Build(transform);
+                _repairBay = new TournamentRepairBay();
+                _repairBay.Build(transform);
                 ShowTournamentBracket();
             }
             else
@@ -160,21 +164,37 @@ namespace IronFauna.Brawl
             if (_bracketOverlay == null || _tournament == null) return;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+            if (_repairBay != null) _repairBay.Hide();
             _bracketOverlay.Show(
                 _tournament,
                 Mathf.Clamp(config.localPlayers, 1, 4),
                 onFight: LaunchTournamentBout,
                 onRematch: () => { _tournament.PrepareRematch(); LaunchTournamentBout(); },
                 onNewTournament: () => { _tournament.GenerateNewBracket(_loadout); ShowTournamentBracket(); },
-                onMainMenu: Exit);
+                onMainMenu: Exit,
+                onRepairBay: ShowRepairBay);
+        }
+
+        private void ShowRepairBay()
+        {
+            if (_repairBay == null || _tournament == null) return;
+            if (_bracketOverlay != null) _bracketOverlay.Hide();
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            _repairBay.Show(_tournament.garage, ShowTournamentBracket);
         }
 
         private void LaunchTournamentBout()
         {
             if (_bracketOverlay != null) _bracketOverlay.Hide();
+            if (_repairBay != null) _repairBay.Hide();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+            // Officials inspect the rig before every bout: black-market mods may be confiscated and fined.
+            _inspectionNote = _tournament != null ? _tournament.garage.RunInspection() : null;
+            if (_inspectionNote != null) _tournament.lastRoundFeed = _inspectionNote;
             StartRound();
+            if (_inspectionNote != null) Banner("INSPECTION BUST! ILLEGAL MODS CONFISCATED", 3.2f);
         }
 
         // ------------------------------------------------------------------ round & campaign
@@ -401,6 +421,7 @@ namespace IronFauna.Brawl
 
                 Camera playerCam = i < _playerCams.Count ? _playerCams[i].GetComponent<Camera>() : null;
                 var spawned = Spawn(label, l, pos, 0f, true, i, 1, false, 1f, playerCam);
+                if (i == 0) _tournament.garage.ApplyToFighter(spawned.ragdoll);   // mods + damage carried from earlier bouts
                 _fighters.Add(spawned);
                 _ragdollList.Add(spawned.ragdoll);
                 if (i < _playerCams.Count)
@@ -812,6 +833,18 @@ namespace IronFauna.Brawl
             {
                 _announcer.OnHeavyHit(FighterName(attacker), FighterName(victim), damage);
             }
+
+            // Tournament prize money: every hit your side lands on the rival pays out.
+            if (config.mode == BrawlGameMode.TournamentCampaign && _tournament != null && _resetT < 0f
+                && attacker != null && victim != null && attacker.team == 1 && victim.team == 2)
+            {
+                int pay = Mathf.RoundToInt(damage * TournamentGarage.CreditsPerDamage) + (ripped ? TournamentGarage.LimbTearBonus : 0);
+                if (pay > 0)
+                {
+                    _tournament.garage.credits += pay;
+                    SpawnPopup(point + Vector3.up * 0.9f, $"+{pay} CR", IronFaunaPalette.HazardYellow, ripped ? 30 : 22);
+                }
+            }
         }
 
         /// <summary>Technical-fighting feedback: parries, blocks, guard breaks, counters, ripostes and dodges.</summary>
@@ -928,6 +961,13 @@ namespace IronFauna.Brawl
         {
             BoxingFeel.Tick(Time.unscaledDeltaTime);
             var kb = Keyboard.current;
+            if (_repairBay != null && _repairBay.IsVisible)
+            {
+                bool back = (kb != null && kb.escapeKey.wasPressedThisFrame)
+                    || (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame);
+                if (back) ShowTournamentBracket();
+                return;
+            }
             if (kb != null && kb.escapeKey.wasPressedThisFrame) { Exit(); return; }
 
             if (_bracketOverlay != null && _bracketOverlay.IsVisible)
@@ -1190,6 +1230,7 @@ namespace IronFauna.Brawl
                     _resetT = -1f;
                     if (config.mode == BrawlGameMode.TournamentCampaign && _tournament != null)
                     {
+                        if (_fighters.Count > 0) _tournament.garage.CaptureFromFighter(_fighters[0].ragdoll);
                         _tournament.RecordPlayerResult(_roundWon);
                         ShowTournamentBracket();
                         return;

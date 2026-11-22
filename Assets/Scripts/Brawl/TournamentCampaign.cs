@@ -78,6 +78,8 @@ namespace IronFauna.Brawl
         public TournamentMatch grandFinal;
 
         public TournamentEntrant playerEntrant;
+        /// <summary>Credits, carried part wear and mods for the player's rig (Repair Bay).</summary>
+        public readonly TournamentGarage garage = new TournamentGarage();
         public int currentRound; // 0, 1, 2
         public bool tournamentWon;
         public bool playerEliminated;
@@ -113,6 +115,7 @@ namespace IronFauna.Brawl
             currentRound = 0;
             tournamentWon = false;
             playerEliminated = false;
+            garage.Reset();
             lastRoundFeed = "8 MECHS ENTER THE CIRCUIT. WIN 3 BOUTS TO CLAIM THE IRONFAUNA BELT.";
 
             string playerWeight = playerLoadout != null
@@ -342,7 +345,8 @@ namespace IronFauna.Brawl
             UnityAction onFight,
             UnityAction onRematch,
             UnityAction onNewTournament,
-            UnityAction onMainMenu)
+            UnityAction onMainMenu,
+            UnityAction onRepairBay = null)
         {
             if (_canvas == null || state == null) return;
 
@@ -371,9 +375,10 @@ namespace IronFauna.Brawl
             var title = MenuUI.Label(header.transform, titleText, 44, state.tournamentWon ? IronFaunaPalette.HazardYellow : IronFaunaPalette.UiText, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Place(title.rectTransform, new Vector2(0f, 0f), new Vector2(0.75f, 1f), new Vector2(44f, 6f), Vector2.zero);
 
-            string recStr = localPlayers > 1
+            string recStr = (localPlayers > 1
                 ? $"{localPlayers}P TAG CIRCUIT  //  WINS: {state.playerEntrant.wins}/3"
-                : $"SOLO CIRCUIT  //  WINS: {state.playerEntrant.wins}/3";
+                : $"SOLO CIRCUIT  //  WINS: {state.playerEntrant.wins}/3")
+                + $"  //  {state.garage.credits:N0} CR";
             var rec = MenuUI.Label(header.transform, recStr, 24, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleRight, FontStyle.Bold);
             MenuUI.Place(rec.rectTransform, new Vector2(0.68f, 0f), new Vector2(1f, 1f), Vector2.zero, new Vector2(-44f, 0f));
 
@@ -417,7 +422,7 @@ namespace IronFauna.Brawl
             var scoutRule = MenuUI.Panel(scoutPanel.transform, "ScoutTopRule", state.tournamentWon ? IronFaunaPalette.HazardYellow : IronFaunaPalette.CrimsonFront);
             MenuUI.Place(scoutRule.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -5f), Vector2.zero);
 
-            BuildScoutingCard(scoutPanel.transform, state, localPlayers, onFight, onRematch, onNewTournament, onMainMenu);
+            BuildScoutingCard(scoutPanel.transform, state, localPlayers, onFight, onRematch, onNewTournament, onMainMenu, onRepairBay);
 
             // Bottom Ticker Bar (last simulated results + controls hint)
             var footer = MenuUI.Panel(_contentRoot, "FooterBar", IronFaunaPalette.WithAlpha(IronFaunaPalette.DarkIron, 0.92f));
@@ -428,7 +433,7 @@ namespace IronFauna.Brawl
             var feed = MenuUI.Label(footer.transform, state.lastRoundFeed, 20, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Place(feed.rectTransform, new Vector2(0.015f, 0f), new Vector2(0.75f, 1f), Vector2.zero, Vector2.zero);
 
-            var hint = MenuUI.Label(footer.transform, "ENTER / SPACE: START BOUT   //   ESC: MAIN MENU", 18, IronFaunaPalette.UiTextDim, TextAnchor.MiddleRight, FontStyle.Bold);
+            var hint = MenuUI.Label(footer.transform, "ENTER / SPACE: START BOUT   //   ESC: MAIN MENU   //   LAND HITS = CREDITS", 18, IronFaunaPalette.UiTextDim, TextAnchor.MiddleRight, FontStyle.Bold);
             MenuUI.Place(hint.rectTransform, new Vector2(0.75f, 0f), new Vector2(0.985f, 1f), Vector2.zero, Vector2.zero);
         }
 
@@ -528,7 +533,8 @@ namespace IronFauna.Brawl
             UnityAction onFight,
             UnityAction onRematch,
             UnityAction onNewTournament,
-            UnityAction onMainMenu)
+            UnityAction onMainMenu,
+            UnityAction onRepairBay)
         {
             var stack = MenuUI.NewRect(parent, "ScoutStack");
             MenuUI.Place(stack, Vector2.zero, Vector2.one, new Vector2(24f, 24f), new Vector2(-24f, -24f));
@@ -548,7 +554,7 @@ namespace IronFauna.Brawl
                 MenuUI.Size(spacer, 140f);
 
                 AddActionButton(stack, "NEW TOURNAMENT", IronFaunaPalette.HazardYellow, IronFaunaPalette.OrangeJointCore, IronFaunaPalette.DarkIron, onNewTournament);
-                AddActionButton(stack, "MAIN MENU / GARAGE", IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, onMainMenu);
+                AddActionButton(stack, "MAIN MENU", IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, onMainMenu);
                 return;
             }
 
@@ -587,20 +593,39 @@ namespace IronFauna.Brawl
                 MenuUI.Size(tape, 130f);
             }
 
+            // Rig condition summary (damage carries between bouts)
+            var g = state.garage;
+            string rig = $"YOUR RIG:  HULL {Mathf.RoundToInt(g.Condition(RigPart.Hull) * 100f)}%";
+            int missing = 0, damaged = 0;
+            foreach (var part in TournamentGarage.Parts)
+            {
+                if (part == RigPart.Hull) continue;
+                if (g.IsMissing(part)) missing++;
+                else if (g.Condition(part) < 0.995f) damaged++;
+            }
+            if (missing > 0) rig += $"  //  {missing} LIMB(S) MISSING";
+            if (damaged > 0) rig += $"  //  {damaged} DAMAGED";
+            if (g.IllegalCount() > 0) rig += $"  //  {g.IllegalCount()} ILLEGAL MOD(S)";
+            var rigLbl = MenuUI.Label(stack, rig, 19, missing > 0 || g.Condition(RigPart.Hull) < 0.5f ? IronFaunaPalette.OrangeJointCore : IronFaunaPalette.CyanEnergy, TextAnchor.MiddleLeft, FontStyle.Bold);
+            MenuUI.Size(rigLbl, 30f);
+            MenuUI.Fit(rigLbl, 11);
+
             var gap = MenuUI.NewRect(stack, "Gap");
-            MenuUI.Size(gap, 48f);
+            MenuUI.Size(gap, 20f);
 
             if (state.playerEliminated)
             {
                 AddActionButton(stack, "REMATCH BOUT", IronFaunaPalette.CrimsonFront, IronFaunaPalette.OrangeJointCore, IronFaunaPalette.UiText, onRematch);
+                if (onRepairBay != null) AddActionButton(stack, $"REPAIR BAY  ({g.credits:N0} CR)", IronFaunaPalette.UiSelect, IronFaunaPalette.CyanEnergy, IronFaunaPalette.UiText, onRepairBay);
                 AddActionButton(stack, "NEW TOURNAMENT", IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, onNewTournament);
-                AddActionButton(stack, "MAIN MENU / GARAGE", IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, onMainMenu);
+                AddActionButton(stack, "MAIN MENU", IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, onMainMenu);
             }
             else
             {
                 string fightLabel = state.currentRound == 2 ? "ENTER GRAND FINAL" : "ENTER RING (FIGHT)";
                 AddActionButton(stack, fightLabel, IronFaunaPalette.CrimsonFront, IronFaunaPalette.OrangeJointCore, IronFaunaPalette.UiText, onFight);
-                AddActionButton(stack, "MAIN MENU / GARAGE", IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, onMainMenu);
+                if (onRepairBay != null) AddActionButton(stack, $"REPAIR BAY  ({g.credits:N0} CR)", IronFaunaPalette.UiSelect, IronFaunaPalette.CyanEnergy, IronFaunaPalette.UiText, onRepairBay);
+                AddActionButton(stack, "MAIN MENU", IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, onMainMenu);
             }
         }
 

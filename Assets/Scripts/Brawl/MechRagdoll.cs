@@ -47,7 +47,10 @@ namespace IronFauna.Brawl
         public Rigidbody Pelvis => _pelvis != null ? _pelvis.rb : null;
         public Vector3 Position => _pelvis != null ? _pelvis.rb.position : transform.position;
         public float Poise01 => Mathf.Clamp01(_poise / poiseMax);
-        public float GetLimbHealth01(LimbId id) => _lost.Contains(id) ? 0f : (_limbHealth.TryGetValue(id, out float v) ? Mathf.Clamp01(v / (id == LimbId.Head ? HeadHealth : LimbHealth)) : 1f);
+        public float GetLimbHealth01(LimbId id) => _lost.Contains(id) ? 0f : (_limbHealth.TryGetValue(id, out float v) ? Mathf.Clamp01(v / LimbMax(id)) : 1f);
+
+        /// <summary>Full health of a limb after weight-class / tournament scaling.</summary>
+        private float LimbMax(LimbId id) => _limbMax.TryGetValue(id, out float m) && m > 0f ? m : (id == LimbId.Head ? HeadHealth : LimbHealth);
 
         /// <summary>victim, attacker, point, damage, power 0..1, limb ripped</summary>
         public event Action<MechRagdoll, MechRagdoll, Vector3, float, float, bool> Hit;
@@ -79,6 +82,7 @@ namespace IronFauna.Brawl
         private Segment _pelvis, _torso, _head;
         private readonly Dictionary<LimbId, float> _limbHealth = new Dictionary<LimbId, float>();
         private readonly HashSet<LimbId> _lost = new HashSet<LimbId>();
+        private readonly Dictionary<LimbId, float> _limbMax = new Dictionary<LimbId, float>();
         private float _totalMass;
         private float _poise;
         private float _downT;
@@ -181,7 +185,9 @@ namespace IronFauna.Brawl
             float limbScale = m.limbHealthMult * Mathf.Lerp(1f, 1.3f, bonusHpMult - 1f);
             foreach (LimbId id in Enum.GetValues(typeof(LimbId)))
             {
-                if (id != LimbId.None) _limbHealth[id] = (id == LimbId.Head ? HeadHealth : LimbHealth) * limbScale;
+                if (id == LimbId.None) continue;
+                _limbMax[id] = (id == LimbId.Head ? HeadHealth : LimbHealth) * limbScale;
+                _limbHealth[id] = _limbMax[id];
             }
 
             _totalMass = 0f;
@@ -847,6 +853,51 @@ namespace IronFauna.Brawl
         }
 
         public bool HasLimb(LimbId limb) => !_lost.Contains(limb);
+
+        // ------------------------------------------------------------------ tournament wear & mods
+        /// <summary>Multiplies every limb's full health (tournament Joint Locks mod). Limbs are refilled.</summary>
+        public void ScaleLimbHealth(float k)
+        {
+            foreach (LimbId id in Enum.GetValues(typeof(LimbId)))
+            {
+                if (id == LimbId.None) continue;
+                _limbMax[id] = LimbMax(id) * k;
+                _limbHealth[id] = _limbMax[id];
+            }
+        }
+
+        /// <summary>Sets a limb's current health as a fraction of its full health (damage carried between bouts).</summary>
+        public void SetLimbHealth01(LimbId id, float t)
+        {
+            if (id == LimbId.None || _lost.Contains(id)) return;
+            _limbHealth[id] = Mathf.Max(1f, LimbMax(id) * Mathf.Clamp01(t));
+        }
+
+        /// <summary>
+        /// Starts a bout without a limb that was torn off earlier and not replaced: no flying limb, no knockdown,
+        /// no announcer call - the segments are simply gone and the animation adapts.
+        /// </summary>
+        public void RemoveLimbQuiet(LimbId limb)
+        {
+            if (limb == LimbId.None || limb == LimbId.Head || _lost.Contains(limb)) return;
+            _lost.Add(limb);
+            foreach (var s in _segs)
+            {
+                if (s.limb != limb) continue;
+                s.detached = true;
+                if (s.joint != null) { Destroy(s.joint); s.joint = null; }
+                s.rb.isKinematic = true;
+                s.armor.Clear();
+                s.phys.gameObject.SetActive(false);
+            }
+            _appliedMuscle = -1f;
+            if (ghost != null) ghost.SetLimbState(HasLimb(LimbId.ArmL), HasLimb(LimbId.ArmR), HasLimb(LimbId.LegL), HasLimb(LimbId.LegR));
+            if (limb == LimbId.LegL || limb == LimbId.LegR)
+            {
+                poiseMax *= 0.65f;
+                _poise = Mathf.Min(_poise, poiseMax);
+            }
+        }
 
         // ------------------------------------------------------------------ strike trails (readability)
         private readonly List<KeyValuePair<Segment, TrailRenderer>> _trails = new List<KeyValuePair<Segment, TrailRenderer>>();
