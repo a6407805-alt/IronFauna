@@ -158,15 +158,17 @@ namespace IronFauna.Brawl
             int boulderCount = stage == BrawlStageId.NeoMetroCity || stage == BrawlStageId.WrestlingRing ? 0 : stage == BrawlStageId.OrbitalDish ? 8 : 16;
             for (int k = 0; k < boulderCount; k++)
             {
-                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float r = Mathf.Lerp(0.36f, 0.74f, (float)rng.NextDouble()) * radius;   // all inside the arena wall
+                // a deliberate ring of boulders between the cover ring and the arena wall (owner 2026-11-22: "random objects
+                // in the ring... not polished"): evenly spaced, slightly jittered, never in the middle of the fight
+                float ang = (k + 0.5f) / boulderCount * Mathf.PI * 2f + ((float)rng.NextDouble() - 0.5f) * 0.18f;
+                float r = Mathf.Lerp(0.66f, 0.74f, (float)rng.NextDouble()) * radius;
                 Vector3 p = new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
                 bool tooClose = false;
                 foreach (var q in placed) if ((q - p).sqrMagnitude < 36f) { tooClose = true; break; }
                 if (tooClose) continue;
                 placed.Add(p);
-                float size = Mathf.Lerp(1.6f, 4.4f, (float)rng.NextDouble());
-                bool spire = k % 4 == 0;
+                float size = Mathf.Lerp(2.0f, 3.6f, (float)rng.NextDouble());
+                const bool spire = false;   // stretched rock spires read as odd one-sided spikes
                 Vector3 scale = spire ? new Vector3(size * 0.7f, size * 2.2f, size * 0.7f) : new Vector3(size, size * 0.7f, size * 1.15f);
                 p.y = Height(p.x, p.z, top, radius, ox, oz, stage) - scale.y * 0.28f;
                 Rock(root, "Boulder", p, scale, (float)rng.NextDouble() * 360f, rng.Next(), k % 3 == 0 ? rimCol : rockCol);
@@ -202,65 +204,52 @@ namespace IronFauna.Brawl
                 return;
             }
 
-            // 1. Perimeter / mid-ring destructible pillars & towers
-            int pillarCount = stage == BrawlStageId.ScrapyardColosseum ? 10 : 8;
-            for (int i = 0; i < pillarCount; i++)
+            // Layout (owner 2026-11-22: "random objects in the ring... things are not fully developed"): a clear fighting floor
+            // (r < 14 m), then one deliberate, symmetric ring of cover: sturdy pillars alternating with walls / containers.
+            const int coverCount = 6;
+            const float coverRadius = 18.5f;
+            Color pillarCol = stage == BrawlStageId.GlacierTrench ? IronFaunaPalette.GlacierIce
+                            : stage == BrawlStageId.FoundryCrucible ? IronFaunaPalette.FoundryRust
+                            : stage == BrawlStageId.OrbitalDish ? IronFaunaPalette.OffWhitePanel
+                            : rockCol;
+            bool natural = stage == BrawlStageId.BasaltMesa || stage == BrawlStageId.ScrapyardColosseum || stage == BrawlStageId.GlacierTrench;
+            float phase = (float)rng.NextDouble() * Mathf.PI * 2f;
+            for (int i = 0; i < coverCount; i++)
             {
-                float ang = i / (float)pillarCount * Mathf.PI * 2f + 0.35f;
-                float dist = Mathf.Lerp(12f, 22f, (float)rng.NextDouble());
-                Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
-                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
-                float h = Mathf.Lerp(5.5f, 9f, (float)rng.NextDouble());
-                Color col = stage == BrawlStageId.GlacierTrench ? IronFaunaPalette.GlacierIce
-                          : stage == BrawlStageId.FoundryCrucible ? IronFaunaPalette.FoundryRust
-                          : stage == BrawlStageId.OrbitalDish ? IronFaunaPalette.OffWhitePanel
-                          : rockCol;
-                var pillar = BreakableProp.Create(arena, "DestructiblePillar", new Vector3(p.x, gy + h * 0.5f - 0.3f, p.z),
-                    new Vector3(1.8f, h, 1.8f), col, 220f, true, new Vector3Int(2, 5, 2));
-                if (stage == BrawlStageId.BasaltMesa || stage == BrawlStageId.ScrapyardColosseum || stage == BrawlStageId.GlacierTrench)
-                    pillar.DressAsRock(rng.Next());   // natural stages: a rock spire, not a box
-            }
+                // 1. pillar
+                float ang = phase + i / (float)coverCount * Mathf.PI * 2f;
+                Vector3 p = new Vector3(Mathf.Cos(ang) * coverRadius, 0f, Mathf.Sin(ang) * coverRadius);
+                if (TryTerrain(p + Vector3.up * 25f, out float gy))
+                {
+                    float h = natural ? 4.6f : 6.5f;
+                    float w = natural ? 2.6f : 2.0f;
+                    var pillar = BreakableProp.Create(arena, "DestructiblePillar", new Vector3(p.x, gy + h * 0.5f - 0.3f, p.z),
+                        new Vector3(w, h, w), pillarCol, 220f, true, new Vector3Int(2, 4, 2));
+                    pillar.transform.rotation = Quaternion.Euler(0f, ang * Mathf.Rad2Deg, 0f);
+                    if (natural) pillar.DressAsRock(rng.Next());   // a squat boulder column, not a box
+                }
 
-            // 2. Destructible walls, shipping containers & barriers
-            int wallCount = 6;
-            for (int i = 0; i < wallCount; i++)
-            {
-                float ang = i / (float)wallCount * Mathf.PI * 2f + 0.8f;
-                float dist = Mathf.Lerp(9f, 18f, (float)rng.NextDouble());
-                Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
-                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
+                // 2. wall / container half-way to the next pillar, facing the centre
+                float wa = ang + Mathf.PI / coverCount;
+                Vector3 q = new Vector3(Mathf.Cos(wa) * (coverRadius + 1.5f), 0f, Mathf.Sin(wa) * (coverRadius + 1.5f));
+                if (!TryTerrain(q + Vector3.up * 25f, out float wy)) continue;
                 Vector3 size = stage == BrawlStageId.ScrapyardColosseum
-                    ? new Vector3(5.2f, 3.2f, 2.2f) // shipping container
-                    : new Vector3(4.6f, 3.6f, 1.1f); // blast wall / ice wall / radar screen
+                    ? new Vector3(5.2f, 3.0f, 2.2f) // shipping container
+                    : new Vector3(4.6f, 3.0f, 1.1f); // blast wall / ice wall / radar screen
                 Color col = stage == BrawlStageId.ScrapyardColosseum ? (i % 2 == 0 ? IronFaunaPalette.CrimsonFront : IronFaunaPalette.CobaltFront)
-                          : stage == BrawlStageId.OrbitalDish ? IronFaunaPalette.OrbitalSeam      // radar screens: grey panels, not flat cyan slabs
+                          : stage == BrawlStageId.OrbitalDish ? IronFaunaPalette.OrbitalSeam
                           : stage == BrawlStageId.GlacierTrench ? IronFaunaPalette.GlacierDeepIce
                           : rimCol;
-                var prop = BreakableProp.Create(arena, "DestructibleWall", new Vector3(p.x, gy + size.y * 0.5f - 0.2f, p.z),
+                var prop = BreakableProp.Create(arena, "DestructibleWall", new Vector3(q.x, wy + size.y * 0.5f - 0.2f, q.z),
                     size, col, 180f, true, new Vector3Int(4, 3, 2));
-                prop.transform.rotation = Quaternion.Euler(0f, ang * Mathf.Rad2Deg + 90f, 0f);
+                prop.transform.rotation = Quaternion.Euler(0f, -wa * Mathf.Rad2Deg + 90f, 0f);   // long side tangent to the ring
             }
 
-            // 3. Orbital Dish central breakable antenna tower
+            // 3. Orbital Dish: the central antenna tower is the landmark of that arena
             if (stage == BrawlStageId.OrbitalDish && TryTerrain(Vector3.up * 25f, out float cy))
             {
                 BreakableProp.Create(arena, "DishSpire", new Vector3(0f, cy + 5.5f, 0f),
                     new Vector3(2.4f, 11f, 2.4f), IronFaunaPalette.OffWhitePanel, 240f, true, new Vector3Int(2, 6, 2));
-            }
-
-            // 4. Loose crates (explosive cells removed at the owner's request, 2026-11-18)
-            for (int i = 0; i < 8; i++)
-            {
-                Vector3 p = new Vector3(Random.Range(-21f, 21f), 0f, Random.Range(-21f, 21f));
-                if (p.magnitude < 5.5f) p = p.normalized * 7.5f;
-                if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
-                const bool explosive = false;
-                float sz = explosive ? 1.35f : Random.Range(1.1f, 1.9f);
-                Color col = explosive ? IronFaunaPalette.OrangeJointCore : IronFaunaPalette.HazardYellow;
-                BreakableProp.Create(arena, explosive ? "ExplosiveCell" : "Crate",
-                    new Vector3(p.x, gy + sz * 0.5f + 0.05f, p.z),
-                    explosive ? new Vector3(sz * 0.85f, sz * 1.3f, sz * 0.85f) : Vector3.one * sz,
-                    col, 110f, false, new Vector3Int(2, 2, 2), explosive);
             }
         }
 
@@ -301,7 +290,7 @@ namespace IronFauna.Brawl
             for (int i = 0; i < 8; i++)
             {
                 float ang = i / 8f * Mathf.PI * 2f + 0.2f;
-                Vector3 p = new Vector3(Mathf.Cos(ang) * 9.5f, 0f, Mathf.Sin(ang) * 9.5f);
+                Vector3 p = new Vector3(Mathf.Cos(ang) * 15f, 0f, Mathf.Sin(ang) * 15f);
                 if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 var post = BreakableProp.Create(arena, "Streetlight", new Vector3(p.x, gy + 3.2f, p.z),
                     new Vector3(0.55f, 6.4f, 0.55f), IronFaunaPalette.GunmetalFrame, 120f, true, new Vector3Int(1, 4, 1));
@@ -313,8 +302,11 @@ namespace IronFauna.Brawl
             // 3. Parked street cars / vehicles (cabin roof + glowing headlights/taillights)
             for (int i = 0; i < 8; i++)
             {
-                Vector3 p = new Vector3(Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()), 0f, Mathf.Lerp(-16f, 16f, (float)rng.NextDouble()));
-                if (p.magnitude < 5f) p = p.normalized * 6.5f;
+                // parked along the kerbs of the two avenues, two per arm, never in the junction
+                float along = (i % 2 == 0 ? 1f : -1f) * (i < 4 ? 15.5f : 21f);
+                float kerb = (i % 4 < 2 ? 1f : -1f) * 4.6f;
+                bool xAvenue = (i / 2) % 2 == 0;
+                Vector3 p = xAvenue ? new Vector3(along, 0f, kerb) : new Vector3(kerb, 0f, along);
                 if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 Color carCol = (i % 3 == 0) ? IronFaunaPalette.CrimsonFront : (i % 3 == 1) ? IronFaunaPalette.HazardYellow : IronFaunaPalette.CobaltFront;
                 var car = BreakableProp.Create(arena, "StreetCar", new Vector3(p.x, gy + 0.72f, p.z),
@@ -329,7 +321,7 @@ namespace IronFauna.Brawl
                 ClamshellParts.Spawn(car.transform, "Taillights",
                     ClamshellMeshFactory.BeveledBox(new Vector3(1.6f, 0.22f, 0.14f), 0.02f),
                     new Vector3(0f, 0.12f, -2.04f), Quaternion.identity, IronFaunaPalette.CrimsonFront, true);
-                car.transform.rotation = Quaternion.Euler(0f, (i % 2 == 0) ? 0f : 90f, 0f);
+                car.transform.rotation = Quaternion.Euler(0f, xAvenue ? 90f : 0f, 0f);   // parked along the street
             }
 
             // (lane paint, crosswalks and manholes are baked into the ground by BrawlStageLook)
@@ -341,10 +333,9 @@ namespace IronFauna.Brawl
             var treePositions = new List<Vector3>();
             for (int i = 0; i < 20; i++)
             {
-                float ang = i / 20f * Mathf.PI * 2f + (float)rng.NextDouble() * 0.25f;
-                float dist = (i < 6)
-                    ? Mathf.Lerp(4.2f, 9.5f, (float)rng.NextDouble())
-                    : Mathf.Lerp(10.0f, 22f, (float)rng.NextDouble());
+                // three grove trees in a triangle around the clearing, the rest form the woodland edge
+                float ang = i < 3 ? i / 3f * Mathf.PI * 2f + 0.5f : i / 20f * Mathf.PI * 2f + (float)rng.NextDouble() * 0.2f;
+                float dist = i < 3 ? 11f : Mathf.Lerp(17f, 24f, (float)rng.NextDouble());
                 Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
                 bool tooClose = false;
                 foreach (var q in treePositions) if ((q - p).sqrMagnitude < 18f) { tooClose = true; break; }
@@ -359,13 +350,14 @@ namespace IronFauna.Brawl
             // 2. Breakable forest boulders & fallen log barricades
             for (int i = 0; i < 8; i++)
             {
+                if (i % 2 == 1) continue;   // four logs, not eight
                 float ang = i / 8f * Mathf.PI * 2f + 0.4f;
-                float dist = Mathf.Lerp(9f, 18f, (float)rng.NextDouble());
+                float dist = 15f;
                 Vector3 p = new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
                 if (!TryTerrain(p + Vector3.up * 25f, out float gy)) continue;
                 var log = BreakableProp.Create(arena, "FallenTimberLog", new Vector3(p.x, gy + 0.7f, p.z),
                     new Vector3(1.3f, 1.3f, 4.8f), IronFaunaPalette.ForestBark, 110f, false, new Vector3Int(2, 2, 4));
-                log.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 180f, 0f);
+                log.transform.rotation = Quaternion.Euler(0f, -ang * Mathf.Rad2Deg, 0f);   // lying tangent to the clearing
             }
         }
 

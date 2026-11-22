@@ -69,7 +69,7 @@ namespace IronFauna.Boxing
         {
             if (_src == null) return;
             _src.pitch = pitch * (0.95f + (float)_rng.NextDouble() * 0.1f);
-            _src.PlayOneShot(clip, vol);
+            _src.PlayOneShot(clip, vol * IronFauna.Core.GameSettings.SfxVolume);
         }
 
         private delegate float Sample(float t, float noise);

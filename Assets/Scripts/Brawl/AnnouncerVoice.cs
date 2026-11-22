@@ -27,7 +27,10 @@ namespace IronFauna.Brawl
         private const float MaxQueueAge = 2.6f;
         private const float StalePlayRequest = 1.8f;
 
-        private AudioSource _src;
+        private AudioSource _src;      // SAPI fallback: deep stadium-PA chain
+        private AudioSource _clean;    // recorded lines (Resources/Announcer): already mixed, played as they are
+        private readonly HashSet<string> _recordedKeys = new HashSet<string>();
+        private bool _workerTried;
         private Process _worker;
         private string _dir;
         private readonly ConcurrentQueue<string> _rendered = new ConcurrentQueue<string>();
@@ -72,8 +75,16 @@ namespace IronFauna.Brawl
             rev.diffusion = 100f;
             rev.density = 100f;
 
-            StartWorker();
+            var cleanGo = new GameObject("AnnouncerVoice");
+            cleanGo.transform.SetParent(transform, false);
+            _clean = cleanGo.AddComponent<AudioSource>();
+            _clean.playOnAwake = false;
+            _clean.spatialBlend = 0f;
+            _clean.priority = 0;
+            // the PowerShell speech worker only starts if a line has no recorded clip
         }
+
+        private bool Busy => _src.isPlaying || _clean.isPlaying;
 
         private void OnDestroy()
         {
@@ -175,7 +186,7 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             if (priority >= 4)
             {
                 _queue.Clear();
-                if (_src.isPlaying && priority >= 5) _src.Stop();
+                if (priority >= 5) { _src.Stop(); _clean.Stop(); }
             }
             if (_clips.ContainsKey(key) || EnsureClip(key))
             {
@@ -200,8 +211,9 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             if (_clips.ContainsKey(key)) return true;
 
             var recorded = Resources.Load<AudioClip>("Announcer/" + key);
-            if (recorded != null) { _clips[key] = recorded; return true; }
+            if (recorded != null) { _clips[key] = recorded; _recordedKeys.Add(key); return true; }
 
+            if (!_workerTried) { _workerTried = true; StartWorker(); }
             if (_requested.Contains(key) || _dir == null) return false;
             _requested.Add(key);
 
@@ -279,7 +291,7 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
                 StartCoroutine(LoadClip(head, rest));
             }
 
-            if (_src.isPlaying || _queue.Count == 0) return;
+            if (Busy || _queue.Count == 0) return;
             // next fresh callout (highest priority first, then oldest)
             int pick = -1;
             for (int k = _queue.Count - 1; k >= 0; k--)
@@ -295,8 +307,10 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             _queue.RemoveAt(pick);
             if (_clips.TryGetValue(p.key, out var clip) && clip != null)
             {
-                _src.clip = clip;
-                _src.Play();
+                var src = _recordedKeys.Contains(p.key) ? _clean : _src;
+                src.volume = IronFauna.Core.GameSettings.AnnouncerVolume;
+                src.clip = clip;
+                src.Play();
             }
         }
     }

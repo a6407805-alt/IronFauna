@@ -103,9 +103,16 @@ namespace IronFauna.Menu
             BuildTournamentSetup();
             BuildBrawlSetup();
             BuildPilots();
+            var settingsCanvas = MenuUI.CreateCanvas("IronFauna_Settings", 400);
+            settingsCanvas.transform.SetParent(transform, false);
+            _settings = GameSettingsPanel.Build(settingsCanvas.transform, null);
 
             if (startInGarage) ShowGarage(); else ShowTitle();
         }
+
+        private GameSettingsPanel _settings;
+
+        private void OpenSettings() => _settings?.Open();
 
         private void Update()
         {
@@ -116,6 +123,7 @@ namespace IronFauna.Menu
 #else
             back = Input.GetKeyDown(KeyCode.Escape);
 #endif
+            if (back && _settings != null && _settings.IsOpen) { _settings.Close(); return; }
             if (back && (_inGarage || (_pilotsCanvas != null && _pilotsCanvas.activeSelf) || (_tournamentSetupCanvas != null && _tournamentSetupCanvas.activeSelf)
                          || (_brawlSetupCanvas != null && _brawlSetupCanvas.activeSelf))) ShowTitle();
         }
@@ -239,6 +247,7 @@ namespace IronFauna.Menu
             AddTitleButton(content, "FIGHT (BRAWL)", ShowBrawlSetup);
             AddTitleButton(content, "PILOTS & UPGRADES", ShowPilots);
             AddTitleButton(content, "GARAGE", ShowGarage);
+            AddTitleButton(content, "SETTINGS", OpenSettings);
             AddTitleButton(content, "QUIT", Quit);
 
             MenuUI.Spacer(content, 24f);

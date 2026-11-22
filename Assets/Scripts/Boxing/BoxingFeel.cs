@@ -14,7 +14,7 @@ namespace IronFauna.Boxing
 
         public static void HitStop(float seconds) => _stopLeft = Mathf.Max(_stopLeft, seconds);
 
-        public static void Shake(float amount) => Trauma = Mathf.Min(1f, Trauma + amount);
+        public static void Shake(float amount) => Trauma = Mathf.Min(1f, Trauma + amount * IronFauna.Core.GameSettings.CameraShake);
 
         /// <summary>Call once per frame (unscaled) by whoever owns the match.</summary>
         public static void Tick(float unscaledDt)

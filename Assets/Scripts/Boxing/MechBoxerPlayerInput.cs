@@ -80,8 +80,27 @@ namespace IronFauna.Boxing
             return idx >= 0 && idx < pads.Count ? pads[idx] : null;
         }
 
+        /// <summary>True while a pause / settings menu is open: the player's robot gets no input.</summary>
+        public static bool InputBlocked;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics() => InputBlocked = false;
+
         private void Update()
         {
+            if (InputBlocked)
+            {
+                var idle = _boxer.intent;
+                idle.move = Vector2.zero;
+                idle.guard = false;
+                idle.sprint = false;
+                idle.grab = false;
+                idle.crouch = false;
+                idle.punch = PunchType.None;
+                idle.slip = 0;
+                _boxer.intent = idle;
+                return;
+            }
             var kb = Keyboard.current;
             var mouse = Mouse.current;
             var pad = GetAssignedPad();

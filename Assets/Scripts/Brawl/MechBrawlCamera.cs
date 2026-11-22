@@ -61,7 +61,7 @@ namespace IronFauna.Brawl
                     var mouse = Mouse.current;
                     if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
                     {
-                        mouseDelta = mouse.delta.ReadValue().x * mouseSensitivity;
+                        mouseDelta = mouse.delta.ReadValue().x * mouseSensitivity * IronFauna.Core.GameSettings.MouseSensitivity;
                         _yaw += mouseDelta;
                     }
                 }

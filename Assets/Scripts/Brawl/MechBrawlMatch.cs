@@ -207,6 +207,11 @@ namespace IronFauna.Brawl
                 _net.StartNetwork(config.netRole, config.joinCode);
             }
             _announcer = gameObject.AddComponent<BrawlAnnouncer>();
+            _pause = gameObject.AddComponent<BrawlPauseMenu>();
+            _pause.freezeTime = config.netRole == BrawlNetRole.Offline;   // online the fight goes on for everyone else
+            _pause.allowRestart = config.netRole != BrawlNetRole.Client && config.mode != BrawlGameMode.TournamentCampaign;
+            _pause.onRestart = StartRound;
+            _pause.onQuitToMenu = Exit;
             BuildHud();
             if (config.mode == BrawlGameMode.TournamentCampaign)
             {
@@ -1132,9 +1137,11 @@ namespace IronFauna.Brawl
             }
         }
 
+        private BrawlPauseMenu _pause;
+
         private void Update()
         {
-            BoxingFeel.Tick(Time.unscaledDeltaTime);
+            if (_pause == null || !_pause.Frozen) BoxingFeel.Tick(Time.unscaledDeltaTime);
             var kb = Keyboard.current;
             if (_repairBay != null && _repairBay.IsVisible)
             {
@@ -1143,7 +1150,11 @@ namespace IronFauna.Brawl
                 if (back) ShowTournamentBracket();
                 return;
             }
-            if (kb != null && kb.escapeKey.wasPressedThisFrame) { Exit(); return; }
+            // Esc / Start: pause menu (resume, settings, restart, quit) instead of leaving the fight at once
+            bool pausePressed = (kb != null && kb.escapeKey.wasPressedThisFrame)
+                || (Gamepad.current != null && Gamepad.current.startButton.wasPressedThisFrame);
+            if (pausePressed && _pause != null) _pause.HandleBack();
+            if (_pause != null && _pause.Frozen) return;
 
             if (_bracketOverlay != null && _bracketOverlay.IsVisible)
             {
@@ -1201,7 +1212,7 @@ namespace IronFauna.Brawl
                 StartRound();
                 return;
             }
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked)
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked && (_pause == null || !_pause.IsOpen))
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;

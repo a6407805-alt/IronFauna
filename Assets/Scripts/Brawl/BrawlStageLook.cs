@@ -928,6 +928,7 @@ namespace IronFauna.Brawl
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smooth);
             if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metal);
+            if (m.HasProperty("_Cull")) { m.SetFloat("_Cull", 0f); m.doubleSidedGI = true; }   // render both faces
             return m;
         }
 
@@ -1237,7 +1238,7 @@ namespace IronFauna.Brawl
             for (int c = 0; c < 6; c++)
             {
                 float a = c / 6f * Mathf.PI * 2f + Rand(rng, -0.3f, 0.3f);
-                float d = radius * Rand(rng, 0.72f, 0.86f);
+                float d = radius * Rand(rng, 0.62f, 0.70f);   // inside the arena wall (0.82)
                 Vector2 centre = new Vector2(Mathf.Cos(a) * d, Mathf.Sin(a) * d);
                 int cols = rng.Next(7, 14);
                 for (int k = 0; k < cols; k++)
@@ -1261,7 +1262,7 @@ namespace IronFauna.Brawl
             int clumps = ferns ? 260 : 340;
             for (int c = 0; c < clumps; c++)
             {
-                float a = Rand(rng, 0f, Mathf.PI * 2f), d = Mathf.Sqrt((float)rng.NextDouble()) * radius * 0.86f;
+                float a = Rand(rng, 0f, Mathf.PI * 2f), d = Mathf.Sqrt((float)rng.NextDouble()) * radius * 0.78f;
                 float x = Mathf.Cos(a) * d, z = Mathf.Sin(a) * d;
                 if (!ferns && (Fbm(x * 0.15f + 50f, z * 0.15f) < 0.5f)) continue;   // grass only grows in the patches the ground bake paints
                 float gy = Ground(x, z, top);
@@ -1455,7 +1456,7 @@ namespace IronFauna.Brawl
             Mesh tyre = ClamshellMeshFactory.Prism(0.62f, 0.38f, 14);
             for (int i = 0; i < 12; i++)
             {
-                float a = i / 12f * Mathf.PI * 2f + Rand(rng, -0.2f, 0.2f), d = radius * Rand(rng, 0.78f, 0.88f);
+                float a = i / 12f * Mathf.PI * 2f + Rand(rng, -0.2f, 0.2f), d = radius * Rand(rng, 0.64f, 0.72f);
                 float x = Mathf.Cos(a) * d, z = Mathf.Sin(a) * d;
                 float gy = Ground(x, z, top);
                 if (i % 3 == 2)
@@ -1507,15 +1508,15 @@ namespace IronFauna.Brawl
             var mb = new MeshBuilder();
             for (int c = 0; c < 8; c++)
             {
-                float a = c / 8f * Mathf.PI * 2f + Rand(rng, -0.25f, 0.25f), d = radius * Rand(rng, 0.7f, 0.86f);
+                float a = (c + 0.5f) / 8f * Mathf.PI * 2f + Rand(rng, -0.12f, 0.12f), d = radius * Rand(rng, 0.64f, 0.71f);
                 float cx = Mathf.Cos(a) * d, cz = Mathf.Sin(a) * d;
                 int n = rng.Next(3, 7);
                 for (int k = 0; k < n; k++)
                 {
-                    float x = cx + Rand(rng, -2f, 2f), z = cz + Rand(rng, -2f, 2f);
-                    float h = Rand(rng, 2f, 7.5f);
+                    float x = cx + Rand(rng, -1.8f, 1.8f), z = cz + Rand(rng, -1.8f, 1.8f);
+                    float h = k == 0 ? Rand(rng, 5f, 7f) : Rand(rng, 2f, 4.5f);   // one tall spire with smaller ones around it
                     float gy = Ground(x, z, top);
-                    Quaternion q = Quaternion.Euler(Rand(rng, -18f, 18f), Rand(rng, 0f, 360f), Rand(rng, -18f, 18f));
+                    Quaternion q = Quaternion.Euler(Rand(rng, -7f, 7f), Rand(rng, 0f, 360f), Rand(rng, -7f, 7f));
                     mb.Add(ClamshellMeshFactory.TaperedPrism(Rand(rng, 0.5f, 1.1f), 0.05f, h, 5), TRS(new Vector3(x, gy + h * 0.45f - 0.3f, z), q, Vector3.one));
                 }
             }
