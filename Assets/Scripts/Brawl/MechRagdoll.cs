@@ -395,6 +395,7 @@ namespace IronFauna.Brawl
         private void FixedUpdate()
         {
             if (_pelvis == null || ghost == null) return;
+            if (netPuppet) return;   // online client: the host simulates this body
             float dt = Time.fixedDeltaTime;
 
             // walked or was knocked off the edge: nothing under the hips any more - fall
@@ -951,6 +952,7 @@ namespace IronFauna.Brawl
         private void Update()
         {
             if (ghost == null) return;
+            if (netPuppet) TickPuppet(Time.deltaTime);
             foreach (var kv in _trails)
             {
                 var s = kv.Key;
@@ -964,6 +966,7 @@ namespace IronFauna.Brawl
         internal void OnPartCollision(Segment mine, Collision c)
         {
             if (mine == null || c == null) return;
+            if (netPuppet) return;   // online client: hits are decided by the host
             if (mine.heldBy != null) { mine.heldBy.WeaponStrike(mine, c); return; }
             TryStrike(mine, c);
             ImpactDamage(mine, c);
@@ -1696,5 +1699,151 @@ namespace IronFauna.Brawl
             dir.y = 0f;
             otherPart.owner.ReceiveStrike(this, otherPart.segment, point, dir.normalized + Vector3.up * 0.3f, Mathf.Clamp(speed * 2.2f, 8f, 28f), Mathf.Clamp01(speed / 14f));
         }
+
+        // ------------------------------------------------------------------ online (host streams poses, clients puppet)
+        /// <summary>Online client: every segment is kinematic and follows the poses the host sends.</summary>
+        public bool netPuppet { get; private set; }
+        private Vector3[] _netFromP, _netToP;
+        private Quaternion[] _netFromR, _netToR;
+        private float _netT, _netSpan = 0.05f, _netLastRecv;
+        private const float NetPosScale = 200f;   // 5 mm steps, +-163 m
+
+        public void EnterNetPuppet()
+        {
+            netPuppet = true;
+            if (_heldSeg != null) DropHold();
+            foreach (var s in _segs)
+            {
+                if (s.rb == null) continue;
+                s.rb.isKinematic = true;
+                s.rb.interpolation = RigidbodyInterpolation.None;
+            }
+        }
+
+        /// <summary>Host: every segment's position and rotation (14 bytes each).</summary>
+        public void WriteNetPose(System.IO.BinaryWriter w)
+        {
+            w.Write((byte)_segs.Count);
+            foreach (var s in _segs)
+            {
+                Vector3 p = s.phys != null ? s.phys.position : Vector3.zero;
+                Quaternion q = s.phys != null ? s.phys.rotation : Quaternion.identity;
+                w.Write(PackPos(p.x)); w.Write(PackPos(p.y)); w.Write(PackPos(p.z));
+                if (q.w < 0f) { q.x = -q.x; q.y = -q.y; q.z = -q.z; q.w = -q.w; }
+                w.Write(PackUnit(q.x)); w.Write(PackUnit(q.y)); w.Write(PackUnit(q.z)); w.Write(PackUnit(q.w));
+            }
+        }
+
+        private static short PackPos(float v) => (short)Mathf.Clamp(Mathf.RoundToInt(v * NetPosScale), short.MinValue, short.MaxValue);
+        private static short PackUnit(float v) => (short)Mathf.Clamp(Mathf.RoundToInt(v * 32767f), -32767, 32767);
+
+        /// <summary>Client: reads a pose written by <see cref="WriteNetPose"/> and starts blending to it.</summary>
+        public void ReadNetPose(System.IO.BinaryReader r)
+        {
+            int n = r.ReadByte();
+            bool match = n == _segs.Count;
+            if (match && (_netToP == null || _netToP.Length != n))
+            {
+                _netFromP = new Vector3[n]; _netToP = new Vector3[n];
+                _netFromR = new Quaternion[n]; _netToR = new Quaternion[n];
+                for (int i = 0; i < n; i++)
+                {
+                    var t = _segs[i].phys;
+                    _netToP[i] = t != null ? t.position : Vector3.zero;
+                    _netToR[i] = t != null ? t.rotation : Quaternion.identity;
+                }
+            }
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 p = new Vector3(r.ReadInt16(), r.ReadInt16(), r.ReadInt16()) / NetPosScale;
+                var q = new Quaternion(r.ReadInt16() / 32767f, r.ReadInt16() / 32767f, r.ReadInt16() / 32767f, r.ReadInt16() / 32767f);
+                if (!match) continue;
+                var t = _segs[i].phys;
+                _netFromP[i] = t != null ? t.position : p;
+                _netFromR[i] = t != null ? t.rotation : q;
+                _netToP[i] = p;
+                float m = Mathf.Sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+                _netToR[i] = m > 0.0001f ? new Quaternion(q.x / m, q.y / m, q.z / m, q.w / m) : Quaternion.identity;
+            }
+            if (!match) return;
+            float now = Time.unscaledTime;
+            _netSpan = Mathf.Clamp(now - _netLastRecv, 0.02f, 0.15f);
+            _netLastRecv = now;
+            _netT = 0f;
+        }
+
+        private void TickPuppet(float dt)
+        {
+            if (_netToP == null || _netToP.Length != _segs.Count) return;
+            _netT += dt;
+            float k = Mathf.Clamp01(_netT / _netSpan);
+            for (int i = 0; i < _segs.Count; i++)
+            {
+                var s = _segs[i];
+                if (s.phys == null) continue;
+                Vector3 p = Vector3.LerpUnclamped(_netFromP[i], _netToP[i], k);
+                Quaternion q = Quaternion.Slerp(_netFromR[i], _netToR[i], k);
+                if (s.rb != null) { s.rb.position = p; s.rb.rotation = q; }
+                s.phys.SetPositionAndRotation(p, q);
+            }
+        }
+
+        private static readonly LimbId[] NetLimbs = { LimbId.ArmL, LimbId.ArmR, LimbId.LegL, LimbId.LegR, LimbId.Head };
+
+        /// <summary>Host: hull, poise, KO and limb health.</summary>
+        public void WriteNetStatus(System.IO.BinaryWriter w)
+        {
+            w.Write(health);
+            w.Write(maxHealth);
+            w.Write((byte)Mathf.RoundToInt(Poise01 * 255f));
+            w.Write(IsKO);
+            byte lost = 0;
+            for (int i = 0; i < NetLimbs.Length; i++)
+            {
+                if (_lost.Contains(NetLimbs[i])) lost |= (byte)(1 << i);
+                w.Write((byte)Mathf.RoundToInt(GetLimbHealth01(NetLimbs[i]) * 255f));
+            }
+            w.Write(lost);
+        }
+
+        /// <summary>Client: applies what <see cref="WriteNetStatus"/> wrote.</summary>
+        public void ReadNetStatus(System.IO.BinaryReader r)
+        {
+            health = r.ReadSingle();
+            maxHealth = r.ReadSingle();
+            _poise = r.ReadByte() / 255f * poiseMax;
+            bool ko = r.ReadBoolean();
+            var lh = new float[NetLimbs.Length];
+            for (int i = 0; i < NetLimbs.Length; i++) lh[i] = r.ReadByte() / 255f;
+            byte lost = r.ReadByte();
+            bool limbsChanged = false;
+            for (int i = 0; i < NetLimbs.Length; i++)
+            {
+                var id = NetLimbs[i];
+                bool gone = (lost & (1 << i)) != 0;
+                if (gone && _lost.Add(id)) limbsChanged = true;
+                _limbHealth[id] = lh[i] * LimbMax(id);
+            }
+            if (ko && !IsKO)
+            {
+                IsKO = true;
+                if (ghost != null) ghost.suppressed = true;
+            }
+            else if (!ko && IsKO)
+            {
+                IsKO = false;
+                if (ghost != null) ghost.suppressed = false;
+            }
+            if (limbsChanged && ghost != null)
+                ghost.SetLimbState(!_lost.Contains(LimbId.ArmL), !_lost.Contains(LimbId.ArmR), !_lost.Contains(LimbId.LegL), !_lost.Contains(LimbId.LegR));
+        }
+
+        /// <summary>Client: shows a hit the host reported (sparks, and the Hit event drives sounds / camera shake / popups).</summary>
+        public void NetShowHit(MechRagdoll attacker, Vector3 point, float damage, float power, bool ripped)
+        {
+            EmitHitSparks(point, Mathf.Clamp01(damage / 20f) + (ripped ? 0.8f : 0f));
+            Hit?.Invoke(this, attacker, point, damage, power, ripped);
+        }
+
     }
 }

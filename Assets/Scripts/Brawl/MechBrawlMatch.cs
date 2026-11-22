@@ -27,7 +27,7 @@ namespace IronFauna.Brawl
         public int localPlayers = 1;       // 1..4 split-screen players on this PC
         public int totalFighters = 8;      // up to 8 fighters in the arena
         public BrawlNetRole netRole = BrawlNetRole.Offline;
-        public string hostIp = "127.0.0.1";
+        public string joinCode = "";       // online JOIN: the host's Relay join code
         public int campaignAct = 0;        // 0..4 across the 5 stages
     }
 
@@ -35,11 +35,11 @@ namespace IronFauna.Brawl
     /// 8-player mech brawler (Gang Beasts / MMA / Kickboxing / Jiu-Jitsu active-ragdoll combat):
     ///  - Modes: 8-Player Free-For-All, 8-Player Co-Op Campaign (5 Acts across 5 Stages + Bosses), and 4v4 Team Brawl.
     ///  - Local Co-Op: 1–4 players on one screen with automatic split-screen cameras.
-    ///  - Online 8P: Host or Join over UDP (:7777) via MechBrawlNet.
+    ///  - Online 8P: Host or Join with a Unity Relay join code via MechBrawlNet (host-authoritative).
     ///  - 5 Destructible Stages: Basalt Mesa, Foundry Crucible, Orbital Dish, Scrapyard Colosseum, Glacier Trench.
     ///  - Distinct Light / Medium / Heavy robot presets with real combat advantages.
     /// </summary>
-    public class MechBrawlMatch : MonoBehaviour
+    public partial class MechBrawlMatch : MonoBehaviour
     {
         public const float ArenaHalf = 17f;
         public const float IslandRadius = 34f;
@@ -84,6 +84,12 @@ namespace IronFauna.Brawl
             public IronFauna.Pilots.PilotProfile pilot;   // a local player's personal fighter (null for bots)
             public float damageDealt;
             public int kos;
+            // spawn data (sent to online clients so they build the same roster)
+            public MechLoadout loadout;
+            public Vector3 spawnPos;
+            public float spawnYaw, hpMult = 1f, scale = 1f;
+            public MechBrawlNet.RemotePlayer remote;   // host: an online friend drives this robot
+            public int ownerId = -1;                   // client: the online id of whoever drives it
         }
 
         private bool _pilotsPaid;
@@ -118,6 +124,16 @@ namespace IronFauna.Brawl
             {
                 if (f.pilot == null) continue;
                 bool won = config.mode == BrawlGameMode.FreeForAll ? !f.out_ : _roundWon;
+                if (f.remote != null)
+                {
+                    // an online friend's pilot lives on their PC: send them their numbers, they save the pay there
+                    if (NetHost)
+                    {
+                        float dmg = f.damageDealt; int kos = f.kos;
+                        _net.SendTo(f.remote, MechBrawlNet.PResult, w => { w.Write(dmg); w.Write(kos); w.Write(won); }, true);
+                    }
+                    continue;
+                }
                 string line = IronFauna.Pilots.PilotUpgrades.AwardMatch(f.pilot, f.damageDealt, f.kos, won);
                 if (line != null) lines.Add(line);
             }
@@ -183,9 +199,12 @@ namespace IronFauna.Brawl
                 BoxingSfx.Attach(_camera.gameObject);
             }
             _net = gameObject.AddComponent<MechBrawlNet>();
+            if (config.mode == BrawlGameMode.TournamentCampaign) config.netRole = BrawlNetRole.Offline;   // the tournament is local only
+            if (config.netRole == BrawlNetRole.Client) config.localPlayers = 1;
             if (config.netRole != BrawlNetRole.Offline)
             {
-                _net.StartNetwork(config.netRole, config.hostIp, MechBrawlNet.DefaultPort);
+                HookNetwork();
+                _net.StartNetwork(config.netRole, config.joinCode);
             }
             _announcer = gameObject.AddComponent<BrawlAnnouncer>();
             BuildHud();
@@ -201,7 +220,7 @@ namespace IronFauna.Brawl
             }
             else
             {
-                StartRound();
+                if (!NetClient) StartRound();   // a client waits for the host's round setup
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
             }
@@ -282,17 +301,20 @@ namespace IronFauna.Brawl
                 return;
             }
 
-            int total = Mathf.Clamp(config.totalFighters, Mathf.Max(2, localCount + 1), 8);
+            var remotes = NetHost ? _net.Players : null;
+            int remoteCount = remotes != null ? remotes.Count : 0;
+            int total = Mathf.Min(8, Mathf.Max(config.totalFighters, Mathf.Max(2, localCount + remoteCount + 1)));
 
             for (int i = 0; i < total; i++)
             {
                 bool isLocalPlayer = i < localCount;
+                var rp = !isLocalPlayer && remotes != null && i - localCount < remoteCount ? remotes[i - localCount] : null;
                 int team = 0;
                 bool isBoss = false;
                 if (config.mode == BrawlGameMode.CoopCampaign)
                 {
                     // Co-Op Campaign: up to 3 Allied slots (all local players + co-op AI allies) vs 5 Enemy AI wave/boss slots
-                    int allyCount = Mathf.Max(localCount, 3);
+                    int allyCount = Mathf.Max(localCount + remoteCount, 3);
                     team = i < allyCount ? 1 : 2;
                     isBoss = (config.campaignAct == 4 && i == total - 1) || (config.campaignAct >= 2 && i == total - 1);
                 }
@@ -319,8 +341,14 @@ namespace IronFauna.Brawl
                 MechLoadout l;
                 string label;
                 float hpMult = 1f;
-                var pilot = isLocalPlayer ? PilotFor(i) : null;
-                if (pilot != null)
+                var pilot = isLocalPlayer ? PilotFor(i) : rp != null ? rp.pilot : null;
+                if (rp != null)
+                {
+                    isBoss = false;
+                    l = rp.pilot.loadout != null ? rp.pilot.loadout.Clone() : MechLoadout.Default();
+                    label = rp.pilot.name;
+                }
+                else if (pilot != null)
                 {
                     l = pilot.loadout.Clone();
                     label = localCount > 1 ? $"P{i + 1} {pilot.name}" : pilot.name;
@@ -362,6 +390,12 @@ namespace IronFauna.Brawl
                     spawned.pilot = pilot;
                     IronFauna.Pilots.PilotUpgrades.ApplyToFighter(pilot, spawned.ragdoll);
                 }
+                if (rp != null)
+                {
+                    spawned.remote = rp;
+                    var ai = spawned.ghost.GetComponent<MechBoxerAI>();
+                    if (ai != null) ai.enabled = false;   // the friend's input drives it
+                }
                 _fighters.Add(spawned);
                 _ragdollList.Add(spawned.ragdoll);
                 if (isLocalPlayer && i < _playerCams.Count)
@@ -373,6 +407,7 @@ namespace IronFauna.Brawl
 
             Retarget();
             UpdateStageHeader();
+            if (NetHost) BroadcastSetup();
             if (config.mode == BrawlGameMode.CoopCampaign)
             {
                 string actTitle = CampaignActTitles[config.campaignAct];
@@ -589,6 +624,11 @@ namespace IronFauna.Brawl
             var f = new Fighter { name = name, player = player, localPlayerIndex = localPlayerIdx, team = team, isBoss = isBoss };
             Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
             float scale = scaleOverride ?? (isBoss ? 1.24f : 1f);
+            f.loadout = l.Clone();
+            f.spawnPos = pos;
+            f.spawnYaw = yaw;
+            f.hpMult = hpMult;
+            f.scale = scale;
 
             f.ghostGo = new GameObject(name + "_Ghost");
             f.ghostGo.transform.SetPositionAndRotation(pos, rot);
@@ -639,7 +679,7 @@ namespace IronFauna.Brawl
             f.weightTag = f.ragdoll.weightLabel;
             f.ragdoll.Hit += OnHit;
             f.ragdoll.ArmorShed += (who, at) => BoxingSfx.Clank(0.3f);
-            f.ragdoll.KnockedOut += who => { if (who == _fighters[0].ragdoll) Banner("K.O.", 2.5f); };
+            f.ragdoll.KnockedOut += who => { if (who == _fighters[0].ragdoll) Banner("K.O.", 2.5f, false); };
             f.ragdoll.GrappleEvent += OnGrapple;
             f.ragdoll.CombatCue += OnCombatCue;
             if (player) f.ghost.CombatCue += (who, cue) => { if (cue == "EXHAUSTED") SpawnPopup(who.ChestPoint() + Vector3.up * 1.2f, "EXHAUSTED", IronFaunaPalette.CrimsonFront, 24); };
@@ -654,12 +694,16 @@ namespace IronFauna.Brawl
             return f;
         }
 
-        private void BuildArena(BrawlStageId stage)
+        private int _arenaSeed;
+
+        private void BuildArena(BrawlStageId stage, int? fixedSeed = null)
         {
             BrawlStageLook.Release();
             _arena = new GameObject("BrawlArena").transform;
             _arena.SetParent(transform, false);
-            int seed = Random.Range(0, 100000);
+            int seed = fixedSeed ?? Random.Range(0, 100000);
+            _arenaSeed = seed;
+            Random.InitState(seed);   // online clients rebuild the same arena from the same seed
             BrawlTerrain.Build(_arena, ArenaTop, IslandRadius, seed, stage);
             Physics.SyncTransforms();
             BrawlTerrain.PopulateDestructibles(_arena, stage, seed + 7);
@@ -691,6 +735,10 @@ namespace IronFauna.Brawl
             _rewardText = MenuUI.Label(root, "", 26, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(_rewardText.rectTransform, new Vector2(0.25f, 0.56f), new Vector2(0.75f, 0.70f), Vector2.zero, Vector2.zero);
             _rewardText.gameObject.SetActive(false);
+
+            _netStatus = MenuUI.Label(root, "", 22, IronFaunaPalette.UiAccent, TextAnchor.UpperCenter, FontStyle.Bold);
+            MenuUI.Place(_netStatus.rectTransform, new Vector2(0.25f, 1f), new Vector2(0.75f, 1f), new Vector2(0f, -92f), new Vector2(0f, -60f));
+            _netStatus.gameObject.SetActive(false);
 
             _banner = MenuUI.Label(root, "", 68, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(_banner.rectTransform, new Vector2(0.24f, 0.72f), new Vector2(0.76f, 0.86f), Vector2.zero, Vector2.zero);
@@ -760,10 +808,8 @@ namespace IronFauna.Brawl
                 : config.mode == BrawlGameMode.CoopCampaign
                 ? CampaignActTitles[Mathf.Clamp(config.campaignAct, 0, CampaignActTitles.Length - 1)]
                 : config.mode == BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8-PLAYER FREE-FOR-ALL";
-            string netStr = config.netRole == BrawlNetRole.Host
-                ? $"  //  ONLINE HOST :{MechBrawlNet.DefaultPort} ({(_net != null ? _net.ConnectedClientCount + 1 : 1)}/8)"
-                : config.netRole == BrawlNetRole.Client
-                ? $"  //  ONLINE CLIENT ({config.hostIp}:{MechBrawlNet.DefaultPort})"
+            string netStr = config.netRole != BrawlNetRole.Offline && _net != null
+                ? $"  //  {_net.Status}"
                 : config.localPlayers > 1 ? $"  //  {config.localPlayers}P SPLIT-SCREEN CO-OP" : "";
             _stageHeader.text = $"{modeStr}   //   STAGE: {BrawlTerrain.StageName(config.stage)}{netStr}";
         }
@@ -809,8 +855,10 @@ namespace IronFauna.Brawl
             bar.anchorMax = new Vector2(Mathf.Clamp01(v), 1f);
         }
 
-        private void Banner(string text, float seconds)
+        private void Banner(string text, float seconds, bool broadcast = true)
         {
+            if (broadcast && NetHost && _net.Players.Count > 0)
+                _net.SendToAll(MechBrawlNet.PBanner, w => { w.Write(text ?? ""); w.Write(seconds); }, true);
             if (_banner == null) return;
             _banner.text = text;
             _bannerT = seconds;
@@ -893,6 +941,16 @@ namespace IronFauna.Brawl
         {
             var me = _fighters.Count > 0 ? _fighters[0].ragdoll : null;
             bool mine = victim == me || attacker == me;
+            if (NetHost && _net.Players.Count > 0 && victim != null)
+            {
+                int vi = _ragdollList.IndexOf(victim), ai = attacker != null ? _ragdollList.IndexOf(attacker) : -1;
+                _net.SendToAll(MechBrawlNet.PHit, w =>
+                {
+                    w.Write((sbyte)vi); w.Write((sbyte)ai);
+                    w.Write(point.x); w.Write(point.y); w.Write(point.z);
+                    w.Write(damage); w.Write(power); w.Write(ripped);
+                }, false);
+            }
             if (victim != null && attacker != null && attacker != victim)
             {
                 _lastHitBy[victim] = (attacker, Time.time);
@@ -1094,6 +1152,18 @@ namespace IronFauna.Brawl
                 }
                 return;
             }
+            if (NetClient)
+            {
+                ClientUpdate();
+                return;
+            }
+            if (_restartForJoin)
+            {
+                _restartForJoin = false;
+                _resetT = -1f;
+                StartRound();
+                return;
+            }
             if (kb != null && kb.tabKey.wasPressedThisFrame)
             {
                 // Cycle to the next stage anytime with Tab
@@ -1121,11 +1191,8 @@ namespace IronFauna.Brawl
                 Cursor.visible = false;
             }
 
-            if (_net != null && config.netRole != BrawlNetRole.Offline && _fighters.Count > 0)
-            {
-                _net.PollNetwork(_ragdollList, _fighters[0].ghost != null ? _fighters[0].ghost.intent : default);
-                UpdateStageHeader();
-            }
+            if (NetHost) HostNetTick();
+            TickNetStatus();
 
             UpdateMoveLabel();
             TickPopups(Time.unscaledDeltaTime);
@@ -1146,7 +1213,7 @@ namespace IronFauna.Brawl
                     if (!f.ragdoll.RingOutPenalty(0.3f, RingOutReturnSpot()))
                     {
                         ringOut = false;
-                        if (f.player) Banner("RING OUT  -30% HULL", 1.8f);
+                        PersonalBanner(f, "RING OUT  -30% HULL", 1.8f);
                         if (_announcer != null) _announcer.OnRingOutPenalty(f.name);
                     }
                 }
@@ -1154,7 +1221,7 @@ namespace IronFauna.Brawl
                 {
                     f.out_ = true;
                     justEliminated = f;
-                    if (ringOut && f.player) Banner("RING OUT", 2f);
+                    if (ringOut) PersonalBanner(f, "RING OUT", 2f);
                     int rem = 0;
                     foreach (var other in _fighters) if (!other.out_) rem++;
                     if (_announcer != null)
@@ -1373,6 +1440,11 @@ namespace IronFauna.Brawl
                 }
             }
 
+            TickBannerAndReward();
+        }
+
+        private void TickBannerAndReward()
+        {
             if (_rewardText != null)
             {
                 _rewardT -= Time.unscaledDeltaTime;

@@ -1,10 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
-using System.Net.Sockets;
+using Unity.Collections;
+using Unity.Networking.Transport;
+using Unity.Networking.Transport.Relay;
+using Unity.Services.Authentication;
+using Unity.Services.Core;
+using Unity.Services.Relay;
+using Unity.Services.Relay.Models;
 using UnityEngine;
 using IronFauna.Boxing;
+using IronFauna.Pilots;
 
 namespace IronFauna.Brawl
 {
@@ -16,293 +22,441 @@ namespace IronFauna.Brawl
     }
 
     /// <summary>
-    /// Lightweight UDP Host-Authoritative Netcode for up to 8 players over LAN or Internet (UDP port 7777).
-    ///  - Host simulates all 8 active-ragdoll mechs, receives clients' MechBoxer.Intent packets, and broadcasts
-    ///    compact 8-fighter state snapshots at 30 Hz.
-    ///  - Clients send their local input Intent at 60 Hz and smoothly drive remote fighters from Host snapshots.
+    /// Online play over Unity Relay (no port forwarding): the host opens a Relay room and gets a short join code
+    /// (e.g. K7QX2M) that friends type in. Host-authoritative: the host simulates every robot, friends send their
+    /// controller input, and the host streams the full ragdoll pose of every robot back ~20 times a second.
+    /// This class only moves packets; MechBrawlMatch decides what goes in them.
     /// </summary>
     public class MechBrawlNet : MonoBehaviour
     {
-        public const int DefaultPort = 7777;
-        private const uint Magic = 0x49464238; // "IFB8"
-        private const byte PacketIntent = 1;
-        private const byte PacketSnapshot = 2;
+        public const int MaxRemotePlayers = 7;
+        private const uint Magic = 0x49464239; // "IFB9"
+
+        public const byte PHello = 1;      // client -> host (reliable): pilot JSON
+        public const byte PWelcome = 2;    // host -> client (reliable): your client id
+        public const byte PIntent = 3;     // client -> host (unreliable): controller input
+        public const byte PSetup = 4;      // host -> clients (reliable): arena seed + roster for a new round
+        public const byte PSnapshot = 5;   // host -> clients (unreliable): every robot's pose and status
+        public const byte PBanner = 6;     // host -> clients (reliable): centre-screen callout
+        public const byte PHit = 7;        // host -> clients (unreliable): hit sparks / sounds
+        public const byte PResult = 8;     // host -> one client (reliable): round pay for their pilot
 
         public BrawlNetRole role = BrawlNetRole.Offline;
-        public string hostIp = "127.0.0.1";
-        public int port = DefaultPort;
+        public string JoinCode { get; private set; } = "";
+        public string Status { get; private set; } = "";
+        /// <summary>Host: room open and code ready. Client: connected and welcomed.</summary>
+        public bool Ready { get; private set; }
+        public bool Failed { get; private set; }
+        public int MyClientId { get; private set; } = -1;
+        /// <summary>Client: the robot this PC controls (its input is sent to the host).</summary>
+        public MechBoxer LocalGhost;
 
-        public struct FighterSyncState
+        public class RemotePlayer
         {
-            public Vector3 pos;
-            public float yaw;
-            public Vector2 move;
-            public PunchType punch;
-            public bool guard, sprint, grab, crouch, sit, isDown, isKO;
-            public float health, maxHealth, poise01;
-        }
-
-        private class ClientSlot
-        {
-            public IPEndPoint endpoint;
-            public int fighterIndex;
+            public int id;
+            public NetworkConnection conn;
+            public PilotProfile pilot;
             public float lastSeen;
-            public MechBoxer.Intent latestIntent;
+            // latest input from this friend
+            public Vector2 move;
+            public bool guard, sprint, grab, crouch, sit;
+            public PunchType lastPunch;
+            public int lastSlip;
+            public int punchSerial, slipSerial;
+            public int appliedPunch = -1, appliedSlip = -1;
+            public float camYaw;          // their camera's heading: movement is camera-relative
+            public Transform camProxy;     // host-side stand-in for that camera
         }
 
-        private UdpClient _udp;
-        private readonly List<ClientSlot> _clients = new List<ClientSlot>();
-        public readonly FighterSyncState[] RemoteStates = new FighterSyncState[8];
-        public bool HasSnapshot { get; private set; }
-        public int AssignedSlot { get; private set; } = 1;
-        public int ConnectedClientCount => _clients.Count;
+        public readonly List<RemotePlayer> Players = new List<RemotePlayer>();
 
-        private float _sendAccumulator;
+        public event Action<RemotePlayer> PlayerJoined;
+        public event Action<RemotePlayer> PlayerLeft;
+        /// <summary>Client: a host packet arrived (type, body).</summary>
+        public event Action<byte, byte[]> HostPacket;
+        public event Action Disconnected;
 
-        public void StartNetwork(BrawlNetRole netRole, string ip, int netPort = DefaultPort)
+        private NetworkDriver _driver;
+        private NetworkPipeline _reliable, _unreliable;
+        private NetworkConnection _toHost;
+        private readonly List<NetworkConnection> _pending = new List<NetworkConnection>();
+        private int _nextId = 1;
+        private float _intentAccum;
+        private bool _destroyed;
+
+        // ------------------------------------------------------------------ start / stop
+        public async void StartNetwork(BrawlNetRole netRole, string joinCode)
         {
             StopNetwork();
             role = netRole;
-            hostIp = string.IsNullOrWhiteSpace(ip) ? "127.0.0.1" : ip.Trim();
-            port = netPort;
             if (role == BrawlNetRole.Offline) return;
-
+            Failed = false;
+            Ready = false;
             try
             {
+                Status = "SIGNING IN TO UNITY SERVICES...";
+                if (UnityServices.State != ServicesInitializationState.Initialized)
+                    await UnityServices.InitializeAsync();
+                if (_destroyed) return;
+                if (!AuthenticationService.Instance.IsSignedIn)
+                    await AuthenticationService.Instance.SignInAnonymouslyAsync();
+                if (_destroyed) return;
+
                 if (role == BrawlNetRole.Host)
                 {
-                    _udp = new UdpClient(port);
-                    _udp.Client.Blocking = false;
-                    Debug.Log($"[IronFauna Net] Hosting 8-player room on UDP :{port}");
+                    Status = "OPENING ONLINE ROOM...";
+                    Allocation a = await RelayService.Instance.CreateAllocationAsync(MaxRemotePlayers);
+                    if (_destroyed) return;
+                    string code = await RelayService.Instance.GetJoinCodeAsync(a.AllocationId);
+                    if (_destroyed) return;
+                    var ep = PickEndpoint(a.ServerEndpoints);
+                    var data = new Unity.Networking.Transport.Relay.RelayServerData(ep.Host, (ushort)ep.Port, a.AllocationIdBytes, a.ConnectionData, a.ConnectionData, a.Key, ep.Secure, false);
+                    CreateDriver(ref data);
+                    if (_driver.Bind(NetworkEndpoint.AnyIpv4) != 0) throw new Exception("could not bind to the Relay server");
+                    if (_driver.Listen() != 0) throw new Exception("could not listen on the Relay server");
+                    JoinCode = code.ToUpperInvariant();
+                    Ready = true;
+                    Status = $"JOIN CODE  {JoinCode}";
+                    Debug.Log($"[IronFauna Net] Hosting online room. Join code: {JoinCode}");
                 }
-                else if (role == BrawlNetRole.Client)
+                else
                 {
-                    _udp = new UdpClient(0);
-                    _udp.Client.Blocking = false;
-                    Debug.Log($"[IronFauna Net] Joining 8-player host at {hostIp}:{port}");
+                    string code = (joinCode ?? "").Trim().ToUpperInvariant();
+                    if (code.Length == 0) throw new Exception("no join code entered");
+                    Status = $"JOINING {code}...";
+                    JoinAllocation j = await RelayService.Instance.JoinAllocationAsync(code);
+                    if (_destroyed) return;
+                    var ep = PickEndpoint(j.ServerEndpoints);
+                    var data = new Unity.Networking.Transport.Relay.RelayServerData(ep.Host, (ushort)ep.Port, j.AllocationIdBytes, j.ConnectionData, j.HostConnectionData, j.Key, ep.Secure, false);
+                    CreateDriver(ref data);
+                    if (_driver.Bind(NetworkEndpoint.AnyIpv4) != 0) throw new Exception("could not bind to the Relay server");
+                    _toHost = _driver.Connect(data.Endpoint);
+                    JoinCode = code;
+                    Status = $"CONNECTING TO {code}...";
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[IronFauna Net] Could not open UDP socket ({ex.Message}). Running offline.");
-                role = BrawlNetRole.Offline;
+                Fail(ex);
             }
+        }
+
+        private void Fail(Exception ex)
+        {
+            Failed = true;
+            Ready = false;
+            string msg = ex.Message ?? "";
+            Debug.LogWarning($"[IronFauna Net] Online failed: {ex}");
+            if (msg.IndexOf("project", StringComparison.OrdinalIgnoreCase) >= 0 || msg.IndexOf("cloud", StringComparison.OrdinalIgnoreCase) >= 0)
+                Status = "ONLINE FAILED: LINK THE PROJECT IN EDIT > PROJECT SETTINGS > SERVICES, THEN TURN ON RELAY";
+            else if (role == BrawlNetRole.Client && (msg.IndexOf("join", StringComparison.OrdinalIgnoreCase) >= 0 || msg.IndexOf("not found", StringComparison.OrdinalIgnoreCase) >= 0))
+                Status = "COULDN'T FIND THAT JOIN CODE. CHECK IT AND TRY AGAIN";
+            else
+                Status = "ONLINE FAILED: " + msg.ToUpperInvariant();
+        }
+
+        private static RelayServerEndpoint PickEndpoint(List<RelayServerEndpoint> eps)
+        {
+            if (eps == null || eps.Count == 0) throw new Exception("Relay returned no server endpoints");
+            foreach (var e in eps) if (e.ConnectionType == "dtls") return e;
+            foreach (var e in eps) if (e.ConnectionType == "udp") return e;
+            return eps[0];
+        }
+
+        private void CreateDriver(ref Unity.Networking.Transport.Relay.RelayServerData data)
+        {
+            var settings = new NetworkSettings();
+            settings.WithRelayParameters(ref data);
+            settings.WithFragmentationStageParameters(payloadCapacity: 32 * 1024);
+            settings.WithReliableStageParameters(windowSize: 64);
+            _driver = NetworkDriver.Create(settings);
+            _reliable = _driver.CreatePipeline(typeof(FragmentationPipelineStage), typeof(ReliableSequencedPipelineStage));
+            _unreliable = _driver.CreatePipeline(typeof(FragmentationPipelineStage));
         }
 
         public void StopNetwork()
         {
-            if (_udp != null)
-            {
-                try { _udp.Close(); } catch { }
-                _udp = null;
-            }
-            _clients.Clear();
-            HasSnapshot = false;
-        }
-
-        private void OnDestroy() => StopNetwork();
-
-        public void PollNetwork(IList<MechRagdoll> fighters, MechBoxer.Intent localClientIntent)
-        {
-            if (_udp == null || role == BrawlNetRole.Offline) return;
-
-            // 1. Read all incoming UDP datagrams
-            while (_udp.Available > 0)
+            if (_driver.IsCreated)
             {
                 try
                 {
-                    IPEndPoint remote = new IPEndPoint(IPAddress.Any, 0);
-                    byte[] data = _udp.Receive(ref remote);
-                    if (data == null || data.Length < 6) continue;
-                    using (var ms = new MemoryStream(data))
-                    using (var br = new BinaryReader(ms))
-                    {
-                        if (br.ReadUInt32() != Magic) continue;
-                        byte type = br.ReadByte();
-                        if (role == BrawlNetRole.Host && type == PacketIntent)
-                        {
-                            ReadClientIntent(remote, br, fighters.Count);
-                        }
-                        else if (role == BrawlNetRole.Client && type == PacketSnapshot)
-                        {
-                            ReadHostSnapshot(br);
-                        }
-                    }
+                    if (role == BrawlNetRole.Host) foreach (var p in Players) if (p.conn.IsCreated) _driver.Disconnect(p.conn);
+                    if (_toHost.IsCreated) _driver.Disconnect(_toHost);
+                    _driver.ScheduleUpdate().Complete();
                 }
-                catch
-                {
-                    break;
-                }
+                catch { }
+                _driver.Dispose();
             }
+            _driver = default;
+            _toHost = default;
+            Players.Clear();
+            _pending.Clear();
+            Ready = false;
+        }
 
-            // 2. Host applies remote client intents & broadcasts 30 Hz state snapshots
-            _sendAccumulator += Time.unscaledDeltaTime;
+        private void OnDestroy()
+        {
+            _destroyed = true;
+            StopNetwork();
+        }
+
+        // ------------------------------------------------------------------ pump
+        private void Update()
+        {
+            if (!_driver.IsCreated) return;
+            _driver.ScheduleUpdate().Complete();
+
             if (role == BrawlNetRole.Host)
             {
-                for (int i = _clients.Count - 1; i >= 0; i--)
-                {
-                    var c = _clients[i];
-                    if (Time.unscaledTime - c.lastSeen > 8f)
-                    {
-                        _clients.RemoveAt(i);
-                        continue;
-                    }
-                    if (c.fighterIndex >= 0 && c.fighterIndex < fighters.Count && fighters[c.fighterIndex] != null)
-                    {
-                        var ghost = fighters[c.fighterIndex].ghost;
-                        if (ghost != null)
-                        {
-                            var ai = ghost.GetComponent<MechBoxerAI>();
-                            if (ai != null) ai.enabled = false; // remote human takes over this bot slot!
-                            ghost.intent = c.latestIntent;
-                        }
-                    }
-                }
+                NetworkConnection c;
+                while ((c = _driver.Accept()) != default) _pending.Add(c);
 
-                if (_sendAccumulator >= 1f / 30f)
+                NetworkEvent.Type t;
+                while ((t = _driver.PopEvent(out NetworkConnection conn, out DataStreamReader reader)) != NetworkEvent.Type.Empty)
                 {
-                    _sendAccumulator = 0f;
-                    BroadcastSnapshot(fighters);
+                    if (t == NetworkEvent.Type.Data) HostReceive(conn, ReadAll(ref reader));
+                    else if (t == NetworkEvent.Type.Disconnect) HostDrop(conn);
                 }
             }
             else if (role == BrawlNetRole.Client)
             {
-                if (_sendAccumulator >= 1f / 60f)
+                NetworkEvent.Type t;
+                while ((t = _toHost.PopEvent(_driver, out DataStreamReader reader)) != NetworkEvent.Type.Empty)
                 {
-                    _sendAccumulator = 0f;
-                    SendIntentToHost(localClientIntent);
-                }
-            }
-        }
-
-        private void ReadClientIntent(IPEndPoint remote, BinaryReader br, int maxFighters)
-        {
-            ClientSlot slot = null;
-            foreach (var c in _clients)
-            {
-                if (c.endpoint.Equals(remote)) { slot = c; break; }
-            }
-            if (slot == null && _clients.Count < 7)
-            {
-                int assigned = Mathf.Clamp(_clients.Count + 1, 1, Mathf.Max(1, maxFighters - 1));
-                slot = new ClientSlot { endpoint = remote, fighterIndex = assigned };
-                _clients.Add(slot);
-            }
-            if (slot == null) return;
-            slot.lastSeen = Time.unscaledTime;
-            var intent = new MechBoxer.Intent
-            {
-                move = new Vector2(br.ReadSingle(), br.ReadSingle()),
-                punch = (PunchType)br.ReadByte(),
-                slip = br.ReadSByte(),
-            };
-            byte flags = br.ReadByte();
-            intent.guard = (flags & 1) != 0;
-            intent.sprint = (flags & 2) != 0;
-            intent.grab = (flags & 4) != 0;
-            intent.crouch = (flags & 8) != 0;
-            intent.sit = (flags & 16) != 0;
-            slot.latestIntent = intent;
-        }
-
-        private void SendIntentToHost(MechBoxer.Intent i)
-        {
-            try
-            {
-                using (var ms = new MemoryStream(32))
-                using (var bw = new BinaryWriter(ms))
-                {
-                    bw.Write(Magic);
-                    bw.Write(PacketIntent);
-                    bw.Write(i.move.x);
-                    bw.Write(i.move.y);
-                    bw.Write((byte)i.punch);
-                    bw.Write((sbyte)i.slip);
-                    byte flags = 0;
-                    if (i.guard) flags |= 1;
-                    if (i.sprint) flags |= 2;
-                    if (i.grab) flags |= 4;
-                    if (i.crouch) flags |= 8;
-                    if (i.sit) flags |= 16;
-                    bw.Write(flags);
-                    byte[] bytes = ms.ToArray();
-                    _udp.Send(bytes, bytes.Length, hostIp, port);
-                }
-            }
-            catch { }
-        }
-
-        private void BroadcastSnapshot(IList<MechRagdoll> fighters)
-        {
-            if (_clients.Count == 0) return;
-            try
-            {
-                using (var ms = new MemoryStream(256))
-                using (var bw = new BinaryWriter(ms))
-                {
-                    bw.Write(Magic);
-                    bw.Write(PacketSnapshot);
-                    byte count = (byte)Mathf.Min(8, fighters.Count);
-                    bw.Write(count);
-                    for (int i = 0; i < count; i++)
+                    if (t == NetworkEvent.Type.Connect)
                     {
-                        var r = fighters[i];
-                        var g = r != null ? r.ghost : null;
-                        Vector3 p = r != null ? r.Position : Vector3.zero;
-                        bw.Write(p.x); bw.Write(p.y); bw.Write(p.z);
-                        bw.Write(g != null ? g.transform.eulerAngles.y : 0f);
-                        bw.Write(g != null ? g.intent.move.x : 0f);
-                        bw.Write(g != null ? g.intent.move.y : 0f);
-                        bw.Write((byte)(g != null ? g.CurrentPunch : PunchType.None));
-                        byte flags = 0;
-                        if (g != null && g.intent.guard) flags |= 1;
-                        if (g != null && g.intent.sprint) flags |= 2;
-                        if (g != null && g.intent.grab) flags |= 4;
-                        if (g != null && g.IsCrouching) flags |= 8;
-                        if (g != null && g.IsSeated) flags |= 16;
-                        if (r != null && r.IsDown) flags |= 32;
-                        if (r != null && r.IsKO) flags |= 64;
-                        bw.Write(flags);
-                        bw.Write(r != null ? r.health : 0f);
-                        bw.Write(r != null ? r.maxHealth : 160f);
-                        bw.Write(r != null ? r.Poise01 : 1f);
+                        Status = "CONNECTED. WAITING FOR THE HOST...";
+                        SendHello();
                     }
-                    byte[] payload = ms.ToArray();
-                    foreach (var c in _clients)
+                    else if (t == NetworkEvent.Type.Data) ClientReceive(ReadAll(ref reader));
+                    else if (t == NetworkEvent.Type.Disconnect)
                     {
-                        _udp.Send(payload, payload.Length, c.endpoint);
+                        Ready = false;
+                        Status = "DISCONNECTED FROM THE HOST. PRESS ESC";
+                        _toHost = default;
+                        Disconnected?.Invoke();
                     }
                 }
+
+                _intentAccum += Time.unscaledDeltaTime;
+                if (Ready && LocalGhost != null && _intentAccum >= 1f / 60f)
+                {
+                    _intentAccum = 0f;
+                    SendIntent(LocalGhost);
+                }
             }
-            catch { }
         }
 
-        private void ReadHostSnapshot(BinaryReader br)
+        private static byte[] ReadAll(ref DataStreamReader reader)
         {
-            int count = Mathf.Min(8, (int)br.ReadByte());
-            for (int i = 0; i < count; i++)
+            int n = reader.Length;
+            var arr = new NativeArray<byte>(n, Allocator.Temp);
+            reader.ReadBytes(arr);
+            byte[] b = arr.ToArray();
+            arr.Dispose();
+            return b;
+        }
+
+        // ------------------------------------------------------------------ host side
+        private void HostReceive(NetworkConnection conn, byte[] data)
+        {
+            if (!Unwrap(data, out byte type, out BinaryReader br)) return;
+            using (br)
             {
-                var s = new FighterSyncState
+                if (type == PHello)
                 {
-                    pos = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle()),
-                    yaw = br.ReadSingle(),
-                    move = new Vector2(br.ReadSingle(), br.ReadSingle()),
-                    punch = (PunchType)br.ReadByte(),
-                };
-                byte flags = br.ReadByte();
-                s.guard = (flags & 1) != 0;
-                s.sprint = (flags & 2) != 0;
-                s.grab = (flags & 4) != 0;
-                s.crouch = (flags & 8) != 0;
-                s.sit = (flags & 16) != 0;
-                s.isDown = (flags & 32) != 0;
-                s.isKO = (flags & 64) != 0;
-                s.health = br.ReadSingle();
-                s.maxHealth = br.ReadSingle();
-                s.poise01 = br.ReadSingle();
-                RemoteStates[i] = s;
+                    if (FindPlayer(conn) != null) return;
+                    if (Players.Count >= MaxRemotePlayers) { _driver.Disconnect(conn); return; }
+                    PilotProfile pilot = null;
+                    try { pilot = JsonUtility.FromJson<PilotProfile>(br.ReadString()); } catch { }
+                    if (pilot == null) pilot = new PilotProfile { name = "FRIEND" };
+                    if (pilot.loadout == null) pilot.loadout = IronFauna.Clamshell.MechLoadout.Default();
+                    pilot.name = string.IsNullOrWhiteSpace(pilot.name) ? "FRIEND" : pilot.name.Trim().ToUpperInvariant();
+                    if (pilot.name.Length > 16) pilot.name = pilot.name.Substring(0, 16);
+                    var p = new RemotePlayer { id = _nextId++, conn = conn, pilot = pilot, lastSeen = Time.unscaledTime };
+                    Players.Add(p);
+                    _pending.Remove(conn);
+                    SendTo(p, PWelcome, w => w.Write(p.id), true);
+                    Debug.Log($"[IronFauna Net] {pilot.name} joined (id {p.id})");
+                    PlayerJoined?.Invoke(p);
+                }
+                else if (type == PIntent)
+                {
+                    var p = FindPlayer(conn);
+                    if (p == null) return;
+                    p.lastSeen = Time.unscaledTime;
+                    p.move = new Vector2(br.ReadSingle(), br.ReadSingle());
+                    byte f = br.ReadByte();
+                    p.guard = (f & 1) != 0; p.sprint = (f & 2) != 0; p.grab = (f & 4) != 0; p.crouch = (f & 8) != 0; p.sit = (f & 16) != 0;
+                    p.lastPunch = (PunchType)br.ReadByte();
+                    p.punchSerial = br.ReadInt32();
+                    p.lastSlip = br.ReadSByte();
+                    p.slipSerial = br.ReadInt32();
+                    p.camYaw = br.ReadSingle();
+                }
             }
-            HasSnapshot = true;
+        }
+
+        private void HostDrop(NetworkConnection conn)
+        {
+            _pending.Remove(conn);
+            var p = FindPlayer(conn);
+            if (p == null) return;
+            Players.Remove(p);
+            if (p.camProxy != null) Destroy(p.camProxy.gameObject);
+            Debug.Log($"[IronFauna Net] {p.pilot.name} left");
+            PlayerLeft?.Invoke(p);
+        }
+
+        private RemotePlayer FindPlayer(NetworkConnection conn)
+        {
+            foreach (var p in Players) if (p.conn == conn) return p;
+            return null;
+        }
+
+        /// <summary>Host: drives a friend's robot with the input they sent. Presses (punches, slips) are applied once each.</summary>
+        public void ApplyIntent(RemotePlayer p, MechBoxer ghost)
+        {
+            if (p == null || ghost == null) return;
+            if (p.camProxy == null)
+            {
+                p.camProxy = new GameObject($"NetCam_{p.id}").transform;
+                p.camProxy.SetParent(transform, false);
+            }
+            p.camProxy.rotation = Quaternion.Euler(0f, p.camYaw, 0f);
+            ghost.moveReference = p.camProxy;
+            ghost.lockOn = false;
+            var i = ghost.intent;
+            i.move = p.move;
+            i.guard = p.guard;
+            i.sprint = p.sprint;
+            i.grab = p.grab;
+            i.crouch = p.crouch;
+            i.sit = p.sit;
+            if (p.appliedPunch < 0) p.appliedPunch = p.punchSerial;
+            if (p.appliedSlip < 0) p.appliedSlip = p.slipSerial;
+            if (p.punchSerial != p.appliedPunch)
+            {
+                ghost.mashCount += Mathf.Clamp(p.punchSerial - p.appliedPunch, 1, 10);
+                p.appliedPunch = p.punchSerial;
+                if (p.lastPunch != PunchType.None) i.punch = p.lastPunch;
+            }
+            if (p.slipSerial != p.appliedSlip)
+            {
+                ghost.mashCount += Mathf.Clamp(p.slipSerial - p.appliedSlip, 1, 10);
+                p.appliedSlip = p.slipSerial;
+                if (p.lastSlip != 0) i.slip = p.lastSlip;
+            }
+            ghost.intent = i;
+        }
+
+        // ------------------------------------------------------------------ client side
+        private void SendHello()
+        {
+            var pilot = PilotStore.ForSlot(0);
+            string json = pilot != null ? JsonUtility.ToJson(pilot) : JsonUtility.ToJson(new PilotProfile { name = "FRIEND" });
+            SendToHost(PHello, w => w.Write(json), true);
+        }
+
+        private void SendIntent(MechBoxer g)
+        {
+            var i = g.intent;
+            SendToHost(PIntent, w =>
+            {
+                w.Write(i.move.x);
+                w.Write(i.move.y);
+                byte f = 0;
+                if (i.guard) f |= 1;
+                if (i.sprint) f |= 2;
+                if (i.grab) f |= 4;
+                if (i.crouch) f |= 8;
+                if (i.sit) f |= 16;
+                w.Write(f);
+                w.Write((byte)g.netLastPunch);
+                w.Write(g.netPunchSerial);
+                w.Write((sbyte)g.netLastSlip);
+                w.Write(g.netSlipSerial);
+                w.Write(g.moveReference != null ? g.moveReference.eulerAngles.y : g.transform.eulerAngles.y);
+            }, false);
+        }
+
+        private void ClientReceive(byte[] data)
+        {
+            if (!Unwrap(data, out byte type, out BinaryReader br)) return;
+            using (br)
+            {
+                if (type == PWelcome)
+                {
+                    MyClientId = br.ReadInt32();
+                    Ready = true;
+                    Status = $"ONLINE  //  ROOM {JoinCode}";
+                    return;
+                }
+                int pos = (int)br.BaseStream.Position;
+                byte[] body = new byte[data.Length - pos];
+                Array.Copy(data, pos, body, 0, body.Length);
+                HostPacket?.Invoke(type, body);
+            }
+        }
+
+        // ------------------------------------------------------------------ sending
+        private static byte[] Wrap(byte type, Action<BinaryWriter> write)
+        {
+            using (var ms = new MemoryStream(256))
+            using (var bw = new BinaryWriter(ms))
+            {
+                bw.Write(Magic);
+                bw.Write(type);
+                write?.Invoke(bw);
+                bw.Flush();
+                return ms.ToArray();
+            }
+        }
+
+        private static bool Unwrap(byte[] data, out byte type, out BinaryReader br)
+        {
+            type = 0;
+            br = null;
+            if (data == null || data.Length < 5) return false;
+            br = new BinaryReader(new MemoryStream(data));
+            if (br.ReadUInt32() != Magic) { br.Dispose(); br = null; return false; }
+            type = br.ReadByte();
+            return true;
+        }
+
+        private bool SendRaw(NetworkConnection c, bool reliable, byte[] bytes)
+        {
+            if (!_driver.IsCreated || !c.IsCreated) return false;
+            int status = _driver.BeginSend(reliable ? _reliable : _unreliable, c, out DataStreamWriter w, bytes.Length);
+            if (status < 0) return false;
+            var arr = new NativeArray<byte>(bytes, Allocator.Temp);
+            w.WriteBytes(arr);
+            arr.Dispose();
+            if (w.HasFailedWrites)
+            {
+                _driver.AbortSend(w);
+                return false;
+            }
+            return _driver.EndSend(w) >= 0;
+        }
+
+        public void SendToHost(byte type, Action<BinaryWriter> write, bool reliable)
+        {
+            if (role != BrawlNetRole.Client) return;
+            SendRaw(_toHost, reliable, Wrap(type, write));
+        }
+
+        public void SendTo(RemotePlayer p, byte type, Action<BinaryWriter> write, bool reliable)
+        {
+            if (role != BrawlNetRole.Host || p == null) return;
+            SendRaw(p.conn, reliable, Wrap(type, write));
+        }
+
+        public void SendToAll(byte type, Action<BinaryWriter> write, bool reliable)
+        {
+            if (role != BrawlNetRole.Host || Players.Count == 0) return;
+            byte[] bytes = Wrap(type, write);
+            foreach (var p in Players) SendRaw(p.conn, reliable, bytes);
         }
     }
 }

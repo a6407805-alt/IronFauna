@@ -199,13 +199,13 @@ namespace IronFauna.Boxing
 
             var i = _boxer.intent;
             i.move = move;
-            if (punch != PunchType.None) { i.punch = punch; _boxer.mashCount++; }   // presses also struggle out of grabs
+            if (punch != PunchType.None) { i.punch = punch; _boxer.mashCount++; _boxer.netLastPunch = punch; _boxer.netPunchSerial++; }   // presses also struggle out of grabs
             i.guard = guard;
             i.sprint = sprint;
             i.grab = grab;
             i.crouch = crouch;
             i.sit = _sitToggle;
-            if (slipDir != 0) { i.slip = slipDir; _boxer.mashCount++; }
+            if (slipDir != 0) { i.slip = slipDir; _boxer.mashCount++; _boxer.netLastSlip = slipDir; _boxer.netSlipSerial++; }
             _boxer.intent = i;
         }
     }

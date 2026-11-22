@@ -561,6 +561,9 @@ namespace IronFauna.Boxing
         [NonSerialized] public float holdExtraHeight, holdExtraReach, forcedSpin;
         /// <summary>Counts button presses from the player (for struggling out of a grab).</summary>
         [NonSerialized] public int mashCount;
+        // online: the last press and a press counter, so a friend's punches/slips reach the host exactly once each
+        [NonSerialized] public PunchType netLastPunch;
+        [NonSerialized] public int netPunchSerial, netLastSlip, netSlipSerial;
 
         // ------------------------------------------------------------------ rope rebound (owner 2026-11-22: "doesn't
         // have to physically be there - run one way, bounce, run back and clothesline them, pretend almost")

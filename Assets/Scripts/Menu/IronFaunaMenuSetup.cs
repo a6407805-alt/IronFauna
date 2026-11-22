@@ -320,18 +320,24 @@ namespace IronFauna.Menu
             SectionLabel(content, "ONLINE");
             _bOnline = OptionRow(content,
                 new[] { "OFFLINE", "HOST GAME", "JOIN GAME" },
-                new[] { "BOTS FILL THE ARENA", "FRIENDS JOIN YOU ON PORT 7777", "CONNECT TO A FRIEND'S IP" },
+                new[] { "BOTS FILL THE ARENA", "FRIENDS JOIN WITH A CODE", "TYPE A FRIEND'S CODE" },
                 76f, i => { _matchConfig.netRole = (BrawlNetRole)i; RefreshBrawlSetup(); });
 
-            // host IP (only for JOIN)
-            var ipRow = MenuUI.NewRect(content, "IpRow");
+            // join code (only for JOIN): the host sees it at the top of their screen once the fight starts
+            var ipRow = MenuUI.NewRect(content, "JoinCodeRow");
             MenuUI.Size(ipRow, 52f);
             _bIpRow = ipRow.gameObject;
-            var ipLbl = MenuUI.Label(ipRow, "HOST IP", 20, IronFaunaPalette.UiTextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var ipLbl = MenuUI.Label(ipRow, "JOIN CODE", 20, IronFaunaPalette.UiTextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Place(ipLbl.rectTransform, Vector2.zero, new Vector2(0.2f, 1f), Vector2.zero, Vector2.zero);
-            _bIp = BuildInputField(ipRow, _matchConfig.hostIp);
+            _bIp = BuildInputField(ipRow, _matchConfig.joinCode);
+            _bIp.characterLimit = 12;
+            _bIp.characterValidation = InputField.CharacterValidation.Alphanumeric;
             MenuUI.Place((RectTransform)_bIp.transform, new Vector2(0.2f, 0f), new Vector2(0.6f, 1f), Vector2.zero, Vector2.zero);
-            _bIp.onValueChanged.AddListener(v => _matchConfig.hostIp = string.IsNullOrWhiteSpace(v) ? "127.0.0.1" : v.Trim());
+            _bIp.onValueChanged.AddListener(v =>
+            {
+                _matchConfig.joinCode = (v ?? "").Trim().ToUpperInvariant();
+                RefreshBrawlSetup();
+            });
 
             _bSummary = MenuUI.Label(content, "", 18, IronFaunaPalette.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Size(_bSummary, 30f);
@@ -430,8 +436,10 @@ namespace IronFauna.Menu
 
             string mode = _matchConfig.mode == BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8P FREE-FOR-ALL";
             string who = _matchConfig.localPlayers == 1 ? "SOLO" : $"{_matchConfig.localPlayers} PLAYERS SPLIT SCREEN";
-            string net = _matchConfig.netRole == BrawlNetRole.Host ? "HOSTING ON :7777"
-                : _matchConfig.netRole == BrawlNetRole.Client ? $"JOINING {_matchConfig.hostIp}:7777" : "OFFLINE";
+            string net = _matchConfig.netRole == BrawlNetRole.Host ? "HOSTING (YOUR JOIN CODE SHOWS IN THE FIGHT)"
+                : _matchConfig.netRole == BrawlNetRole.Client
+                    ? (string.IsNullOrEmpty(_matchConfig.joinCode) ? "TYPE THE HOST'S JOIN CODE" : $"JOINING {_matchConfig.joinCode} (THE HOST PICKS MODE + MAP)")
+                    : "OFFLINE";
             if (_bSummary != null) _bSummary.text = $"{mode}  //  {BrawlTerrain.StageName(stage)}  //  {who}  //  {net}";
         }
     }
