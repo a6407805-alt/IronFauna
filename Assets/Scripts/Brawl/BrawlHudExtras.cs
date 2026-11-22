@@ -69,7 +69,7 @@ namespace IronFauna.Brawl
         // ================================================================= keyboard
         private void BuildKeyboard(Transform root)
         {
-            const float u = 74f, gap = 6f, pad = 16f, header = 34f;
+            const float u = 52f, gap = 4f, pad = 12f, header = 26f;
             const float cols = 8.6f, rows = 4f;
             float w = cols * u + pad * 2f, h = rows * u + pad * 2f + header;
 
@@ -77,7 +77,7 @@ namespace IronFauna.Brawl
             MenuUI.Place(panel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-w - 30f, 14f), new Vector2(-30f, 14f + h));
             var top = MenuUI.Panel(panel.transform, "TopRule", IronFaunaPalette.CyanEnergy);
             MenuUI.Place(top.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -4f), Vector2.zero);
-            var title = MenuUI.Label(panel.transform, "CONTROLS  //  LIVE INPUT", 17, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var title = MenuUI.Label(panel.transform, "CONTROLS  //  LIVE INPUT", 13, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Place(title.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(pad, -header), new Vector2(-pad, -6f));
 
             var area = MenuUI.NewRect(panel.transform, "Keys");
@@ -96,14 +96,14 @@ namespace IronFauna.Brawl
                 var bg = rt.gameObject.AddComponent<Image>();
                 bg.color = IronFaunaPalette.UiButton;
                 var edge = MenuUI.Panel(rt, "Edge", KindColor(kind));
-                MenuUI.Place(edge.rectTransform, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 4f));
+                MenuUI.Place(edge.rectTransform, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 3f));
 
-                var key = MenuUI.Label(rt, label, 26, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+                var key = MenuUI.Label(rt, label, 19, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
                 MenuUI.Place(key.rectTransform, new Vector2(0f, 0.38f), Vector2.one, new Vector2(4f, 0f), new Vector2(-4f, -2f));
                 MenuUI.Fit(key, 10);
-                var act = MenuUI.Label(rt, action, 13, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+                var act = MenuUI.Label(rt, action, 10, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
                 MenuUI.Place(act.rectTransform, Vector2.zero, new Vector2(1f, 0.40f), new Vector2(3f, 5f), new Vector2(-3f, 0f));
-                MenuUI.Fit(act, 8);
+                MenuUI.Fit(act, 7);
                 _keys.Add(new KeyCap { bg = bg, key = key, action = act, kind = kind, held = held });
             }
 
@@ -134,7 +134,7 @@ namespace IronFauna.Brawl
                 () => ms() != null && Mathf.Abs(ms().scroll.ReadValue().y) > 0.01f);
 
             // legend
-            var legend = MenuUI.Label(area, "MOVE    ATTACK    DEFEND / COUNTER    GRAPPLE", 13, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft, FontStyle.Bold);
+            var legend = MenuUI.Label(area, "MOVE    ATTACK    DEFEND / COUNTER    GRAPPLE", 10, IronFaunaPalette.UiTextDim, TextAnchor.LowerLeft, FontStyle.Bold);
             var lrt = legend.rectTransform;
             lrt.anchorMin = lrt.anchorMax = new Vector2(0f, 1f);
             lrt.pivot = new Vector2(0f, 1f);
@@ -164,37 +164,37 @@ namespace IronFauna.Brawl
         private void BuildDolls(Transform root)
         {
             var panel = MenuUI.Panel(root, "DamagePanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.86f));
-            MenuUI.Place(panel.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.30f, 1f), new Vector2(0f, -620f), new Vector2(0f, -330f));
+            MenuUI.Place(panel.rectTransform, new Vector2(0.02f, 1f), new Vector2(0.18f, 1f), new Vector2(0f, -540f), new Vector2(0f, -330f));
             var top = MenuUI.Panel(panel.transform, "TopRule", IronFaunaPalette.UiStatusGood);
             MenuUI.Place(top.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -4f), Vector2.zero);
 
             _myDoll = MakeDoll(panel.transform, "YOU", 0f, 0.5f);
             _targetDoll = MakeDoll(panel.transform, "TARGET", 0.5f, 1f);
 
-            var legend = MenuUI.Label(panel.transform, "", 14, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var legend = MenuUI.Label(panel.transform, "", 11, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
             legend.supportRichText = true;
-            legend.text = $"<color=#{Hex(IronFaunaPalette.UiStatusGood)}>■ GOOD</color>   <color=#{Hex(IronFaunaPalette.UiStatusHurt)}>■ INJURED</color>   " +
-                          $"<color=#{Hex(IronFaunaPalette.UiStatusBad)}>■ BAD</color>   <color=#{Hex(IronFaunaPalette.UiStatusGone)}>■ GONE</color>";
-            MenuUI.Place(legend.rectTransform, Vector2.zero, new Vector2(1f, 0f), new Vector2(8f, 6f), new Vector2(-8f, 32f));
+            legend.text = $"<color=#{Hex(IronFaunaPalette.UiStatusGood)}>■ OK</color>  <color=#{Hex(IronFaunaPalette.UiStatusHurt)}>■ HURT</color>  " +
+                          $"<color=#{Hex(IronFaunaPalette.UiStatusBad)}>■ BAD</color>  <color=#{Hex(IronFaunaPalette.UiStatusGone)}>■ GONE</color>";
+            MenuUI.Place(legend.rectTransform, Vector2.zero, new Vector2(1f, 0f), new Vector2(6f, 4f), new Vector2(-6f, 22f));
         }
 
         private Doll MakeDoll(Transform parent, string title, float x0, float x1)
         {
             var d = new Doll();
             var area = MenuUI.NewRect(parent, "Doll_" + title);
-            MenuUI.Place(area, new Vector2(x0, 0f), new Vector2(x1, 1f), new Vector2(10f, 36f), new Vector2(-10f, -10f));
+            MenuUI.Place(area, new Vector2(x0, 0f), new Vector2(x1, 1f), new Vector2(6f, 26f), new Vector2(-6f, -8f));
             d.root = area.gameObject;
 
-            d.title = MenuUI.Label(area, title, 17, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
-            MenuUI.Place(d.title.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -26f), Vector2.zero);
+            d.title = MenuUI.Label(area, title, 13, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
+            MenuUI.Place(d.title.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -20f), Vector2.zero);
             MenuUI.Fit(d.title, 10);
-            d.hull = MenuUI.Label(area, "", 15, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
-            MenuUI.Place(d.hull.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -48f), new Vector2(0f, -26f));
+            d.hull = MenuUI.Label(area, "", 11, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+            MenuUI.Place(d.hull.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -36f), new Vector2(0f, -20f));
             MenuUI.Fit(d.hull, 9);
 
             // body silhouette inside a fixed-aspect box (on-screen left = the robot's left side)
             var body = MenuUI.NewRect(area, "Body");
-            MenuUI.Place(body, Vector2.zero, Vector2.one, new Vector2(0f, 0f), new Vector2(0f, -52f));
+            MenuUI.Place(body, Vector2.zero, Vector2.one, new Vector2(0f, 0f), new Vector2(0f, -40f));
             var fit = body.gameObject.AddComponent<AspectRatioFitter>();
             fit.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
             fit.aspectRatio = 0.72f;
@@ -213,7 +213,7 @@ namespace IronFauna.Brawl
             var frame = MenuUI.Panel(body, "Frame_" + p, IronFaunaPalette.ShadowSlate);
             MenuUI.Place(frame.rectTransform, new Vector2(x0, y0), new Vector2(x1, y1), Vector2.zero, Vector2.zero);
             var fill = MenuUI.Panel(frame.transform, "Fill", IronFaunaPalette.UiStatusGood);
-            MenuUI.Place(fill.rectTransform, Vector2.zero, Vector2.one, new Vector2(3f, 3f), new Vector2(-3f, -3f));
+            MenuUI.Place(fill.rectTransform, Vector2.zero, Vector2.one, new Vector2(2f, 2f), new Vector2(-2f, -2f));
             d.parts[p] = fill;
         }
 
@@ -241,15 +241,15 @@ namespace IronFauna.Brawl
             if (_bars.TryGetValue(r, out var b) && b.root != null) return b;
             b = new OverheadBar();
             b.root = MenuUI.NewRect(_root, "Overhead");
-            b.root.sizeDelta = new Vector2(170f, 34f);
+            b.root.sizeDelta = new Vector2(120f, 24f);
             b.root.SetAsFirstSibling();   // behind the HUD cards
             var back = MenuUI.Panel(b.root, "Back", IronFaunaPalette.WithAlpha(IronFaunaPalette.ShadowSlate, 0.9f));
-            MenuUI.Place(back.rectTransform, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 12f));
+            MenuUI.Place(back.rectTransform, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 8f));
             b.fillImg = MenuUI.Panel(back.transform, "Fill", IronFaunaPalette.UiStatusGood);
             b.fill = b.fillImg.rectTransform;
-            MenuUI.Place(b.fill, Vector2.zero, Vector2.one, new Vector2(2f, 2f), new Vector2(-2f, -2f));
-            b.name = MenuUI.Label(b.root, "", 14, IronFaunaPalette.UiText, TextAnchor.LowerCenter, FontStyle.Bold);
-            MenuUI.Place(b.name.rectTransform, new Vector2(0f, 0f), Vector2.one, new Vector2(-30f, 14f), new Vector2(30f, 0f));
+            MenuUI.Place(b.fill, Vector2.zero, Vector2.one, new Vector2(1f, 1f), new Vector2(-1f, -1f));
+            b.name = MenuUI.Label(b.root, "", 11, IronFaunaPalette.UiText, TextAnchor.LowerCenter, FontStyle.Bold);
+            MenuUI.Place(b.name.rectTransform, new Vector2(0f, 0f), Vector2.one, new Vector2(-30f, 9f), new Vector2(30f, 0f));
             _bars[r] = b;
             return b;
         }

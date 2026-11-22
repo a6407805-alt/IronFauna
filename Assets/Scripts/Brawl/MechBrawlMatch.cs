@@ -614,20 +614,12 @@ namespace IronFauna.Brawl
             _banner = MenuUI.Label(root, "", 68, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Place(_banner.rectTransform, new Vector2(0.24f, 0.72f), new Vector2(0.76f, 0.86f), Vector2.zero, Vector2.zero);
 
-            // 4. Bottom-Center Framed Controls Ribbon
-            var controlsBar = MenuUI.Panel(root, "ControlsRibbon", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.84f));
-            MenuUI.Place(controlsBar.rectTransform, new Vector2(0.02f, 0f), new Vector2(0.68f, 0f), new Vector2(0f, 14f), new Vector2(0f, 84f));
-            var controlsTop = MenuUI.Panel(controlsBar.transform, "ControlsEdge", IronFaunaPalette.UiButton);
-            MenuUI.Place(controlsTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -2f), Vector2.zero);
-            var help = MenuUI.Label(controlsBar.transform,
-                "TAP SHIFT JUST BEFORE A HIT = PARRY + COUNTER  ·  WHILE HOLDING G: LMB THROW · RMB JOINT-CRANK / TEAR LIMB · SPACE SUPLEX / SLAM · Z/X DRAG ON MAT\nTAB STAGE  ·  F2 SPLIT-SCREEN  ·  F5 RESTART  ·  ESC MENU",
-                16, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
-            MenuUI.Fill(help.rectTransform);
+            // 4. (controls ribbon removed: the live keyboard diagram in BrawlHudExtras shows every control)
 
             // 5. Bottom-Right Framed Martial-Arts Special Selector Card
             var movePanel = MenuUI.Panel(root, "SpecialPanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
             // sits above the live keyboard diagram (bottom-right corner)
-            MenuUI.Place(movePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-698f, 390f), new Vector2(-30f, 580f));
+            MenuUI.Place(movePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-497f, 282f), new Vector2(-30f, 420f));
             var moveStripe = MenuUI.Panel(movePanel.transform, "MoveStripe", IronFaunaPalette.HazardYellow);
             MenuUI.Place(moveStripe.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, 0f));
             var moveTop = MenuUI.Panel(movePanel.transform, "MoveTopRule", IronFaunaPalette.UiSelect);
@@ -718,7 +710,7 @@ namespace IronFauna.Brawl
             string footer = executing && activeGhost.ActiveMove != PunchType.None
                 ? $"<color=#FFC83A>EXECUTING: {MechBoxer.MoveName(activeGhost.ActiveMove)}</color>"
                 : $"<color=#A9D4FF>SCROLL PICK ({i + 1}/{n}) · SPACE THROW</color>";
-            _moveLabel.text = $"<size=20><color=#8592A3>{prev}</color></size>\n<size=36>{curStr}</size>\n<size=20><color=#8592A3>{next}</color></size>\n<size=17>{footer}</size>";
+            _moveLabel.text = $"<size=15><color=#8592A3>{prev}</color></size>\n<size=26>{curStr}</size>\n<size=15><color=#8592A3>{next}</color></size>\n<size=13>{footer}</size>";
         }
 
         private RectTransform Bar(Transform root, string label, Vector2 a0, Vector2 a1, float y, Color color)
