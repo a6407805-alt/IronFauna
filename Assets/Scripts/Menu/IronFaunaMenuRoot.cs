@@ -151,6 +151,12 @@ namespace IronFauna.Menu
             enabled = false;
         }
 
+        public void StartTournamentCampaign()
+        {
+            _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.TournamentCampaign;
+            StartBrawl();
+        }
+
         public void StartCampaign()
         {
             _matchConfig.mode = IronFauna.Brawl.BrawlGameMode.CoopCampaign;
@@ -204,8 +210,9 @@ namespace IronFauna.Menu
 
             var buttons = MenuUI.NewRect(column.transform, "TitleButtons");
             MenuUI.Place(buttons, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(84f, -860f), new Vector2(676f, -445f));
-            MenuUI.VStack(buttons.gameObject, 10f, 0);
+            MenuUI.VStack(buttons.gameObject, 8f, 0);
 
+            AddTitleButton(buttons, "TOURNAMENT CAMPAIGN", StartTournamentCampaign, IronFaunaPalette.CrimsonFront);
             AddTitleButton(buttons, "FIGHT (BRAWL)", StartBrawl);
             AddTitleButton(buttons, "CITY BRAWL (NEO-METRO)", () => StartStage(IronFauna.Brawl.BrawlStageId.NeoMetroCity));
             AddTitleButton(buttons, "FOREST BRAWL (TIMBER!)", () => StartStage(IronFauna.Brawl.BrawlStageId.RedwoodForest));
@@ -235,7 +242,7 @@ namespace IronFauna.Menu
 
         private void CycleMode(int d)
         {
-            int n = 3;
+            int n = 4;
             _matchConfig.mode = (IronFauna.Brawl.BrawlGameMode)((((int)_matchConfig.mode + d) % n + n) % n);
             RefreshTitleSetup();
         }
@@ -264,7 +271,8 @@ namespace IronFauna.Menu
         {
             if (_modeCycler.Value != null)
             {
-                _modeCycler.Value.text = _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.CoopCampaign ? "8P CO-OP CAMPAIGN"
+                _modeCycler.Value.text = _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TournamentCampaign ? "TOURNAMENT CAMPAIGN"
+                    : _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.CoopCampaign ? "8P CO-OP CAMPAIGN"
                     : _matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8P FREE-FOR-ALL";
             }
             if (_stageCycler.Value != null)
@@ -291,10 +299,11 @@ namespace IronFauna.Menu
 #endif
         }
 
-        private static void AddTitleButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
+        private static void AddTitleButton(Transform parent, string label, UnityEngine.Events.UnityAction action, Color? normalOverride = null)
         {
-            var b = MenuUI.CreateButton(parent, label, 26, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
-            MenuUI.Size(b, 58f);
+            Color normal = normalOverride ?? IronFaunaPalette.UiButton;
+            var b = MenuUI.CreateButton(parent, label, 24, normal, IronFaunaPalette.UiSelect, IronFaunaPalette.UiText, action);
+            MenuUI.Size(b, 50f);
         }
 
         // ------------------------------------------------------------------

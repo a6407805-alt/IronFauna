@@ -16,6 +16,7 @@ namespace IronFauna.Brawl
         FreeForAll = 0,
         CoopCampaign = 1,
         TeamBrawl = 2,
+        TournamentCampaign = 3,
     }
 
     [System.Serializable]
@@ -101,6 +102,8 @@ namespace IronFauna.Brawl
         private MechBoxerPlayerInput _input;
         private MechBrawlNet _net;
         private BrawlAnnouncer _announcer;
+        private TournamentState _tournament;
+        private TournamentBracketOverlay _bracketOverlay;
         private float _bannerT, _resetT = -1f, _targetT;
         private bool _roundWon;
         private float _savedFixedDt;
@@ -136,9 +139,42 @@ namespace IronFauna.Brawl
             }
             _announcer = gameObject.AddComponent<BrawlAnnouncer>();
             BuildHud();
-            StartRound();
+            if (config.mode == BrawlGameMode.TournamentCampaign)
+            {
+                _tournament = new TournamentState();
+                _tournament.GenerateNewBracket(_loadout);
+                _bracketOverlay = new TournamentBracketOverlay();
+                _bracketOverlay.Build(transform);
+                ShowTournamentBracket();
+            }
+            else
+            {
+                StartRound();
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+        }
+
+        private void ShowTournamentBracket()
+        {
+            if (_bracketOverlay == null || _tournament == null) return;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            _bracketOverlay.Show(
+                _tournament,
+                Mathf.Clamp(config.localPlayers, 1, 4),
+                onFight: LaunchTournamentBout,
+                onRematch: () => { _tournament.PrepareRematch(); LaunchTournamentBout(); },
+                onNewTournament: () => { _tournament.GenerateNewBracket(_loadout); ShowTournamentBracket(); },
+                onMainMenu: Exit);
+        }
+
+        private void LaunchTournamentBout()
+        {
+            if (_bracketOverlay != null) _bracketOverlay.Hide();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+            StartRound();
         }
 
         // ------------------------------------------------------------------ round & campaign
@@ -159,12 +195,23 @@ namespace IronFauna.Brawl
                 config.campaignAct = Mathf.Clamp(config.campaignAct, 0, CampaignActStages.Length - 1);
                 config.stage = CampaignActStages[config.campaignAct];
             }
+            else if (config.mode == BrawlGameMode.TournamentCampaign && _tournament != null)
+            {
+                config.stage = _tournament.CurrentStage;
+            }
 
             BuildArena(config.stage);
 
             int localCount = Mathf.Clamp(config.localPlayers, 1, 4);
-            int total = Mathf.Clamp(config.totalFighters, Mathf.Max(2, localCount + 1), 8);
             SetupSplitScreenCameras(localCount);
+
+            if (config.mode == BrawlGameMode.TournamentCampaign && _tournament != null)
+            {
+                SpawnTournamentBout(localCount);
+                return;
+            }
+
+            int total = Mathf.Clamp(config.totalFighters, Mathf.Max(2, localCount + 1), 8);
 
             for (int i = 0; i < total; i++)
             {
@@ -326,7 +373,90 @@ namespace IronFauna.Brawl
             }
         }
 
-        private Fighter Spawn(string name, MechLoadout l, Vector3 pos, float yaw, bool player, int localPlayerIdx, int team, bool isBoss, float hpMult, Camera playerCam)
+        private void SpawnTournamentBout(int localCount)
+        {
+            var opp = _tournament.CurrentOpponent;
+            float faceOffRadius = localCount > 1 ? 8.5f : 6.8f;
+
+            // Team 1: Player (and local co-op tag partners if localPlayers > 1)
+            for (int i = 0; i < localCount; i++)
+            {
+                float lat = localCount == 1 ? 0f : Mathf.Lerp(-2.6f, 2.6f, i / (float)(localCount - 1));
+                Vector3 pos = new Vector3(lat, 0f, -faceOffRadius);
+                pos.y = MechBoxer.TryGround(pos + Vector3.up * 25f, out float gy) ? gy : ArenaTop;
+
+                MechLoadout l;
+                string label;
+                if (i == 0)
+                {
+                    l = _loadout.Clone();
+                    label = localCount > 1 ? "P1" : "YOU";
+                }
+                else
+                {
+                    l = MechLoadout.CreatePreset((i * 2) % MechLoadout.PresetCount, out _, out _);
+                    l.paintScheme = (_loadout.paintScheme + i) % IronFaunaPalette.PaintSchemes.Length;
+                    label = $"P{i + 1}";
+                }
+
+                Camera playerCam = i < _playerCams.Count ? _playerCams[i].GetComponent<Camera>() : null;
+                var spawned = Spawn(label, l, pos, 0f, true, i, 1, false, 1f, playerCam);
+                _fighters.Add(spawned);
+                _ragdollList.Add(spawned.ragdoll);
+                if (i < _playerCams.Count)
+                {
+                    _playerCams[i].player = spawned.ragdoll;
+                    _playerCams[i].Snap();
+                }
+            }
+
+            // Team 2: Tournament Rival (plus tag partners if localPlayers > 1)
+            for (int i = 0; i < localCount; i++)
+            {
+                float lat = localCount == 1 ? 0f : Mathf.Lerp(-2.6f, 2.6f, i / (float)(localCount - 1));
+                Vector3 pos = new Vector3(lat, 0f, faceOffRadius);
+                pos.y = MechBoxer.TryGround(pos + Vector3.up * 25f, out float gy) ? gy : ArenaTop;
+
+                MechLoadout rl;
+                string rLabel;
+                bool rBoss = false;
+                float rHp = 1f;
+                float rSkill = 0.6f;
+
+                if (i == 0 && opp != null)
+                {
+                    rl = opp.BuildLoadout(_loadout);
+                    rLabel = opp.isBoss ? $"{opp.callsign} [CHAMP]" : opp.callsign;
+                    rBoss = opp.isBoss;
+                    rHp = opp.hpMult;
+                    rSkill = opp.skill;
+                }
+                else
+                {
+                    int partnerPreset = ((opp != null ? opp.presetIndex : 1) + i + 2) % MechLoadout.PresetCount;
+                    rl = MechLoadout.CreatePreset(partnerPreset, out string pName, out _);
+                    rLabel = pName.Split(' ')[0] + " TAG";
+                    rHp = opp != null ? Mathf.Max(0.9f, opp.hpMult * 0.85f) : 0.95f;
+                    rSkill = opp != null ? Mathf.Clamp(opp.skill - 0.08f, 0.42f, 0.80f) : 0.55f;
+                }
+
+                var rival = Spawn(rLabel, rl, pos, 180f, false, -1, 2, rBoss, rHp, null, rSkill);
+                _fighters.Add(rival);
+                _ragdollList.Add(rival.ragdoll);
+            }
+
+            Retarget();
+            UpdateStageHeader();
+            string oppName = opp != null ? opp.callsign : "RIVAL";
+            string oppStyle = opp != null ? opp.styleTitle : "CONTENDER";
+            Banner($"{_tournament.CurrentRoundName} · VS {oppName}", 2.4f);
+            if (_announcer != null)
+            {
+                _announcer.OnTournamentBoutStart(_tournament.CurrentRoundName, oppName, oppStyle, config.stage, opp != null && opp.isBoss);
+            }
+        }
+
+        private Fighter Spawn(string name, MechLoadout l, Vector3 pos, float yaw, bool player, int localPlayerIdx, int team, bool isBoss, float hpMult, Camera playerCam, float? customAiSkill = null)
         {
             var f = new Fighter { name = name, player = player, localPlayerIndex = localPlayerIdx, team = team, isBoss = isBoss };
             Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
@@ -360,7 +490,9 @@ namespace IronFauna.Brawl
             else
             {
                 var ai = f.ghostGo.AddComponent<MechBoxerAI>();
-                ai.skill = isBoss ? 0.82f : (config.mode == BrawlGameMode.CoopCampaign ? Mathf.Clamp(0.42f + config.campaignAct * 0.1f, 0.4f, 0.85f) : Random.Range(0.42f, 0.72f));
+                ai.skill = customAiSkill.HasValue
+                    ? customAiSkill.Value
+                    : isBoss ? 0.82f : (config.mode == BrawlGameMode.CoopCampaign ? Mathf.Clamp(0.42f + config.campaignAct * 0.1f, 0.4f, 0.85f) : Random.Range(0.42f, 0.72f));
                 ai.edgeHalfSize = IslandRadius * 0.6f;
             }
 
@@ -520,7 +652,9 @@ namespace IronFauna.Brawl
         private void UpdateStageHeader()
         {
             if (_stageHeader == null) return;
-            string modeStr = config.mode == BrawlGameMode.CoopCampaign
+            string modeStr = config.mode == BrawlGameMode.TournamentCampaign && _tournament != null
+                ? $"TOURNAMENT · {_tournament.CurrentRoundName}"
+                : config.mode == BrawlGameMode.CoopCampaign
                 ? CampaignActTitles[Mathf.Clamp(config.campaignAct, 0, CampaignActTitles.Length - 1)]
                 : config.mode == BrawlGameMode.TeamBrawl ? "4v4 SQUAD BRAWL" : "8-PLAYER FREE-FOR-ALL";
             string netStr = config.netRole == BrawlNetRole.Host
@@ -795,6 +929,30 @@ namespace IronFauna.Brawl
             BoxingFeel.Tick(Time.unscaledDeltaTime);
             var kb = Keyboard.current;
             if (kb != null && kb.escapeKey.wasPressedThisFrame) { Exit(); return; }
+
+            if (_bracketOverlay != null && _bracketOverlay.IsVisible)
+            {
+                bool confirm = (kb != null && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame))
+                    || (Gamepad.current != null && Gamepad.current.buttonSouth.wasPressedThisFrame);
+                if (confirm && _tournament != null)
+                {
+                    if (_tournament.tournamentWon)
+                    {
+                        _tournament.GenerateNewBracket(_loadout);
+                        ShowTournamentBracket();
+                    }
+                    else if (_tournament.playerEliminated)
+                    {
+                        _tournament.PrepareRematch();
+                        LaunchTournamentBout();
+                    }
+                    else
+                    {
+                        LaunchTournamentBout();
+                    }
+                }
+                return;
+            }
             if (kb != null && kb.tabKey.wasPressedThisFrame)
             {
                 // Cycle to the next stage anytime with Tab
@@ -972,7 +1130,30 @@ namespace IronFauna.Brawl
 
             if (_resetT < 0f)
             {
-                if (config.mode == BrawlGameMode.CoopCampaign || config.mode == BrawlGameMode.TeamBrawl)
+                if (config.mode == BrawlGameMode.TournamentCampaign && _tournament != null)
+                {
+                    if (aliveEnemies == 0)
+                    {
+                        _roundWon = true;
+                        bool grandFinalWin = _tournament.currentRound >= 2;
+                        string winText = grandFinalWin ? "IRONFAUNA GRAND CHAMPION!" : $"{_tournament.CurrentRoundName} VICTORY!";
+                        Banner(winText, 3.2f);
+                        if (_announcer != null)
+                        {
+                            if (grandFinalWin) _announcer.OnTournamentChampion();
+                            else _announcer.OnMatchEnd(winText);
+                        }
+                        _resetT = 3.6f;
+                    }
+                    else if (aliveAllies == 0)
+                    {
+                        _roundWon = false;
+                        Banner("KNOCKED OUT · BRACKET UPDATE", 3.0f);
+                        if (_announcer != null) _announcer.OnMatchEnd("CHALLENGER ELIMINATED");
+                        _resetT = 3.4f;
+                    }
+                }
+                else if (config.mode == BrawlGameMode.CoopCampaign || config.mode == BrawlGameMode.TeamBrawl)
                 {
                     if (aliveEnemies == 0)
                     {
@@ -1007,6 +1188,12 @@ namespace IronFauna.Brawl
                 if (_resetT <= 0f)
                 {
                     _resetT = -1f;
+                    if (config.mode == BrawlGameMode.TournamentCampaign && _tournament != null)
+                    {
+                        _tournament.RecordPlayerResult(_roundWon);
+                        ShowTournamentBracket();
+                        return;
+                    }
                     if (config.mode == BrawlGameMode.CoopCampaign && _roundWon)
                     {
                         config.campaignAct = (config.campaignAct + 1) % CampaignActStages.Length;

@@ -263,6 +263,24 @@ namespace IronFauna.Brawl
             Announce($"MATCH OVER — {headline}!", 3.8f, 4, 0, 1.0f);
         }
 
+        public void OnTournamentBoutStart(string roundName, string opponentName, string opponentStyle, BrawlStageId stage, bool isBoss)
+        {
+            _firstBloodDone = false;
+            _lastPriority = 0;
+            BoxingSfx.AnnouncerBell();
+            string stageName = BrawlTerrain.StageName(stage);
+            string line = isBoss
+                ? $"{roundName} AT {stageName} — CHALLENGER VERSUS DEFENDING CHAMPION {opponentName} — FIGHT!"
+                : $"{roundName} AT {stageName} — YOU VERSUS {opponentName}, {opponentStyle} — LET'S SCRAP!";
+            Announce(line, 4.2f, 3, 0, 1.0f);
+        }
+
+        public void OnTournamentChampion()
+        {
+            BoxingSfx.AnnouncerBell();
+            Announce("UNBELIEVABLE! WE HAVE A NEW IRONFAUNA GRAND TOURNAMENT CHAMPION!", 4.6f, 5, 0, 1.0f);
+        }
+
         private void Announce(string text, float duration, int priority, int voiceStyle, float hype)
         {
             if (_holdT > 0.2f && priority < _lastPriority) return;
