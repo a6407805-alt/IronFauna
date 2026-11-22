@@ -95,6 +95,7 @@ namespace IronFauna.Brawl
         private Image _staminaFill;
         private Text _staminaValueText;
         private Text _hpValueText, _poiseValueText, _scoreboardTitle;
+        private BrawlHudExtras _hudExtras;
         private readonly Image[] _limbBadgeImgs = new Image[4];
         private readonly Text[] _limbBadgeTexts = new Text[4];
         private float _hpGhostFill = 1f, _poiseSmoothFill = 1f;
@@ -593,17 +594,7 @@ namespace IronFauna.Brawl
             if (stGhost != null) stGhost.gameObject.SetActive(false);
             _staminaFill = _staminaBar != null ? _staminaBar.GetComponent<Image>() : null;
 
-            string[] limbLabels = { "L-ARM", "R-ARM", "L-LEG", "R-LEG" };
-            for (int i = 0; i < 4; i++)
-            {
-                float xMin = 0.03f + i * 0.24f;
-                var pill = MenuUI.Panel(playerCard.transform, "Limb_" + limbLabels[i], IronFaunaPalette.UiSelect);
-                MenuUI.Place(pill.rectTransform, new Vector2(xMin, 1f), new Vector2(xMin + 0.22f, 1f), new Vector2(0f, -258f), new Vector2(0f, -230f));
-                _limbBadgeImgs[i] = pill;
-                var txt = MenuUI.Label(pill.transform, limbLabels[i] + " OK", 14, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
-                MenuUI.Fill(txt.rectTransform);
-                _limbBadgeTexts[i] = txt;
-            }
+            // (limb status now lives in the robot damage outline below the card: BrawlHudExtras)
 
             _postureLabel = MenuUI.Label(playerCard.transform, "", 17, IronFaunaPalette.HazardYellow, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Place(_postureLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(18f, 8f), new Vector2(-12f, 40f));
@@ -625,17 +616,18 @@ namespace IronFauna.Brawl
 
             // 4. Bottom-Center Framed Controls Ribbon
             var controlsBar = MenuUI.Panel(root, "ControlsRibbon", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.84f));
-            MenuUI.Place(controlsBar.rectTransform, new Vector2(0.02f, 0f), new Vector2(0.73f, 0f), new Vector2(0f, 14f), new Vector2(0f, 84f));
+            MenuUI.Place(controlsBar.rectTransform, new Vector2(0.02f, 0f), new Vector2(0.68f, 0f), new Vector2(0f, 14f), new Vector2(0f, 84f));
             var controlsTop = MenuUI.Panel(controlsBar.transform, "ControlsEdge", IronFaunaPalette.UiButton);
             MenuUI.Place(controlsTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -2f), Vector2.zero);
             var help = MenuUI.Label(controlsBar.transform,
-                "WASD MOVE · CTRL SPRINT · SHIFT GUARD (TAP JUST BEFORE A HIT = PARRY) · C DODGE · X CROUCH · Z JIU-JITSU SIT & FLOOR SCOOT · LMB JAB · RMB CROSS · Q HOOK · E UPPERCUT · F/R/V KICKS\nHOLD G GRAB (Z/X DRAG ON MAT · LMB THROW · RMB JOINT-CRANK/TEAR LIMB · SPACE SUPLEX/SLAM) · TAB STAGE · F2 SPLIT-SCREEN · F5 RESTART · ESC MENU",
+                "TAP SHIFT JUST BEFORE A HIT = PARRY + COUNTER  ·  WHILE HOLDING G: LMB THROW · RMB JOINT-CRANK / TEAR LIMB · SPACE SUPLEX / SLAM · Z/X DRAG ON MAT\nTAB STAGE  ·  F2 SPLIT-SCREEN  ·  F5 RESTART  ·  ESC MENU",
                 16, IronFaunaPalette.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Fill(help.rectTransform);
 
             // 5. Bottom-Right Framed Martial-Arts Special Selector Card
             var movePanel = MenuUI.Panel(root, "SpecialPanel", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.88f));
-            MenuUI.Place(movePanel.rectTransform, new Vector2(0.75f, 0f), new Vector2(0.98f, 0f), new Vector2(0f, 14f), new Vector2(0f, 234f));
+            // sits above the live keyboard diagram (bottom-right corner)
+            MenuUI.Place(movePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-698f, 390f), new Vector2(-30f, 580f));
             var moveStripe = MenuUI.Panel(movePanel.transform, "MoveStripe", IronFaunaPalette.HazardYellow);
             MenuUI.Place(moveStripe.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(6f, 0f));
             var moveTop = MenuUI.Panel(movePanel.transform, "MoveTopRule", IronFaunaPalette.UiSelect);
@@ -647,6 +639,10 @@ namespace IronFauna.Brawl
             // 6. Top-Center Ringside Announcer Broadcast Bar
             if (_announcer != null) _announcer.BuildUi(root);
 
+            // 6b. Live keyboard diagram, robot damage outlines (you + target), overhead health bars
+            _hudExtras = new BrawlHudExtras();
+            _hudExtras.Build(root);
+
             // 7. 3D Target Reticle Bracket
             _targetBracket = MenuUI.Label(root, "", 18, IronFaunaPalette.HazardYellow, TextAnchor.MiddleCenter, FontStyle.Bold);
             _targetBracket.rectTransform.sizeDelta = new Vector2(340f, 52f);
@@ -654,6 +650,22 @@ namespace IronFauna.Brawl
         }
 
         private Text _targetBracket;
+
+        private void TickHudExtras()
+        {
+            if (_hudExtras == null) return;
+            MechRagdoll me = null, target = null;
+            if (_fighters.Count > 0 && _fighters[0].ragdoll != null)
+            {
+                me = (_fighters[0].out_ && _playerCams.Count > 0 && _playerCams[0] != null && _playerCams[0].player != null)
+                    ? _playerCams[0].player
+                    : _fighters[0].ragdoll;
+            }
+            if (_playerCams.Count > 0 && _playerCams[0] != null) target = _playerCams[0].target;
+            var others = new List<(MechRagdoll r, string name, int team, bool out_)>(_fighters.Count);
+            foreach (var f in _fighters) others.Add((f.ragdoll, f.name, f.team, f.out_));
+            _hudExtras.Tick(me, target, others, _camera != null ? _camera : Camera.main);
+        }
 
         private RectTransform BarWithGhost(Transform parent, string label, float y, Color color, out RectTransform ghostRt, out Text valueLabel)
         {
@@ -1167,6 +1179,8 @@ namespace IronFauna.Brawl
                     else _targetBracket.enabled = false;
                 }
             }
+
+            TickHudExtras();
 
             if (_resetT < 0f)
             {

@@ -45,6 +45,11 @@ namespace IronFauna.Core
         public static readonly Color UiText            = new Color32(0xDC, 0xE4, 0xEE, 0xFF); // #DCE4EE Primary readout text
         public static readonly Color UiTextDim         = new Color32(0x85, 0x92, 0xA3, 0xFF); // #8592A3 Labels and hints
         public static readonly Color UiAccent          = new Color32(0xA9, 0xD4, 0xFF, 0xFF); // #A9D4FF Header readouts, rules, stat bars
+        // Damage-status colours (HUD robot outline, overhead health bars)
+        public static readonly Color UiStatusGood      = new Color32(0x3F, 0xD4, 0x6B, 0xFF); // #3FD46B Part healthy
+        public static readonly Color UiStatusHurt      = new Color32(0xE6, 0xB8, 0x00, 0xFF); // #E6B800 Part injured (HazardYellow)
+        public static readonly Color UiStatusBad       = new Color32(0xC8, 0x28, 0x2E, 0xFF); // #C8282E Part critical (CrimsonFront)
+        public static readonly Color UiStatusGone      = new Color32(0x5A, 0x60, 0x68, 0xFF); // #5A6068 Part torn off
 
         // Hangar studio (realistic look)
         public static readonly Color SteelBare         = new Color32(0x5C, 0x63, 0x6D, 0xFF); // #5C636D Machined skeleton steel
