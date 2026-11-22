@@ -214,9 +214,6 @@ namespace IronFauna.Menu
 
             AddTitleButton(buttons, "TOURNAMENT CAMPAIGN", StartTournamentCampaign, IronFaunaPalette.CrimsonFront);
             AddTitleButton(buttons, "FIGHT (BRAWL)", StartBrawl);
-            AddTitleButton(buttons, "CITY BRAWL (NEO-METRO)", () => StartStage(IronFauna.Brawl.BrawlStageId.NeoMetroCity));
-            AddTitleButton(buttons, "FOREST BRAWL (TIMBER!)", () => StartStage(IronFauna.Brawl.BrawlStageId.RedwoodForest));
-            AddTitleButton(buttons, "8P CO-OP CAMPAIGN", StartCampaign);
             AddTitleButton(buttons, "GARAGE", ShowGarage);
             AddTitleButton(buttons, "QUIT", Quit);
 
