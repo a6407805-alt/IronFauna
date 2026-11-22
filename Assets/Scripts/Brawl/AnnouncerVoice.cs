@@ -23,7 +23,7 @@ namespace IronFauna.Brawl
     /// </summary>
     public class AnnouncerVoice : MonoBehaviour
     {
-        private const string CacheVersion = "v1";   // bump when the SAPI styling changes so old renders are redone
+        private const string CacheVersion = "v2";   // bump when the SAPI styling changes so old renders are redone
         private const float MaxQueueAge = 2.6f;
         private const float StalePlayRequest = 1.8f;
 
@@ -109,10 +109,13 @@ namespace IronFauna.Brawl
                     CreateNoWindow = true,
                     RedirectStandardInput = true,
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                 };
                 _worker = Process.Start(psi);
                 _worker.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) _rendered.Enqueue(e.Data); };
                 _worker.BeginOutputReadLine();
+                _worker.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) _rendered.Enqueue("STDERR|" + e.Data); };
+                _worker.BeginErrorReadLine();
             }
             catch (Exception ex)
             {
@@ -122,29 +125,36 @@ namespace IronFauna.Brawl
 #endif
         }
 
-        /// <summary>PowerShell: pick a male SAPI voice, then for each "key|sapi-xml" line render key.wav and print "key|path".</summary>
+        /// <summary>
+        /// PowerShell + System.Speech: male adult voice; for each "key|ssml" line render key.tmp.wav (the .wav extension
+        /// matters: the engine writes a proper WAV header), rename it to key.wav and print "key|path", or "ERR|key|message".
+        /// </summary>
         private const string WorkerScript = @"
-$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
 $dir = $args[0]
-$v = New-Object -ComObject SAPI.SpVoice
-foreach ($tok in $v.GetVoices()) { if ($tok.GetAttribute('Gender') -eq 'Male') { $v.Voice = $tok; break } }
-$v.Rate = -1
-$v.Volume = 100
+Add-Type -AssemblyName System.Speech
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::Male, [System.Speech.Synthesis.VoiceAge]::Adult) } catch { }
+$s.Volume = 100
+[Console]::Out.WriteLine('READY|' + $s.Voice.Name)
+[Console]::Out.Flush()
 while (($line = [Console]::In.ReadLine()) -ne $null) {
   $i = $line.IndexOf('|')
   if ($i -lt 1) { continue }
   $key = $line.Substring(0, $i)
-  $xml = $line.Substring($i + 1)
+  $ssml = $line.Substring($i + 1)
   $path = Join-Path $dir ($key + '.wav')
-  $tmp = $path + '.part'
-  $fs = New-Object -ComObject SAPI.SpFileStream
-  $fs.Format.Type = 22
-  $fs.Open($tmp, 3, $false)
-  $v.AudioOutputStream = $fs
-  [void]$v.Speak($xml, 8)
-  $fs.Close()
-  Move-Item -Force $tmp $path
-  [Console]::Out.WriteLine($key + '|' + $path)
+  $tmp = Join-Path $dir ($key + '.tmp.wav')
+  try {
+    $s.SetOutputToWaveFile($tmp)
+    $s.SpeakSsml($ssml)
+    $s.SetOutputToNull()
+    Move-Item -Force $tmp $path
+    [Console]::Out.WriteLine($key + '|' + $path)
+  } catch {
+    try { $s.SetOutputToNull() } catch { }
+    [Console]::Out.WriteLine('ERR|' + $key + '|' + $_.Exception.Message)
+  }
   [Console]::Out.Flush()
 }
 ";
@@ -204,28 +214,29 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             if (_worker == null || _worker.HasExited || !_texts.TryGetValue(key, out string text)) return false;
             try
             {
-                _worker.StandardInput.WriteLine(key + "|" + ToSapiXml(text));
+                _worker.StandardInput.WriteLine(key + "|" + ToSsml(text));
                 _worker.StandardInput.Flush();
             }
             catch { }
             return false;
         }
 
-        /// <summary>Announcer delivery: low pitch, slow, emphasised, with a beat between words ("TRIPLE ... STRIKE!").</summary>
-        private static string ToSapiXml(string text)
+        /// <summary>Announcer delivery (W3C SSML): low, slow, loud, stressed, with a beat between words ("TRIPLE ... STRIKE!").</summary>
+        private static string ToSsml(string text)
         {
-            string safe = text.Replace("&", "and").Replace("<", " ").Replace(">", " ").Replace("|", " ");
+            string safe = text.Replace("&", "and").Replace("<", " ").Replace(">", " ").Replace("|", " ").Replace("\"", " ");
             string[] words = safe.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             var sb = new StringBuilder();
-            sb.Append("<pitch absmiddle=\"-6\"><rate absspeed=\"-2\"><volume level=\"100\">");
+            sb.Append("<speak version=\"1.0\" xmlns=\"http://www.w3.org/2001/10/synthesis\" xml:lang=\"en-US\">");
+            sb.Append("<prosody pitch=\"low\" rate=\"slow\" volume=\"x-loud\">");
             bool shortCall = words.Length <= 3;
             for (int i = 0; i < words.Length; i++)
             {
-                if (i > 0) sb.Append(shortCall ? "<silence msec=\"110\"/>" : " ");
-                if (shortCall || i == words.Length - 1) sb.Append("<emph>").Append(words[i]).Append("</emph>");
+                if (i > 0) sb.Append(shortCall ? "<break time=\"140ms\"/>" : " ");
+                if (shortCall || i == words.Length - 1) sb.Append("<emphasis level=\"strong\">").Append(words[i]).Append("</emphasis>");
                 else sb.Append(words[i]);
             }
-            sb.Append("</volume></rate></pitch>");
+            sb.Append("</prosody></speak>");
             return sb.ToString();
         }
 
@@ -234,9 +245,17 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             using (var req = UnityWebRequestMultimedia.GetAudioClip(new Uri(path).AbsoluteUri, AudioType.WAV))
             {
                 yield return req.SendWebRequest();
-                if (req.result != UnityWebRequest.Result.Success) yield break;
+                if (req.result != UnityWebRequest.Result.Success)
+                {
+                    UnityEngine.Debug.LogWarning($"[IronFauna Announcer] Could not load '{key}' from {path}: {req.error}");
+                    yield break;
+                }
                 var clip = DownloadHandlerAudioClip.GetContent(req);
-                if (clip == null) yield break;
+                if (clip == null || clip.length <= 0.05f)
+                {
+                    UnityEngine.Debug.LogWarning($"[IronFauna Announcer] '{key}' loaded empty from {path}");
+                    yield break;
+                }
                 clip.name = "Announcer_" + key;
                 _clips[key] = clip;
                 if (_wantPlay.TryGetValue(key, out float asked))
@@ -254,7 +273,10 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             {
                 int i = line.IndexOf('|');
                 if (i < 1) continue;
-                StartCoroutine(LoadClip(line.Substring(0, i), line.Substring(i + 1)));
+                string head = line.Substring(0, i), rest = line.Substring(i + 1);
+                if (head == "READY") { UnityEngine.Debug.Log($"[IronFauna Announcer] Voice ready: {rest}"); continue; }
+                if (head == "ERR" || head == "STDERR") { UnityEngine.Debug.LogWarning($"[IronFauna Announcer] Voice render problem: {rest}"); continue; }
+                StartCoroutine(LoadClip(head, rest));
             }
 
             if (_src.isPlaying || _queue.Count == 0) return;
