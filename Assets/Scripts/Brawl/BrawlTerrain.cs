@@ -148,9 +148,9 @@ namespace IronFauna.Brawl
             ground.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = ground.AddComponent<MeshRenderer>();
             mr.sharedMaterial = BrawlStageLook.GroundMaterial(stage, mesh, n, half, top, radius, seed);
-            var groundCol = ground.AddComponent<MeshCollider>();
-            groundCol.sharedMesh = mesh;
-            ActiveGround = groundCol;
+            var groundCollider = ground.AddComponent<MeshCollider>();
+            groundCollider.sharedMesh = mesh;
+            ActiveGround = groundCollider;
 
             // ---------------- boulders and outcrops (static, half buried; omitted on paved Neo-Metro City streets)
             var placed = new List<Vector3>();
