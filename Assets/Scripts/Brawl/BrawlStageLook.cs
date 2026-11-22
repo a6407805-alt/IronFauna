@@ -38,6 +38,7 @@ namespace IronFauna.Brawl
 
         private static Look Get(BrawlStageId stage)
         {
+            if (stage == BrawlStageId.WrestlingRing) stage = BrawlStageId.ScrapyardColosseum;   // ring sits inside the colosseum
             switch (stage)
             {
                 case BrawlStageId.FoundryCrucible:
@@ -163,6 +164,7 @@ namespace IronFauna.Brawl
                         for (int x = Mathf.Max(0, c - half); x < Mathf.Min(W, c + half); x++) skyline[x] = Mathf.Max(skyline[x], top);
                     }
                     break;
+                case BrawlStageId.WrestlingRing:
                 case BrawlStageId.ScrapyardColosseum: // stepped stands all round
                     for (int x = 0; x < W; x++)
                     {
@@ -250,6 +252,16 @@ namespace IronFauna.Brawl
                         c = L(c, rock, n < 0.05f ? 0.4f : 0f) * (0.92f + n * 0.12f);
                         if (island && Mathf.Abs(Mathf.Abs(u - 0.5f) - width * 0.5f) < 0.006f) c = rim;
                         if (stage == BrawlStageId.FoundryCrucible && island && Mathf.Abs(Mathf.Sin(u * 40f + t * 9f)) < 0.04f) c = P.FoundryMolten;
+                        if (stage == BrawlStageId.WrestlingRing)
+                        {
+                            // the ring: canvas trapezoid, crimson apron below it, ropes along the far edge
+                            float ringW = Mathf.Lerp(0.32f, 0.18f, Mathf.InverseLerp(0.15f, 0.62f, t));
+                            bool inRingX = Mathf.Abs(u - 0.5f) < ringW;
+                            if (inRingX && t > 0.22f && t < 0.62f) c = L(P.OffWhitePanel, far, (t - 0.22f) * 0.6f);
+                            else if (inRingX && t > 0.12f && t <= 0.22f) c = P.MaroonRear;
+                            if (inRingX && (Mathf.Abs(t - 0.66f) < 0.006f || Mathf.Abs(t - 0.70f) < 0.006f || Mathf.Abs(t - 0.74f) < 0.006f)) c = P.CrimsonFront;
+                            if (Mathf.Abs(Mathf.Abs(u - 0.5f) - ringW) < 0.005f && t > 0.12f && t < 0.78f) c = P.DarkIron;   // corner posts
+                        }
                         if (stage == BrawlStageId.OrbitalDish && island && Mathf.Abs(Mathf.Sin(((u - 0.5f) / Mathf.Max(0.05f, width)) * 18f)) < 0.05f) c = P.CyanEnergy * 0.8f;
                     }
                     c.a = 1f;
@@ -287,6 +299,7 @@ namespace IronFauna.Brawl
         /// <summary>Bakes the stage ground material from the terrain mesh (an (n+1)² grid spanning ±half, uv 0..1).</summary>
         public static Material GroundMaterial(BrawlStageId stage, Mesh ground, int n, float half, float top, float radius, int seed)
         {
+            if (stage == BrawlStageId.WrestlingRing) stage = BrawlStageId.ScrapyardColosseum;   // arena floor round the ring
             var look = Get(stage);
             Vector3[] v = ground.vertices;
             Vector3[] nm = ground.normals;
@@ -866,6 +879,13 @@ namespace IronFauna.Brawl
                     CloudPuffs(root, top - 28.5f, rng);
                     FeedTripod(root, top, radius);
                     Masts(root, top, radius, rng);
+                    break;
+                case BrawlStageId.WrestlingRing:
+                    // the ring (BrawlTerrain.BuildRing) in the colosseum: stands and floodlights, no junk piles
+                    Floor(root, top - 28f, IronFaunaMaterials.GetTerrain(P.ScrapOil));
+                    MountainRing(root, top, 120f, 240f, 40f, 10f, 34f, false, P.Lerp(P.ScrapyardSand, P.ScrapSkyHorizon, 0.3f), rng);
+                    Colosseum(root, top, radius);
+                    Floodlights(root, top, radius);
                     break;
                 case BrawlStageId.ScrapyardColosseum:
                     Floor(root, top - 28f, IronFaunaMaterials.GetTerrain(P.ScrapOil));

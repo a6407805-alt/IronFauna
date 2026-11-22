@@ -192,6 +192,9 @@ namespace IronFauna.Brawl
                     case BrawlStageId.ScrapyardColosseum:
                         line = "WELCOME TO THE SCRAPYARD COLOSSEUM — NO MERCY!";
                         break;
+                    case BrawlStageId.WrestlingRing:
+                        line = "LIVE FROM THE SQUARED CIRCLE — RING THE BELL!";
+                        break;
                     default:
                         line = "8 MECHS ENTER BASALT MESA — TEAR THEM APART!";
                         break;

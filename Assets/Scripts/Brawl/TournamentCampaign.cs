@@ -82,7 +82,7 @@ namespace IronFauna.Brawl
             BrawlStageId.GlacierTrench,
             BrawlStageId.FoundryCrucible,
             BrawlStageId.ScrapyardColosseum,
-            BrawlStageId.OrbitalDish,          // Grand Master
+            BrawlStageId.WrestlingRing,        // Grand Master: the title fight in the ring
         };
 
         public readonly TournamentMatch[] rounds = new TournamentMatch[TotalRounds];

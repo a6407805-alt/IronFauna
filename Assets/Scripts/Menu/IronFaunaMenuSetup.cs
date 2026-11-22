@@ -42,7 +42,7 @@ namespace IronFauna.Menu
 
         private static readonly BrawlStageId[] MapOrder =
         {
-            BrawlStageId.BasaltMesa, BrawlStageId.ScrapyardColosseum, BrawlStageId.FoundryCrucible, BrawlStageId.GlacierTrench,
+            BrawlStageId.WrestlingRing, BrawlStageId.BasaltMesa, BrawlStageId.ScrapyardColosseum, BrawlStageId.FoundryCrucible, BrawlStageId.GlacierTrench,
             BrawlStageId.OrbitalDish, BrawlStageId.NeoMetroCity, BrawlStageId.RedwoodForest,
         };
 
@@ -55,6 +55,7 @@ namespace IronFauna.Menu
                 case BrawlStageId.ScrapyardColosseum: return "A JUNK-BUILT ARENA RINGED BY STANDS. TYRE STACKS AND CAR HULKS FOR COVER.";
                 case BrawlStageId.GlacierTrench: return "SLICK ICE BETWEEN FROZEN SPIRES UNDER THE AURORA. MIND THE RIDGE.";
                 case BrawlStageId.NeoMetroCity: return "NEON STREETS AT NIGHT. SMASH THROUGH BUILDINGS AND PARKED CARS.";
+                case BrawlStageId.WrestlingRing: return "A REAL WRESTLING RING IN THE COLOSSEUM. HIT THE ROPES (ROPE REBOUND) AND TAKE IT OUTSIDE.";
                 case BrawlStageId.RedwoodForest: return "GIANT REDWOODS - KNOCK ONE DOWN AND WATCH IT FALL ON SOMEONE.";
                 default: return "A WIND-SWEPT BASALT PLATEAU WITH ROCK SPIRES. THE CLASSIC ARENA.";
             }

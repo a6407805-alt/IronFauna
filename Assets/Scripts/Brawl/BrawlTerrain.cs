@@ -14,6 +14,7 @@ namespace IronFauna.Brawl
         GlacierTrench = 4,
         NeoMetroCity = 5,
         RedwoodForest = 6,
+        WrestlingRing = 7,
     }
 
     /// <summary>
@@ -24,7 +25,7 @@ namespace IronFauna.Brawl
     /// </summary>
     public static class BrawlTerrain
     {
-        public const int StageCount = 7;
+        public const int StageCount = 8;
 
         public static string StageName(BrawlStageId stage)
         {
@@ -36,6 +37,7 @@ namespace IronFauna.Brawl
                 case BrawlStageId.GlacierTrench: return "GLACIER TRENCH";
                 case BrawlStageId.NeoMetroCity: return "NEO-METRO CITY";
                 case BrawlStageId.RedwoodForest: return "REDWOOD TIMBERLAND";
+                case BrawlStageId.WrestlingRing: return "THE SQUARED CIRCLE";
                 default: return "BASALT MESA";
             }
         }
@@ -84,6 +86,13 @@ namespace IronFauna.Brawl
                     rockColor = IronFaunaPalette.TerrainRock;
                     rimColor = IronFaunaPalette.ForestBark;
                     skyColor = IronFaunaPalette.ForestSky;
+                    sunColor = IronFaunaPalette.SunWarm;
+                    break;
+                case BrawlStageId.WrestlingRing:
+                    groundColor = IronFaunaPalette.DarkIron;
+                    rockColor = IronFaunaPalette.GunmetalFrame;
+                    rimColor = IronFaunaPalette.ShadowSlate;
+                    skyColor = IronFaunaPalette.ScrapyardSky;
                     sunColor = IronFaunaPalette.SunWarm;
                     break;
                 default:
@@ -143,7 +152,8 @@ namespace IronFauna.Brawl
 
             // ---------------- boulders and outcrops (static, half buried; omitted on paved Neo-Metro City streets)
             var placed = new List<Vector3>();
-            int boulderCount = stage == BrawlStageId.NeoMetroCity ? 0 : stage == BrawlStageId.OrbitalDish ? 8 : 16;
+            if (stage == BrawlStageId.WrestlingRing) BuildRing(root, top);
+            int boulderCount = stage == BrawlStageId.NeoMetroCity || stage == BrawlStageId.WrestlingRing ? 0 : stage == BrawlStageId.OrbitalDish ? 8 : 16;
             for (int k = 0; k < boulderCount; k++)
             {
                 float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
@@ -183,6 +193,7 @@ namespace IronFauna.Brawl
                 PopulateCityDestructibles(arena, rng);
                 return;
             }
+            if (stage == BrawlStageId.WrestlingRing) return;   // a clean ring: nothing to smash but each other
             if (stage == BrawlStageId.RedwoodForest)
             {
                 PopulateForestDestructibles(arena, rng);
@@ -357,6 +368,88 @@ namespace IronFauna.Brawl
         }
 
         /// <summary>Ground height of the island at (x, z) for the given stage.</summary>
+        /// <summary>Wrestling ring: half-size of the square canvas and how high it stands above the arena floor (m).</summary>
+        public const float RingHalf = 11f, RingHeight = 1.4f;
+
+        /// <summary>
+        /// The ring itself: canvas, apron skirt, four corner posts with padded turnbuckles and three rows of ropes.
+        /// The ropes are look-only (no colliders): the Rope Rebound special just runs out and bounces back.
+        /// </summary>
+        private static void BuildRing(Transform root, float top)
+        {
+            var ring = new GameObject("WrestlingRing").transform;
+            ring.SetParent(root, false);
+            Material canvas = IronFaunaMaterials.Get(IronFaunaPalette.OffWhitePanel, false);
+            Material apron = IronFaunaMaterials.Get(IronFaunaPalette.MaroonRear, false);
+            Material post = IronFaunaMaterials.Get(IronFaunaPalette.DarkIron, false);
+            Material pad = IronFaunaMaterials.Get(IronFaunaPalette.CrimsonFront, false);
+            Material[] ropes =
+            {
+                IronFaunaMaterials.Get(IronFaunaPalette.CrimsonFront, false),
+                IronFaunaMaterials.Get(IronFaunaPalette.OffWhitePanel, false),
+                IronFaunaMaterials.Get(IronFaunaPalette.CyanEnergy, true),
+            };
+
+            GameObject Box(string name, Vector3 pos, Vector3 size, Material m, bool collider)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = name;
+                go.transform.SetParent(ring, false);
+                go.transform.localPosition = pos;
+                go.transform.localScale = size;
+                go.GetComponent<MeshRenderer>().sharedMaterial = m;
+                if (!collider) Object.DestroyImmediate(go.GetComponent<Collider>());   // immediate: spawns raycast the ground right after building
+                return go;
+            }
+
+            float h = RingHalf;
+            // canvas (slightly proud of the terrain so it reads cleanly) and the logo-coloured centre square
+            Box("Canvas", new Vector3(0f, top + 0.04f, 0f), new Vector3(h * 2f + 0.4f, 0.1f, h * 2f + 0.4f), canvas, true);
+            Box("CentreMark", new Vector3(0f, top + 0.095f, 0f), new Vector3(5f, 0.01f, 5f), pad, false);
+            // apron skirt down to the floor on all four sides
+            float skirtY = top - RingHeight * 0.5f;
+            Box("ApronN", new Vector3(0f, skirtY, h + 0.2f), new Vector3(h * 2f + 0.4f, RingHeight, 0.12f), apron, false);
+            Box("ApronS", new Vector3(0f, skirtY, -h - 0.2f), new Vector3(h * 2f + 0.4f, RingHeight, 0.12f), apron, false);
+            Box("ApronE", new Vector3(h + 0.2f, skirtY, 0f), new Vector3(0.12f, RingHeight, h * 2f + 0.4f), apron, false);
+            Box("ApronW", new Vector3(-h - 0.2f, skirtY, 0f), new Vector3(0.12f, RingHeight, h * 2f + 0.4f), apron, false);
+
+            // corner posts + turnbuckle pads
+            const float postH = 2.6f;
+            var corners = new[] { new Vector3(h, 0f, h), new Vector3(-h, 0f, h), new Vector3(-h, 0f, -h), new Vector3(h, 0f, -h) };
+            foreach (var c in corners)
+            {
+                Box("Post", new Vector3(c.x, top + postH * 0.5f, c.z), new Vector3(0.35f, postH, 0.35f), post, true);
+                for (int k = 0; k < 3; k++)
+                    Box("Turnbuckle", new Vector3(c.x * 0.985f, top + 0.8f + k * 0.62f, c.z * 0.985f), new Vector3(0.5f, 0.32f, 0.5f), pad, false);
+            }
+            // three rows of ropes between the posts (visual only)
+            for (int k = 0; k < 3; k++)
+            {
+                float y = top + 0.8f + k * 0.62f;
+                var m = ropes[k];
+                Box("RopeN" + k, new Vector3(0f, y, h), new Vector3(h * 2f, 0.07f, 0.07f), m, false);
+                Box("RopeS" + k, new Vector3(0f, y, -h), new Vector3(h * 2f, 0.07f, 0.07f), m, false);
+                Box("RopeE" + k, new Vector3(h, y, 0f), new Vector3(0.07f, 0.07f, h * 2f), m, false);
+                Box("RopeW" + k, new Vector3(-h, y, 0f), new Vector3(0.07f, 0.07f, h * 2f), m, false);
+            }
+            // ring steps at two corners
+            Box("StepsA", new Vector3(h + 1.0f, top - RingHeight + 0.45f, h - 1.2f), new Vector3(1.4f, 0.9f, 1.4f), post, true);
+            Box("StepsB", new Vector3(-h - 1.0f, top - RingHeight + 0.45f, -h + 1.2f), new Vector3(1.4f, 0.9f, 1.4f), post, true);
+
+            // overhead ring lights
+            var lightGo = new GameObject("RingLight");
+            lightGo.transform.SetParent(ring, false);
+            lightGo.transform.localPosition = new Vector3(0f, top + 16f, 0f);
+            lightGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            var spot = lightGo.AddComponent<Light>();
+            spot.type = LightType.Spot;
+            spot.spotAngle = 85f;
+            spot.range = 40f;
+            spot.intensity = 6f;
+            spot.color = IronFaunaPalette.KeyLightWarm;
+            spot.shadows = LightShadows.Soft;
+        }
+
         public static float Height(float x, float z, float top, float radius, float ox = 0f, float oz = 0f, BrawlStageId stage = BrawlStageId.BasaltMesa)
         {
             float r = Mathf.Sqrt(x * x + z * z) / radius;
@@ -405,6 +498,13 @@ namespace IronFauna.Brawl
                     // Flat urban street grid with slightly raised city block sidewalks
                     bool avenue = Mathf.Abs(x) < 6.5f || Mathf.Abs(z) < 6.5f;
                     h = (avenue ? 0f : 0.35f) + fbm * 0.15f;
+                    break;
+                }
+                case BrawlStageId.WrestlingRing:
+                {
+                    // Raised square ring in the middle of a flat arena floor (owner 2026-11-22: "a boxing ring map")
+                    bool inRing = Mathf.Abs(x) <= RingHalf && Mathf.Abs(z) <= RingHalf;
+                    h = inRing ? 0f : -RingHeight;
                     break;
                 }
                 case BrawlStageId.RedwoodForest:

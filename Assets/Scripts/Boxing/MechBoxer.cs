@@ -16,6 +16,7 @@ namespace IronFauna.Boxing
         DoubleLegTakedown, FlyingScissor, Upkick, ClinchKnee,
         // WWE-style wrestling strikes (owner 2026-11-22)
         Spear, RunningDropkick, Clothesline, DivingSplash, DivingElbowDrop,
+        RopeRebound,
     }
 
     /// <summary>
@@ -319,6 +320,7 @@ namespace IronFauna.Boxing
             Specs[PunchType.DivingSplash].unblockable = true;
             Specs[PunchType.RunningDropkick].guardBreak = 2.2f;
             Specs[PunchType.Clothesline].guardBreak = 2.0f;
+            Specs[PunchType.RopeRebound].guardBreak = 2.4f;
             Specs[PunchType.DivingElbowDrop].guardBreak = 1.8f;
         }
 
@@ -505,6 +507,13 @@ namespace IronFauna.Boxing
                 twist = 0f, load = 0f, lean = 72f, roll = 0f, dip = 0.45f, lunge = 1.4f, rise = 1.6f, lungeImpulse = 9f,
                 damage = 24f, knock = 4f, stop = 0.2f, shake = 1.1f, aimDrop = 2.6f,
             },
+            [PunchType.RopeRebound] = new PunchSpec
+            {
+                type = PunchType.RopeRebound, name = "ROPE REBOUND CLOTHESLINE", lead = true, sweep = true, windup = 0.28f, strike = 0.26f, hold = 0.14f, recover = 0.56f,
+                twist = 85f, load = -20f, lean = 16f, roll = -6f, dip = 0.1f, lunge = 1.4f, lungeImpulse = 15f,
+                damage = 18f, knock = 6f, stop = 0.17f, shake = 0.95f,
+                pull = new Vector3(-0.6f, 0.15f, -0.3f), arc = new Vector3(2.2f, 0.4f, -0.4f), elbow = new Vector3(0f, -1f, 0f),
+            },
             [PunchType.DivingElbowDrop] = new PunchSpec
             {
                 type = PunchType.DivingElbowDrop, name = "DIVING ELBOW DROP", lead = false, windup = 0.34f, strike = 0.26f, hold = 0.16f, recover = 0.75f,
@@ -523,6 +532,7 @@ namespace IronFauna.Boxing
             PunchType.CapoeiraSweep, PunchType.FlyingKnee, PunchType.ClinchKnee, PunchType.DoubleLegTakedown,
             PunchType.FlyingScissor, PunchType.Upkick, PunchType.Headbutt, PunchType.ShoulderCharge,
             PunchType.Spear, PunchType.RunningDropkick, PunchType.Clothesline, PunchType.DivingSplash, PunchType.DivingElbowDrop,
+            PunchType.RopeRebound,
         };
 
         public static string MoveName(PunchType t) => Specs.TryGetValue(t, out var s) ? s.name : "";
@@ -551,6 +561,35 @@ namespace IronFauna.Boxing
         [NonSerialized] public float holdExtraHeight, holdExtraReach, forcedSpin;
         /// <summary>Counts button presses from the player (for struggling out of a grab).</summary>
         [NonSerialized] public int mashCount;
+
+        // ------------------------------------------------------------------ rope rebound (owner 2026-11-22: "doesn't
+        // have to physically be there - run one way, bounce, run back and clothesline them, pretend almost")
+        private float _reboundT = -1f;
+        private Vector3 _reboundDir;
+        private const float ReboundOut = 0.55f, ReboundBounce = 0.12f, ReboundBackMax = 0.9f;
+        public bool Rebounding => _reboundT >= 0f;
+
+        /// <summary>Sprint out, sag into the ropes, spring back toward the opponent and throw a clothesline when close.</summary>
+        private Vector3 TickRebound(float dt, Vector3 oppFwd, float dist)
+        {
+            if (IsKO || suppressed || holding || _stagger > 0.05f || LegsLeft < 2) { _reboundT = -1f; return Vector3.zero; }
+            _reboundT += dt;
+            _fight = 0f;   // face the run
+            if (_reboundT < ReboundOut) return _reboundDir * sprintSpeed * 1.05f;
+            if (_reboundT < ReboundOut + ReboundBounce)
+            {
+                // hit the ropes: a jolt backward as they give, then the spring
+                _joltVel += new Vector3(0f, -0.25f, -1.6f) * dt * 20f;
+                return Vector3.zero;
+            }
+            Vector3 back = opponent != null && !opponent.IsKO ? oppFwd : -_reboundDir;
+            if (dist < 3.4f || _reboundT > ReboundOut + ReboundBounce + ReboundBackMax)
+            {
+                _reboundT = -1f;
+                StartPunch(Specs[PunchType.RopeRebound]);
+            }
+            return back * sprintSpeed * 1.3f;
+        }
 
         /// <summary>Moves the ghost (ring-out recovery) and stops its momentum.</summary>
         public void Teleport(Vector3 p)
@@ -804,6 +843,7 @@ namespace IronFauna.Boxing
             // backing off while squared up is slower than stepping in
             if (_fight > 0.5f && Vector3.Dot(wish, oppFwd) < 0f) wish *= 0.85f;
             Vector3 want = wish * top * slow;
+            if (_reboundT >= 0f) want = TickRebound(dt, oppFwd, dist);
             float rate = want.sqrMagnitude > _vel.sqrMagnitude ? acceleration : braking;
             if (IsKO) rate = 3f;
             _vel = Vector3.MoveTowards(_vel, want, rate * dt);
@@ -895,7 +935,17 @@ namespace IronFauna.Boxing
                 PunchType chosen = _buffer;
                 // From Jiu-Jitsu floor sit, kicking throws an Upkick or Floor Sweep, and punching from crouch can shoot a takedown
                 if (_seatedBlend > 0.5f && (chosen == PunchType.FrontKick || chosen == PunchType.Roundhouse)) chosen = PunchType.Upkick;
-                StartPunch(Specs[chosen]);
+                if (chosen == PunchType.RopeRebound)
+                {
+                    if (_reboundT < 0f && LegsLeft == 2 && !holding)
+                    {
+                        // run out to the (pretend) ropes, away from the opponent
+                        SpendStamina(Specs[PunchType.RopeRebound].staminaCost * 0.5f);
+                        _reboundT = 0f;
+                        _reboundDir = opponent != null && !opponent.IsKO ? -oppFwd : -transform.forward;
+                    }
+                }
+                else StartPunch(Specs[chosen]);
                 _buffer = PunchType.None;
             }
         }
