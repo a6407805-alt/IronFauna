@@ -33,6 +33,14 @@ namespace IronFauna.Brawl
         private int _myKoTotal;
         private readonly Dictionary<string, float> _keyCooldown = new Dictionary<string, float>();
 
+        private static readonly string[] HeavyHitLines =
+        {
+            "CRUSHING HAYMAKER CONNECTS!",
+            "HEAVY METAL IMPACT — ARMOR CRACKING!",
+            "BRUTAL STRIKE ROCKS THE CHASSIS!",
+            "SPARKS FLY ON A CLEAN COUNTER!",
+        };
+
         public const float ComboWindow = 2.2f;
         public const float MultiKoWindow = 5f;
 
