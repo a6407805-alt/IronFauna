@@ -126,9 +126,12 @@ namespace IronFauna.Menu
         public static AutoFitText Fit(Text text, int minSize = 10, float fill = 0.92f)
         {
             var fit = text.GetComponent<AutoFitText>();
+            // Read the authored size BEFORE adding the component: AddComponent runs OnEnable -> Fit() at once,
+            // against the label's not-yet-laid-out placeholder rect, which would shrink the font first.
+            int authored = fit != null ? fit.maxSize : text.fontSize;
             if (fit == null) fit = text.gameObject.AddComponent<AutoFitText>();
-            fit.maxSize = text.fontSize;
-            fit.minSize = Mathf.Min(minSize, text.fontSize);
+            fit.maxSize = authored;
+            fit.minSize = Mathf.Min(minSize, authored);
             fit.fill = fill;
             fit.Fit();
             return fit;
