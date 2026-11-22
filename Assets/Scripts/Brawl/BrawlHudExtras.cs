@@ -25,7 +25,12 @@ namespace IronFauna.Brawl
             public KeyKind kind;
             public System.Func<bool> held;
             public float flash;   // keeps a quick tap visible for a moment
+            public string normalAction;
+            public string grappleAction;   // label while you are holding a robot (null = unchanged)
         }
+
+        private Text _kbTitle;
+        private bool _wasGrappling;
 
         private readonly List<KeyCap> _keys = new List<KeyCap>();
 
@@ -80,8 +85,11 @@ namespace IronFauna.Brawl
             MenuUI.Place(panel.rectTransform, Vector2.zero, Vector2.zero, new Vector2(30f, 14f), new Vector2(30f + w, 14f + h));   // bottom-left
             var top = MenuUI.Panel(panel.transform, "TopRule", IronFaunaPalette.CyanEnergy);
             MenuUI.Place(top.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -4f), Vector2.zero);
-            var title = MenuUI.Label(panel.transform, "CONTROLS  //  LIVE INPUT", 13, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var title = MenuUI.Label(panel.transform, NormalTitle, 13, IronFaunaPalette.CyanEnergy, TextAnchor.MiddleLeft, FontStyle.Bold);
             MenuUI.Place(title.rectTransform, new Vector2(0f, 1f), Vector2.one, new Vector2(pad, -header), new Vector2(-pad, -6f));
+            title.supportRichText = true;
+            MenuUI.Fit(title, 8, 0.98f);
+            _kbTitle = title;
 
             var area = MenuUI.NewRect(panel.transform, "Keys");
             MenuUI.Place(area, Vector2.zero, Vector2.one, new Vector2(pad, pad), new Vector2(-pad, -header - 4f));
@@ -89,7 +97,7 @@ namespace IronFauna.Brawl
             // (label, action, x, row, width, height, kind, held)
             var kb = (System.Func<Keyboard>)(() => Keyboard.current);
             var ms = (System.Func<Mouse>)(() => Mouse.current);
-            void K(string label, string action, float x, float row, float wu, float hu, KeyKind kind, System.Func<bool> held)
+            void K(string label, string action, float x, float row, float wu, float hu, KeyKind kind, System.Func<bool> held, string grappleAction = null)
             {
                 var rt = MenuUI.NewRect(area, "Key_" + label);
                 rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
@@ -107,7 +115,7 @@ namespace IronFauna.Brawl
                 var act = MenuUI.Label(rt, action, 10, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
                 MenuUI.Place(act.rectTransform, Vector2.zero, new Vector2(1f, 0.40f), new Vector2(3f, 5f), new Vector2(-3f, 0f));
                 MenuUI.Fit(act, 7);
-                _keys.Add(new KeyCap { bg = bg, key = key, action = act, kind = kind, held = held });
+                _keys.Add(new KeyCap { bg = bg, key = key, action = act, kind = kind, held = held, normalAction = action, grappleAction = grappleAction });
             }
 
             // row 0
@@ -120,19 +128,19 @@ namespace IronFauna.Brawl
             K("S", "BACK", 2.25f, 1f, 1f, 1f, KeyKind.Move, () => kb() != null && kb().sKey.isPressed);
             K("D", "RIGHT", 3.25f, 1f, 1f, 1f, KeyKind.Move, () => kb() != null && kb().dKey.isPressed);
             K("F", "FRONT KICK", 4.25f, 1f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().fKey.isPressed);
-            K("G", "GRAB", 5.25f, 1f, 1f, 1f, KeyKind.Grapple, () => kb() != null && kb().gKey.isPressed);
+            K("G", "GRAB (HOLD)", 5.25f, 1f, 1.35f, 1f, KeyKind.Grapple, () => kb() != null && kb().gKey.isPressed, "LET GO = THROW");
             // row 2
             K("SHIFT", "GUARD / PARRY", 0f, 2f, 1.75f, 1f, KeyKind.Defend, () => kb() != null && kb().leftShiftKey.isPressed);
-            K("Z", "FLOOR SIT", 1.75f, 2f, 1f, 1f, KeyKind.Utility, () => kb() != null && kb().zKey.isPressed);
-            K("X", "CROUCH", 2.75f, 2f, 1f, 1f, KeyKind.Defend, () => kb() != null && kb().xKey.isPressed);
+            K("Z", "FLOOR SIT", 1.75f, 2f, 1f, 1f, KeyKind.Utility, () => kb() != null && kb().zKey.isPressed, "DRAG ON MAT");
+            K("X", "CROUCH", 2.75f, 2f, 1f, 1f, KeyKind.Defend, () => kb() != null && kb().xKey.isPressed, "SUPLEX STANCE");
             K("C", "DODGE", 3.75f, 2f, 1f, 1f, KeyKind.Defend, () => kb() != null && kb().cKey.isPressed);
             K("V", "LOW KICK", 4.75f, 2f, 1f, 1f, KeyKind.Attack, () => kb() != null && kb().vKey.isPressed);
             // row 3
             K("CTRL", "SPRINT", 0f, 3f, 1.5f, 1f, KeyKind.Move, () => kb() != null && kb().leftCtrlKey.isPressed);
-            K("SPACE", "SPECIAL MOVE", 2f, 3f, 3.75f, 1f, KeyKind.Attack, () => kb() != null && kb().spaceKey.isPressed);
+            K("SPACE", "SPECIAL MOVE", 2f, 3f, 3.75f, 1f, KeyKind.Attack, () => kb() != null && kb().spaceKey.isPressed, "SLAM  (CROUCHED = SUPLEX)");
             // mouse
-            K("LMB", "JAB", 6.6f, 0f, 1f, 1.5f, KeyKind.Attack, () => ms() != null && ms().leftButton.isPressed);
-            K("RMB", "CROSS", 7.6f, 0f, 1f, 1.5f, KeyKind.Attack, () => ms() != null && ms().rightButton.isPressed);
+            K("LMB", "JAB", 6.6f, 0f, 1f, 1.5f, KeyKind.Attack, () => ms() != null && ms().leftButton.isPressed, "THROW");
+            K("RMB", "CROSS", 7.6f, 0f, 1f, 1.5f, KeyKind.Attack, () => ms() != null && ms().rightButton.isPressed, "TEAR LIMB");
             K("WHEEL", "PICK SPECIAL", 6.6f, 1.5f, 2f, 0.9f, KeyKind.Utility,
                 () => ms() != null && Mathf.Abs(ms().scroll.ReadValue().y) > 0.01f);
 
@@ -150,6 +158,11 @@ namespace IronFauna.Brawl
         }
 
         private static string Hex(Color c) => ColorUtility.ToHtmlStringRGB(c);
+
+        private static string NormalTitle =>
+            $"CONTROLS  //  <color=#{Hex(IronFaunaPalette.CrimsonFront)}>HOLD G NEAR A ROBOT TO GRAB IT</color>";
+        private static string GrappleTitle =>
+            $"<color=#{Hex(IronFaunaPalette.CrimsonFront)}>GRAPPLING!</color>  LMB THROW · RMB TEAR LIMB · SPACE SLAM · LET GO OF G = THROW";
 
         private static Color KindColor(KeyKind k)
         {
@@ -272,6 +285,16 @@ namespace IronFauna.Brawl
         public void Tick(MechRagdoll me, MechRagdoll target, IEnumerable<(MechRagdoll r, string name, int team, bool out_)> others, Camera cam)
         {
             float dt = Time.unscaledDeltaTime;
+            bool grappling = me != null && me.IsHolding;
+            if (grappling != _wasGrappling)
+            {
+                _wasGrappling = grappling;
+                if (_kbTitle != null) _kbTitle.text = grappling ? GrappleTitle : NormalTitle;
+                foreach (var k in _keys)
+                {
+                    if (k.grappleAction != null) k.action.text = grappling ? k.grappleAction : k.normalAction;
+                }
+            }
             foreach (var k in _keys)
             {
                 bool down = k.held != null && k.held();

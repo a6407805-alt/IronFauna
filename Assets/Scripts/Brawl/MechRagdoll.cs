@@ -238,6 +238,11 @@ namespace IronFauna.Brawl
             var s = new Segment { name = name, phys = phys, target = target, parent = parent, limb = limb, striker = striker, leadHand = lead, spring = spring, damper = spring * 0.045f };
             var rb = phys.gameObject.AddComponent<Rigidbody>();
             rb.mass = mass;
+            // anti-explosion: overlapping bodies are pushed apart gently instead of at "infinite" speed,
+            // and joints get more solver passes so a hard yank cannot stretch them apart
+            rb.maxDepenetrationVelocity = 4f;
+            rb.solverIterations = 12;
+            rb.solverVelocityIterations = 4;
             s.rb = rb;
             _segs.Add(s);
             return s;
@@ -1081,6 +1086,7 @@ namespace IronFauna.Brawl
         private void ImpactDamage(Segment mine, Collision c)
         {
             if (!IsDown || mine.detached) return;
+            if (_grabbedBy != null) return;   // being carried is not a crash: no impact damage until thrown / slammed / released
             float speed = c.relativeVelocity.magnitude;
             if (speed < 8.5f || Time.time - _impactT < 0.3f) return;
             _impactT = Time.time;
@@ -1129,6 +1135,33 @@ namespace IronFauna.Brawl
         private float _heldMass, _holdT, _slamT = -1f, _swingT = -1f;
         private int _swingSerial;
         private MechRagdoll _grabbedBy;
+        private const float HeldMaxSpeed = 14f, HeldMaxSpin = 18f;
+        private Collider[] _bodyColliders;
+        private readonly Dictionary<MechRagdoll, Coroutine> _restoreCollision = new Dictionary<MechRagdoll, Coroutine>();
+
+        private Collider[] BodyColliders => _bodyColliders ??= GetComponentsInChildren<Collider>(true);
+
+        /// <summary>Grabber and grabbed body stop colliding with each other while held (the hold point sits inside the
+        /// grabber, so the two bodies used to fight each other and explode).</summary>
+        private void IgnoreBodyCollision(MechRagdoll other, bool ignore)
+        {
+            if (other == null) return;
+            foreach (var a in BodyColliders)
+            {
+                if (a == null) continue;
+                foreach (var b in other.BodyColliders)
+                {
+                    if (b != null) Physics.IgnoreCollision(a, b, ignore);
+                }
+            }
+        }
+
+        private System.Collections.IEnumerator RestoreBodyCollisionLater(MechRagdoll other)
+        {
+            yield return new WaitForSeconds(0.6f);   // let a thrown / slammed body clear the grabber first
+            _restoreCollision.Remove(other);
+            if (other != null && _held != other) IgnoreBodyCollision(other, false);
+        }
         public bool IsHeld => _grabbedBy != null;
         public bool IsHolding => _heldSeg != null;
         public event System.Action<MechRagdoll, string> GrappleEvent;   // who, "GRAB" / "THROW" / "SLAM" / "TORN" / "PICKUP"
@@ -1186,7 +1219,20 @@ namespace IronFauna.Brawl
             float w = 2f * Mathf.PI * (weapon ? 5f : 3f), zeta = 0.85f;
             Vector3 acc = w * w * (hp - rb.position) + 2f * zeta * w * (ghost.Velocity - rb.linearVelocity);
             acc = Vector3.ClampMagnitude(acc, weapon ? 260f : 110f);
-            rb.AddForce(acc * _heldMass * 0.75f - Physics.gravity * _heldMass * 0.9f, ForceMode.Force);
+            if (_held != null)
+            {
+                // Anti-explosion: move the whole held body as one (same acceleration on every segment) instead of
+                // hauling a full-body mass by a single forearm, which yanked joints apart; and cap its speed.
+                Vector3 a = acc * 0.75f - Physics.gravity * 0.9f;
+                foreach (var hs in _held._segs)
+                {
+                    if (hs.detached || hs.rb == null || hs.rb.isKinematic) continue;
+                    hs.rb.AddForce(a, ForceMode.Acceleration);
+                    if (hs.rb.linearVelocity.sqrMagnitude > HeldMaxSpeed * HeldMaxSpeed) hs.rb.linearVelocity = hs.rb.linearVelocity.normalized * HeldMaxSpeed;
+                    if (hs.rb.angularVelocity.sqrMagnitude > HeldMaxSpin * HeldMaxSpin) hs.rb.angularVelocity = hs.rb.angularVelocity.normalized * HeldMaxSpin;
+                }
+            }
+            else rb.AddForce(acc * _heldMass * 0.75f - Physics.gravity * _heldMass * 0.9f, ForceMode.Force);
 
             if (_held != null)
             {
@@ -1233,6 +1279,9 @@ namespace IronFauna.Brawl
             {
                 _held = bestOwner;
                 _heldMass = bestOwner._totalMass;
+                if (_restoreCollision.TryGetValue(bestOwner, out var pending) && pending != null) StopCoroutine(pending);
+                _restoreCollision.Remove(bestOwner);
+                IgnoreBodyCollision(bestOwner, true);
                 bestOwner.GrabbedBy(this);
                 ghost.SpendStamina(18f);
                 GrappleEvent?.Invoke(this, bestOwner.ghost != null && bestOwner.ghost.Blocking ? "GUARD GRAB" : "GRAB");
@@ -1244,6 +1293,8 @@ namespace IronFauna.Brawl
         {
             if (_heldSeg != null) _heldSeg.heldBy = null;
             if (_held != null && _held._grabbedBy == this) _held.ReleasedBy(this);
+            if (_held != null && isActiveAndEnabled && !_restoreCollision.ContainsKey(_held))
+                _restoreCollision[_held] = StartCoroutine(RestoreBodyCollisionLater(_held));
             _held = null;
             _heldSeg = null;
             _slamT = _swingT = -1f;
