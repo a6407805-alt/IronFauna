@@ -48,9 +48,17 @@ namespace IronFauna.Brawl
         public static readonly (string key, string text)[] Callouts =
         {
             ("fight", "Fight!"),
-            ("quarterfinal", "Quarterfinal... Fight!"),
-            ("semifinal", "Semifinal... Fight!"),
-            ("grand_final", "The grand final... Fight!"),
+            ("round_1", "Round one... Fight!"),
+            ("round_2", "Round two... Fight!"),
+            ("round_3", "Round three... Fight!"),
+            ("round_4", "Round four... Fight!"),
+            ("mini_boss", "Mini boss... Fight!"),
+            ("round_6", "Round six... Fight!"),
+            ("round_7", "Round seven... Fight!"),
+            ("round_8", "Round eight... Fight!"),
+            ("round_9", "Round nine... Fight!"),
+            ("grand_master", "The Grand Master... Fight!"),
+            ("boss_down", "Boss down!"),
             ("first_blood", "First blood!"),
             ("combo_3", "Triple strike!"),
             ("combo_4", "Quad strike!"),
@@ -271,24 +279,27 @@ namespace IronFauna.Brawl
             Announce($"MATCH OVER — {headline}!", 3.8f, 4, key);
         }
 
-        public void OnTournamentBoutStart(string roundName, string opponentName, string opponentStyle, BrawlStageId stage, bool isBoss)
+        /// <param name="bossTier">0 regular, 1 mini-boss (round 5), 2 Grand Master (round 10).</param>
+        public void OnTournamentBoutStart(int roundIndex, string roundName, string opponentName, string opponentStyle, BrawlStageId stage, int bossTier)
         {
             _firstBloodDone = false;
             _lastPriority = 0;
             ResetStreaks();
             BoxingSfx.AnnouncerBell();
             string stageName = BrawlTerrain.StageName(stage);
-            string line = isBoss
-                ? $"{roundName} AT {stageName} — CHALLENGER VERSUS DEFENDING CHAMPION {opponentName} — FIGHT!"
+            string line = bossTier == 2
+                ? $"{roundName} AT {stageName} — THE GRAND MASTER {opponentName} AWAITS — FIGHT!"
+                : bossTier == 1
+                ? $"{roundName} AT {stageName} — MINI-BOSS {opponentName} ENTERS THE RING — FIGHT!"
                 : $"{roundName} AT {stageName} — YOU VERSUS {opponentName}, {opponentStyle} — LET'S SCRAP!";
-            string key = isBoss || roundName.Contains("GRAND") ? "grand_final" : roundName.Contains("SEMI") ? "semifinal" : roundName.Contains("QUARTER") ? "quarterfinal" : "fight";
+            string key = bossTier == 2 ? "grand_master" : bossTier == 1 ? "mini_boss" : $"round_{roundIndex + 1}";
             Announce(line, 4.2f, 3, key);
         }
 
         public void OnTournamentChampion()
         {
             BoxingSfx.AnnouncerBell();
-            Announce("UNBELIEVABLE! WE HAVE A NEW IRONFAUNA GRAND TOURNAMENT CHAMPION!", 4.6f, 5, "champion");
+            Announce("UNBELIEVABLE! THE GRAND MASTER FALLS - WE HAVE A NEW IRONFAUNA CHAMPION!", 4.6f, 5, "champion");
         }
 
         // ------------------------------------------------------------------ Halo-style streaks & medals
@@ -333,6 +344,11 @@ namespace IronFauna.Brawl
         public void OnPlayerRiposte() => Announce("PUNISHED!", 1.5f, 3, "punished", 3f);
         public void OnPlayerGuardBreak() => Announce("GUARD BREAK!", 1.5f, 2, "guard_break", 4f);
         public void OnPlayerCounter() => Announce("COUNTER!", 1.2f, 1, "counter", 6f);
+        public void OnBossDown(string headline)
+        {
+            BoxingSfx.AnnouncerBell();
+            Announce($"{headline} THE MINI-BOSS IS SCRAP!", 3.6f, 4, "boss_down");
+        }
         public void OnInspectionBust() => Announce("BUSTED! ILLEGAL MODS CONFISCATED", 3f, 4, "busted");
 
         /// <summary>

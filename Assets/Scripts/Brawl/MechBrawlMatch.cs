@@ -452,7 +452,7 @@ namespace IronFauna.Brawl
                 if (i == 0 && opp != null)
                 {
                     rl = opp.BuildLoadout(_loadout);
-                    rLabel = opp.isBoss ? $"{opp.callsign} [CHAMP]" : opp.callsign;
+                    rLabel = opp.bossTier == 2 ? $"{opp.callsign} [GRAND MASTER]" : opp.bossTier == 1 ? $"{opp.callsign} [MINI-BOSS]" : opp.callsign;
                     rBoss = opp.isBoss;
                     rHp = opp.hpMult;
                     rSkill = opp.skill;
@@ -466,7 +466,10 @@ namespace IronFauna.Brawl
                     rSkill = opp != null ? Mathf.Clamp(opp.skill - 0.08f, 0.42f, 0.80f) : 0.55f;
                 }
 
-                var rival = Spawn(rLabel, rl, pos, 180f, false, -1, 2, rBoss, rHp, null, rSkill);
+                int tier = i == 0 && opp != null ? opp.bossTier : 0;
+                float? bossScale = tier == 2 ? 1.38f : tier == 1 ? 1.26f : (float?)null;
+                var rival = Spawn(rLabel, rl, pos, 180f, false, -1, 2, rBoss, rHp, null, rSkill, bossScale);
+                if (tier > 0) ApplyBossBuffs(rival, tier);
                 _fighters.Add(rival);
                 _ragdollList.Add(rival.ragdoll);
             }
@@ -478,15 +481,46 @@ namespace IronFauna.Brawl
             Banner($"{_tournament.CurrentRoundName} · VS {oppName}", 2.4f);
             if (_announcer != null)
             {
-                _announcer.OnTournamentBoutStart(_tournament.CurrentRoundName, oppName, oppStyle, config.stage, opp != null && opp.isBoss);
+                _announcer.OnTournamentBoutStart(_tournament.currentRound, _tournament.CurrentRoundName, oppName, oppStyle, config.stage, opp != null ? opp.bossTier : 0);
             }
         }
 
-        private Fighter Spawn(string name, MechLoadout l, Vector3 pos, float yaw, bool player, int localPlayerIdx, int team, bool isBoss, float hpMult, Camera playerCam, float? customAiSkill = null)
+        /// <summary>
+        /// Tournament bosses on top of their hull multiplier and AI skill. Mini-boss (round 5): harder hits, more poise,
+        /// tougher limbs. Grand Master (round 10): a very hard final boss - brutal fast strikes, near-endless stamina,
+        /// iron limbs, very hard to stagger, shrugs off knockback.
+        /// </summary>
+        private static void ApplyBossBuffs(Fighter f, int tier)
+        {
+            var r = f.ragdoll;
+            var g = f.ghost;
+            if (r == null || g == null) return;
+            if (tier >= 2)
+            {
+                g.damageScale *= 1.4f;
+                g.strikeSpeedScale *= 1.15f;
+                g.staminaRegen *= 1.8f;
+                g.maxSpeed *= 1.1f;
+                g.sprintSpeed *= 1.1f;
+                r.poiseMax *= 1.8f;
+                r.knockbackScale *= 0.6f;
+                r.ScaleLimbHealth(1.8f);
+            }
+            else
+            {
+                g.damageScale *= 1.18f;
+                g.staminaRegen *= 1.25f;
+                r.poiseMax *= 1.35f;
+                r.knockbackScale *= 0.8f;
+                r.ScaleLimbHealth(1.35f);
+            }
+        }
+
+        private Fighter Spawn(string name, MechLoadout l, Vector3 pos, float yaw, bool player, int localPlayerIdx, int team, bool isBoss, float hpMult, Camera playerCam, float? customAiSkill = null, float? scaleOverride = null)
         {
             var f = new Fighter { name = name, player = player, localPlayerIndex = localPlayerIdx, team = team, isBoss = isBoss };
             Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
-            float scale = isBoss ? 1.24f : 1f;
+            float scale = scaleOverride ?? (isBoss ? 1.24f : 1f);
 
             f.ghostGo = new GameObject(name + "_Ghost");
             f.ghostGo.transform.SetPositionAndRotation(pos, rot);
@@ -1167,12 +1201,15 @@ namespace IronFauna.Brawl
                     if (aliveEnemies == 0)
                     {
                         _roundWon = true;
-                        bool grandFinalWin = _tournament.currentRound >= 2;
-                        string winText = grandFinalWin ? "IRONFAUNA GRAND CHAMPION!" : $"{_tournament.CurrentRoundName} VICTORY!";
+                        bool grandFinalWin = _tournament.IsFinalRound;
+                        string winText = grandFinalWin ? "GRAND MASTER DEFEATED!"
+                            : _tournament.currentRound == TournamentState.MiniBossRound ? "MINI-BOSS DOWN!"
+                            : $"{_tournament.CurrentRoundName} CLEARED!";
                         Banner(winText, 3.2f);
                         if (_announcer != null)
                         {
                             if (grandFinalWin) _announcer.OnTournamentChampion();
+                            else if (_tournament.currentRound == TournamentState.MiniBossRound) _announcer.OnBossDown(winText);
                             else _announcer.OnMatchEnd(winText, true);
                         }
                         _resetT = 3.6f;
