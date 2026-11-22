@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using IronFauna.Boxing;
 using IronFauna.Clamshell;
+using IronFauna.Core;
 
 namespace IronFauna.Brawl
 {
