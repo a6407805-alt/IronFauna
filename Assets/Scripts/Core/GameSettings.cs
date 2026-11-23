@@ -17,6 +17,7 @@ namespace IronFauna.Core
         public static float MasterVolume = 1f;
         public static float SfxVolume = 1f;
         public static float AnnouncerVolume = 1f;
+        public static float MusicVolume = 0.8f;
         public static float CameraShake = 1f;
         public static float MouseSensitivity = 1f;
         public static int DisplayMode = 1;          // borderless by default
@@ -39,6 +40,7 @@ namespace IronFauna.Core
             MasterVolume = PlayerPrefs.GetFloat(Prefix + "Master", 1f);
             SfxVolume = PlayerPrefs.GetFloat(Prefix + "Sfx", 1f);
             AnnouncerVolume = PlayerPrefs.GetFloat(Prefix + "Announcer", 1f);
+            MusicVolume = PlayerPrefs.GetFloat(Prefix + "Music", 0.8f);
             CameraShake = PlayerPrefs.GetFloat(Prefix + "Shake", 1f);
             MouseSensitivity = PlayerPrefs.GetFloat(Prefix + "Mouse", 1f);
             DisplayMode = Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "DisplayMode", 1), 0, DisplayModes.Length - 1);
@@ -54,6 +56,7 @@ namespace IronFauna.Core
             PlayerPrefs.SetFloat(Prefix + "Master", MasterVolume);
             PlayerPrefs.SetFloat(Prefix + "Sfx", SfxVolume);
             PlayerPrefs.SetFloat(Prefix + "Announcer", AnnouncerVolume);
+            PlayerPrefs.SetFloat(Prefix + "Music", MusicVolume);
             PlayerPrefs.SetFloat(Prefix + "Shake", CameraShake);
             PlayerPrefs.SetFloat(Prefix + "Mouse", MouseSensitivity);
             PlayerPrefs.SetInt(Prefix + "DisplayMode", DisplayMode);

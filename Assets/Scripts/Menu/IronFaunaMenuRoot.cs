@@ -106,11 +106,13 @@ namespace IronFauna.Menu
             var settingsCanvas = MenuUI.CreateCanvas("IronFauna_Settings", 400);
             settingsCanvas.transform.SetParent(transform, false);
             _settings = GameSettingsPanel.Build(settingsCanvas.transform, null);
+            _music = gameObject.AddComponent<MenuMusic>();
 
             if (startInGarage) ShowGarage(); else ShowTitle();
         }
 
         private GameSettingsPanel _settings;
+        private MenuMusic _music;
 
         private void OpenSettings() => _settings?.Open();
 
@@ -148,6 +150,7 @@ namespace IronFauna.Menu
         /// (Esc reloads the menu).</summary>
         public void StartBrawl()
         {
+            if (_music != null) _music.FadeOut();
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
             HideSetupScreens();

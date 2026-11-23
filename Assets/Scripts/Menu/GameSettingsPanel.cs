@@ -27,7 +27,7 @@ namespace IronFauna.Menu
             p.Root = dim.gameObject;
 
             var box = MenuUI.Panel(dim.transform, "SettingsBox", IronFaunaPalette.WithAlpha(IronFaunaPalette.UiPanel, 0.97f));
-            MenuUI.Place(box.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-560f, -500f), new Vector2(560f, 500f));
+            MenuUI.Place(box.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-560f, -525f), new Vector2(560f, 525f));
             var stack = MenuUI.VStack(box.gameObject, 8f, 30);
             stack.childAlignment = TextAnchor.UpperCenter;
 
@@ -60,6 +60,7 @@ namespace IronFauna.Menu
             p.Header(box.transform, "AUDIO");
             p.Row(box.transform, "MASTER VOLUME", () => Pct(GameSettings.MasterVolume), d => GameSettings.MasterVolume = Step(GameSettings.MasterVolume, d, 0f, 1f));
             p.Row(box.transform, "EFFECTS VOLUME", () => Pct(GameSettings.SfxVolume), d => GameSettings.SfxVolume = Step(GameSettings.SfxVolume, d, 0f, 1f));
+            p.Row(box.transform, "MUSIC VOLUME", () => Pct(GameSettings.MusicVolume), d => GameSettings.MusicVolume = Step(GameSettings.MusicVolume, d, 0f, 1f));
             p.Row(box.transform, "ANNOUNCER VOLUME", () => Pct(GameSettings.AnnouncerVolume), d => GameSettings.AnnouncerVolume = Step(GameSettings.AnnouncerVolume, d, 0f, 1f));
 
             p.Header(box.transform, "CONTROLS");
@@ -72,7 +73,7 @@ namespace IronFauna.Menu
             MenuUI.Size(buttons, 62f);
             var reset = MenuUI.CreateButton(buttons, "RESET TO DEFAULTS", 24, IronFaunaPalette.UiButton, IronFaunaPalette.UiSelect, IronFaunaPalette.UiTextDim, () =>
             {
-                GameSettings.MasterVolume = 1f; GameSettings.SfxVolume = 1f; GameSettings.AnnouncerVolume = 1f;
+                GameSettings.MasterVolume = 1f; GameSettings.SfxVolume = 1f; GameSettings.AnnouncerVolume = 1f; GameSettings.MusicVolume = 0.8f;
                 GameSettings.MouseSensitivity = 1f; GameSettings.CameraShake = 1f;
                 GameSettings.DisplayMode = 1; GameSettings.ResolutionIndex = -1; GameSettings.Quality = -1;
                 GameSettings.VSync = true; GameSettings.FrameCapIndex = 1;
