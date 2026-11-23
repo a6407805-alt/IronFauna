@@ -49,22 +49,28 @@ namespace IronFauna.Menu
         public static void Back() => Play(_back, 0.8f);
     }
 
-    /// <summary>Added to every MenuUI button: hover / click / gamepad submit sounds.</summary>
-    public class UiSoundHook : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler, ISelectHandler, ISubmitHandler
+    /// <summary>Added to every MenuUI button: hover / gamepad-select tick, and a click sound on the button's own onClick.</summary>
+    public class UiSoundHook : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, ISelectHandler
     {
         public bool isBack;
         private Selectable _sel;
+        private bool _pointerInside;
 
-        private void Awake() => _sel = GetComponent<Selectable>();
+        private void Awake()
+        {
+            _sel = GetComponent<Selectable>();
+            // the click sound rides on onClick (mouse and gamepad submit): it plays even when the click hides this
+            // button's own menu, which used to silence it (owner 2026-11-22: "no audible click on TOURNAMENT CAMPAIGN")
+            var btn = GetComponent<Button>();
+            if (btn != null) btn.onClick.AddListener(Click);
+        }
+
         private bool Live => _sel == null || (_sel.interactable && _sel.isActiveAndEnabled);
 
-        private bool _pointerInside;
         public void OnPointerEnter(PointerEventData e) { _pointerInside = true; if (Live) UiSfx.Hover(); }
         public void OnPointerExit(PointerEventData e) => _pointerInside = false;
         // gamepad / keyboard navigation (a mouse click also selects the button: no tick on top of the clunk)
         public void OnSelect(BaseEventData e) { if (Live && !_pointerInside) UiSfx.Hover(); }
-        public void OnPointerClick(PointerEventData e) { if (Live && e.button == PointerEventData.InputButton.Left) Click(); }
-        public void OnSubmit(BaseEventData e) { if (Live) Click(); }
 
         private void Click()
         {
