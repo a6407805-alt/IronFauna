@@ -63,7 +63,7 @@ namespace IronFauna.Brawl
             _hint = MenuUI.Label(box.transform, "ESC  RESUME", 18, IronFaunaPalette.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
             MenuUI.Size(_hint, 28f);
 
-            _settings = GameSettingsPanel.Build(canvas.transform, null);
+            _settings = GameSettingsPanel.Build(canvas.transform, MenuMusic.CloseOverlay);
             _root.SetActive(false);
         }
 
@@ -107,7 +107,12 @@ namespace IronFauna.Brawl
             Cursor.visible = false;
         }
 
-        private void OpenSettings() => _settings?.Open();
+        private void OpenSettings()
+        {
+            if (_settings == null) return;
+            MenuMusic.OpenOverlay("settings");
+            _settings.Open();
+        }
 
         private static void QuitGame()
         {

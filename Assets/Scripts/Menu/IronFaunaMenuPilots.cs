@@ -19,6 +19,7 @@ namespace IronFauna.Menu
 
         private void ShowPilots()
         {
+            MenuMusic.Play("pilots");
             _inGarage = false;
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);

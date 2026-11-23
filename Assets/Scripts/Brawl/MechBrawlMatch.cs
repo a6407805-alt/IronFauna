@@ -234,6 +234,7 @@ namespace IronFauna.Brawl
         private void ShowTournamentBracket()
         {
             if (_bracketOverlay == null || _tournament == null) return;
+            MenuMusic.Play("tournament");   // the bracket between bouts used to be silent
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             if (_repairBay != null) _repairBay.Hide();
@@ -250,6 +251,7 @@ namespace IronFauna.Brawl
         private void ShowRepairBay()
         {
             if (_repairBay == null || _tournament == null) return;
+            MenuMusic.Play("garage");
             if (_bracketOverlay != null) _bracketOverlay.Hide();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -258,6 +260,7 @@ namespace IronFauna.Brawl
 
         private void LaunchTournamentBout()
         {
+            MenuMusic.Stop();
             if (_bracketOverlay != null) _bracketOverlay.Hide();
             if (_repairBay != null) _repairBay.Hide();
             Cursor.lockState = CursorLockMode.Locked;

@@ -105,16 +105,19 @@ namespace IronFauna.Menu
             BuildPilots();
             var settingsCanvas = MenuUI.CreateCanvas("IronFauna_Settings", 400);
             settingsCanvas.transform.SetParent(transform, false);
-            _settings = GameSettingsPanel.Build(settingsCanvas.transform, null);
-            _music = gameObject.AddComponent<MenuMusic>();
+            _settings = GameSettingsPanel.Build(settingsCanvas.transform, MenuMusic.CloseOverlay);
 
             if (startInGarage) ShowGarage(); else ShowTitle();
         }
 
         private GameSettingsPanel _settings;
-        private MenuMusic _music;
 
-        private void OpenSettings() => _settings?.Open();
+        private void OpenSettings()
+        {
+            if (_settings == null) return;
+            MenuMusic.OpenOverlay("settings");
+            _settings.Open();
+        }
 
         private void Update()
         {
@@ -138,6 +141,7 @@ namespace IronFauna.Menu
 
         private void ShowTitle()
         {
+            MenuMusic.Play("menu_theme");
             _inGarage = false;
             _titleCanvas.SetActive(true);
             _garageCanvas.SetActive(false);
@@ -152,7 +156,9 @@ namespace IronFauna.Menu
         /// (Esc reloads the menu).</summary>
         public void StartBrawl()
         {
-            if (_music != null) _music.FadeOut();
+            // the tournament keeps its music through the bracket; a brawl goes straight into the fight
+            if (_matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TournamentCampaign) MenuMusic.Play("tournament");
+            else MenuMusic.Stop();
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
             HideSetupScreens();
@@ -193,6 +199,7 @@ namespace IronFauna.Menu
 
         private void ShowGarage()
         {
+            MenuMusic.Play("garage");
             _inGarage = true;
             _titleCanvas.SetActive(false);
             HideSetupScreens();

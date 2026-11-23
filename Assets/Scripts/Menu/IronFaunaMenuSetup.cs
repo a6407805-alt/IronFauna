@@ -80,6 +80,7 @@ namespace IronFauna.Menu
 
         private void ShowTournamentSetup()
         {
+            MenuMusic.Play("tournament");
             _inGarage = false;
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
@@ -92,6 +93,7 @@ namespace IronFauna.Menu
 
         private void ShowBrawlSetup()
         {
+            MenuMusic.Play("brawl");
             _inGarage = false;
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
