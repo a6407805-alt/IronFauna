@@ -56,10 +56,11 @@ namespace IronFauna.Boxing
         public float crouch = 0.34f;
         public float bodyFrequency = 4.2f;     // body spring: lower = floatier
         public float bodyDamping = 0.5f;
-        public float maxSpeed = 3.0f;
-        public float acceleration = 13f;
-        public float braking = 9f;
-        public float turnRate = 260f;
+        // owner 2026-11-22: "work on the fluidity... make it a little bit faster": quicker top speed, snappier starts/stops/turns
+        public float maxSpeed = 3.9f;
+        public float acceleration = 21f;
+        public float braking = 17f;
+        public float turnRate = 480f;
         public float ringHalfSize = 6.2f;
         /// <summary>Brawl: the ghost cannot walk past this radius (the arena wall). 0 = no limit.</summary>
         public float arenaRadius;
@@ -70,7 +71,7 @@ namespace IronFauna.Boxing
         [Tooltip("Off: never locks on - faces where it walks; turns into an opponent only while punching or guarding")]
         public bool lockOn = true;
         public float punchTurnRange = 4.5f;
-        public float sprintSpeed = 5.6f;
+        public float sprintSpeed = 7.0f;
         [Tooltip("Ride the terrain: the root follows the static ground under it (hills, rocks)")]
         public bool followGround;
         public float minDistance = 2.05f;
@@ -83,9 +84,11 @@ namespace IronFauna.Boxing
         [Tooltip("Guard pressed this close before a hit lands = parry")]
         public float parryWindow = 0.2f;
         public float dodgeCost = 20f;
-        public float dodgeSpeed = 8f;
+        public float dodgeSpeed = 9.5f;
         public float sprintDrain = 9f;
-        public const float DodgeTime = 0.42f;
+        public const float DodgeTime = 0.38f;
+        /// <summary>Global strike tempo (owner 2026-11-22: "make it a little bit faster"): every wind-up / strike / recovery runs 15% quicker.</summary>
+        public const float StrikeTempo = 1.15f;
         public const float DodgeIFrames = 0.28f;
         [NonSerialized] public float stamina = 100f;
         public float Stamina01 => staminaMax > 0f ? Mathf.Clamp01(stamina / staminaMax) : 0f;
@@ -825,7 +828,7 @@ namespace IronFauna.Boxing
             bool engage = lockOn && opponent != null && !opponent.IsKO && dist < lockOnRange && !sprinting;
             bool busy = _punch != null || _guardBlend > 0.5f || intent.punch != PunchType.None;
             if (busy) engage |= opponent != null && !opponent.IsKO && dist < (lockOn ? lockOnRange * 1.5f : punchTurnRange);
-            _fight = Mathf.MoveTowards(_fight, engage ? 1f : 0f, dt * 2.5f);
+            _fight = Mathf.MoveTowards(_fight, engage ? 1f : 0f, dt * 4f);
 
             // input frame: the camera when given (free movement), otherwise the line to the opponent
             Vector3 fwd, right;
@@ -892,7 +895,10 @@ namespace IronFauna.Boxing
                 else if (_vel.sqrMagnitude > 0.2f) face = _vel.normalized;
                 float target = Quaternion.LookRotation(face).eulerAngles.y;
                 float rate2 = turnRate * (_fight > 0.5f ? 1f : 0.7f) * (sprinting ? 0.6f : 1f);
-                float yaw = Mathf.MoveTowardsAngle(transform.eulerAngles.y, target, rate2 * dt);
+                // eased turn (fast at first, settling smoothly) capped at the turn rate, instead of a constant-speed swivel
+                float cur = transform.eulerAngles.y;
+                float eased = Mathf.LerpAngle(cur, target, 1f - Mathf.Exp(-16f * dt));
+                float yaw = Mathf.MoveTowardsAngle(cur, eased, rate2 * dt);
                 transform.rotation = Quaternion.Euler(0f, yaw, 0f);
             }
             _stagger = Mathf.Max(0f, _stagger - dt);
@@ -1057,7 +1063,7 @@ namespace IronFauna.Boxing
         private void TickPunch(float dt)
         {
             if (_punch == null) return;
-            _phaseT += dt * Mathf.Max(0.5f, strikeSpeedScale);
+            _phaseT += dt * Mathf.Max(0.5f, strikeSpeedScale) * StrikeTempo;
             var s = _punch;
             switch (_phase)
             {

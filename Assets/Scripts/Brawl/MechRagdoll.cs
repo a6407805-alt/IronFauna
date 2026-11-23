@@ -204,8 +204,8 @@ namespace IronFauna.Brawl
 
             if (ghost != null)
             {
-                ghost.maxSpeed = 3.0f * m.moveSpeedMult;
-                ghost.sprintSpeed = 5.6f * m.sprintSpeedMult;
+                ghost.maxSpeed = 3.9f * m.moveSpeedMult;
+                ghost.sprintSpeed = 7.0f * m.sprintSpeedMult;
                 ghost.strikeSpeedScale = m.strikeSpeedMult;
                 ghost.damageScale = m.damageMult;
                 ghost.hyperArmor = m.hyperArmor;

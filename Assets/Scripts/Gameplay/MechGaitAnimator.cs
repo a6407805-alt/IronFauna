@@ -34,9 +34,10 @@ namespace IronFauna.Gameplay
         }
 
         [Header("Gait by leg weight class")]
-        public GaitProfile light = new GaitProfile { cycleTime = 0.9f, duty = 0.58f, liftHeight = 0.34f, stompImpulse = 0.28f, bodyFrequency = 3.4f, stompShake = 0.10f };
-        public GaitProfile medium = new GaitProfile { cycleTime = 1.1f, duty = 0.62f, liftHeight = 0.38f, stompImpulse = 0.42f, bodyFrequency = 2.8f, stompShake = 0.17f };
-        public GaitProfile heavy = new GaitProfile { cycleTime = 1.35f, duty = 0.66f, liftHeight = 0.42f, stompImpulse = 0.62f, bodyFrequency = 2.2f, stompShake = 0.26f };
+        // quicker steps to match the faster movement (owner 2026-11-22), so strides stay planted instead of stretching
+        public GaitProfile light = new GaitProfile { cycleTime = 0.76f, duty = 0.58f, liftHeight = 0.34f, stompImpulse = 0.28f, bodyFrequency = 3.4f, stompShake = 0.10f };
+        public GaitProfile medium = new GaitProfile { cycleTime = 0.92f, duty = 0.62f, liftHeight = 0.38f, stompImpulse = 0.42f, bodyFrequency = 2.8f, stompShake = 0.17f };
+        public GaitProfile heavy = new GaitProfile { cycleTime = 1.12f, duty = 0.66f, liftHeight = 0.42f, stompImpulse = 0.62f, bodyFrequency = 2.2f, stompShake = 0.26f };
 
         [Header("Body")]
         [Tooltip("How far the hips shift over the standing foot (share of the hip width).")]
@@ -152,7 +153,7 @@ namespace IronFauna.Gameplay
 
             // ---------------- motion state
             bool grounded = true, boosting = false;
-            float walkSpeed = 3f;
+            float walkSpeed = 3.9f;
             Vector3 raw = (transform.position - _lastPos) / dt;
             _velocity = Vector3.Lerp(_velocity, raw, 1f - Mathf.Exp(-10f * dt));
             Vector3 vel = _velocity;
@@ -200,7 +201,9 @@ namespace IronFauna.Gameplay
                     }
                 }
             }
-            float cycle = g.cycleTime * (walking ? Mathf.Lerp(1.15f, 0.9f, speed01) : 0.85f);
+            // faster cadence as speed rises; past walking speed (sprint) the cadence keeps climbing so strides don't over-reach
+            float run = speed > walkSpeed ? Mathf.Sqrt(walkSpeed / speed) : 1f;
+            float cycle = g.cycleTime * (walking ? Mathf.Lerp(1.12f, 0.86f, speed01) * run : 0.8f);
             if (walking || settling) _phase = Mathf.Repeat(_phase + dt / cycle, 1f);
 
             // ---------------- feet
@@ -311,7 +314,7 @@ namespace IronFauna.Gameplay
                 }
                 if (count > 0) swayTarget = sum / count * hipSway;
             }
-            _swayX = Mathf.Lerp(_swayX, swayTarget, 1f - Mathf.Exp(-5f * dt));
+            _swayX = Mathf.Lerp(_swayX, swayTarget, 1f - Mathf.Exp(-7f * dt));
 
             Transform visual = _builder.visualRoot;
             visual.localPosition = new Vector3(_swayX, _bodyY, 0f);
