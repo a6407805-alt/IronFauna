@@ -260,7 +260,6 @@ namespace IronFauna.Brawl
 
         private void LaunchTournamentBout()
         {
-            MenuMusic.Stop();
             if (_bracketOverlay != null) _bracketOverlay.Hide();
             if (_repairBay != null) _repairBay.Hide();
             Cursor.lockState = CursorLockMode.Locked;
@@ -299,6 +298,7 @@ namespace IronFauna.Brawl
             }
 
             BuildArena(config.stage);
+            MenuMusic.PlayFight();   // a new hype track every round
 
             int localCount = Mathf.Clamp(config.localPlayers, 1, 4);
             SetupSplitScreenCameras(localCount);

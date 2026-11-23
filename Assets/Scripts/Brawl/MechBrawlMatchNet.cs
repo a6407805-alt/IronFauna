@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using IronFauna.Boxing;
 using IronFauna.Clamshell;
 using IronFauna.Core;
+using IronFauna.Menu;
 
 namespace IronFauna.Brawl
 {
@@ -175,6 +176,7 @@ namespace IronFauna.Brawl
             _resetT = -1f;
 
             BuildArena(config.stage, seed);
+            MenuMusic.PlayFight();
             SetupSplitScreenCameras(1);
             Fighter mine = null;
             for (int i = 0; i < count; i++)

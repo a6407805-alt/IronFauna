@@ -13,7 +13,10 @@ namespace IronFauna.Menu
     /// </summary>
     public class MenuMusic : MonoBehaviour
     {
-        private const float Level = 0.55f;   // tracks are mastered loud; this sits under the UI sounds
+        private const float Level = 0.55f;       // tracks are mastered loud; this sits under the UI sounds
+        private const float FightLevel = 0.42f;  // fight music sits under the impacts and the announcer
+        private static readonly string[] FightTracks = { "fight_bigroom", "fight_wobble", "fight_dnb" };
+        private int _fightIndex = -1;
         private const float FadeIn = 0.45f, FadeOut = 0.8f;   // volume units per second
 
         private static MenuMusic _inst;
@@ -42,6 +45,21 @@ namespace IronFauna.Menu
         /// <summary>Crossfade to a track (file name in Resources/Music). Null = silence.</summary>
         public static void Play(string track) => Instance.Switch(track);
         public static void Stop() => Instance.Switch(null);
+
+        /// <summary>
+        /// Fight music (owner 2026-11-22: "upbeat EDM... something to get the player hyped up"): the next of the three
+        /// fight tracks, from its start, each new round.
+        /// </summary>
+        public static void PlayFight()
+        {
+            var m = Instance;
+            if (m._fightIndex < 0) m._fightIndex = Random.Range(0, FightTracks.Length);
+            else m._fightIndex = (m._fightIndex + 1) % FightTracks.Length;
+            string track = FightTracks[m._fightIndex];
+            m._resumeAt.Remove(track);
+            if (m._track == track) m._track = null;   // same track again: restart it
+            m.Switch(track);
+        }
 
         /// <summary>Settings and other overlays: play their own track, then return to whatever was playing.</summary>
         public static void OpenOverlay(string track)
@@ -78,8 +96,8 @@ namespace IronFauna.Menu
         private void Switch(string track)
         {
             if (track == _track) return;
-            // remember where the outgoing track was, so coming back resumes it
-            if (_track != null && _src[_cur].isPlaying && _src[_cur].clip != null) _resumeAt[_track] = _src[_cur].time;
+            // remember where the outgoing track was, so coming back resumes it (fight tracks always restart)
+            if (_track != null && !_track.StartsWith("fight_") && _src[_cur].isPlaying && _src[_cur].clip != null) _resumeAt[_track] = _src[_cur].time;
             _track = track;
             if (track == null) return;
 
@@ -105,7 +123,7 @@ namespace IronFauna.Menu
 
         private void Update()
         {
-            float music = Level * GameSettings.MusicVolume;
+            float music = (_track != null && _track.StartsWith("fight_") ? FightLevel : Level) * GameSettings.MusicVolume;
             for (int i = 0; i < 2; i++)
             {
                 var s = _src[i];

@@ -156,9 +156,8 @@ namespace IronFauna.Menu
         /// (Esc reloads the menu).</summary>
         public void StartBrawl()
         {
-            // the tournament keeps its music through the bracket; a brawl goes straight into the fight
+            // the tournament keeps its music through the bracket; a brawl's fight music starts with the round
             if (_matchConfig.mode == IronFauna.Brawl.BrawlGameMode.TournamentCampaign) MenuMusic.Play("tournament");
-            else MenuMusic.Stop();
             _titleCanvas.SetActive(false);
             _garageCanvas.SetActive(false);
             HideSetupScreens();
