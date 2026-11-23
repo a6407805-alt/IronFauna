@@ -397,6 +397,7 @@ namespace IronFauna.Brawl
             if (_pelvis == null || ghost == null) return;
             if (netPuppet) return;   // online client: the host simulates this body
             float dt = Time.fixedDeltaTime;
+            ProjectJoints();
 
             // walked or was knocked off the edge: nothing under the hips any more - fall
             if (!IsDown && _recoverT <= 0f && !SupportUnder(ghost.transform.position)) Knockdown(2.5f);
@@ -500,13 +501,8 @@ namespace IronFauna.Brawl
             if (standing)
             {
                 // hips and legs = the walk cycle
-                float k = _follow >= 1f ? 1f : 1f - Mathf.Exp(-10f * dt) + _follow * 0.5f;
-                foreach (var s in _segs)
-                {
-                    if (!IsLowerBody(s) || s.detached || !s.rb.isKinematic || s.target == null) continue;
-                    s.rb.MovePosition(Vector3.Lerp(s.rb.position, s.target.position, Mathf.Clamp01(k)));
-                    s.rb.MoveRotation(Quaternion.Slerp(s.rb.rotation, s.target.rotation, Mathf.Clamp01(k)));
-                }
+                float k = Mathf.Clamp01(_follow >= 1f ? 1f : 1f - Mathf.Exp(-10f * dt) + _follow * 0.5f);
+                MoveLowerBodyChain(k);
                 // keep the torso upright over the hips on top of its joint motor
                 PdRotate(_torso.rb, _torso.target.rotation, 5.5f * balance, 0.9f);
                 if (ghost.StrikeActive) TickActiveStrikeSweep();
@@ -1785,6 +1781,62 @@ namespace IronFauna.Brawl
                 Quaternion q = Quaternion.Slerp(_netFromR[i], _netToR[i], k);
                 if (s.rb != null) { s.rb.position = p; s.rb.rotation = q; }
                 s.phys.SetPositionAndRotation(p, q);
+            }
+        }
+
+
+        // ------------------------------------------------------------------ no stretching (owner 2026-11-22: "the legs and limbs
+        // are constantly stretching out")
+        private readonly Dictionary<Segment, (Vector3 p, Quaternion r)> _chainPose = new Dictionary<Segment, (Vector3, Quaternion)>();
+
+        /// <summary>
+        /// Hips and legs onto the walk cycle as a rigid chain: the pelvis eases toward its target, and every thigh / calf / foot
+        /// keeps its exact bone offset from its parent (only its bend eases in). Easing each piece on its own used to pull the
+        /// legs apart for the 0.6 s blend after every get-up.
+        /// </summary>
+        private void MoveLowerBodyChain(float k)
+        {
+            _chainPose.Clear();
+            foreach (var s in _segs)
+            {
+                if (!IsLowerBody(s) || s.detached || !s.rb.isKinematic || s.target == null) continue;
+                Vector3 p;
+                Quaternion r;
+                if (s == _pelvis || s.parent == null || !_chainPose.TryGetValue(s.parent, out var parentPose))
+                {
+                    p = Vector3.Lerp(s.rb.position, s.target.position, k);
+                    r = Quaternion.Slerp(s.rb.rotation, s.target.rotation, k);
+                }
+                else
+                {
+                    Quaternion parentTargetInv = Quaternion.Inverse(s.parent.target.rotation);
+                    Vector3 boneOffset = parentTargetInv * (s.target.position - s.parent.target.position);
+                    Quaternion targetLocal = parentTargetInv * s.target.rotation;
+                    Quaternion currentLocal = Quaternion.Inverse(s.parent.rb.rotation) * s.rb.rotation;
+                    r = parentPose.r * Quaternion.Slerp(currentLocal, targetLocal, k);
+                    p = parentPose.p + parentPose.r * boneOffset;
+                }
+                _chainPose[s] = (p, r);
+                s.rb.MovePosition(p);
+                s.rb.MoveRotation(r);
+            }
+        }
+
+        /// <summary>
+        /// Hand-made joint projection before every physics step: stiff joint motors can out-pull PhysX's locked joints and
+        /// open visible gaps at the shoulders, elbows, neck and waist. Any physical piece more than 2.5 cm off its socket is
+        /// moved back onto it (velocity kept), parent first, so the error can never build up.
+        /// </summary>
+        private void ProjectJoints()
+        {
+            foreach (var s in _segs)
+            {
+                if (s.joint == null || s.parent == null || s.detached || s.rb == null || s.rb.isKinematic || s.parent.rb == null) continue;
+                if (s.joint.connectedBody != s.parent.rb) continue;
+                Vector3 want = s.parent.rb.position + s.parent.rb.rotation * Vector3.Scale(s.joint.connectedAnchor, s.parent.phys.lossyScale);
+                Vector3 have = s.rb.position + s.rb.rotation * Vector3.Scale(s.joint.anchor, s.phys.lossyScale);
+                Vector3 err = want - have;
+                if (err.sqrMagnitude > 0.025f * 0.025f && err.sqrMagnitude < 4f) s.rb.position += err;
             }
         }
 

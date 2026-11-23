@@ -70,6 +70,7 @@ namespace IronFauna.Brawl
         /// <summary>Esc / Start: closes settings, else toggles the pause menu.</summary>
         public void HandleBack()
         {
+            if (IsOpen || (_settings != null && _settings.IsOpen)) UiSfx.Back(); else UiSfx.Select();
             if (_settings != null && _settings.IsOpen) { _settings.Close(); return; }
             if (IsOpen) Close(); else Open();
         }

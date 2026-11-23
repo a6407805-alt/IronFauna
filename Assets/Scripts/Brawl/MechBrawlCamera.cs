@@ -29,7 +29,9 @@ namespace IronFauna.Brawl
 
         private void Awake() => _cam = GetComponent<Camera>();
 
-        public void Snap() => _snapped = false;
+        public void Snap() { _snapped = false; _free = -1f; }
+
+        private float _free = -1f;   // eased camera pull-in distance
 
         private void LateUpdate()
         {
@@ -120,11 +122,17 @@ namespace IronFauna.Brawl
                 {
                     if (hit.distance <= 0f) continue;
                     var rb = hit.collider.attachedRigidbody;
-                    if (rb != null && !rb.isKinematic) continue; // ignore mechs and loose physics debris so rubble never yanks the camera
+                    if (rb != null && !rb.isKinematic) continue; // ignore loose physics debris so rubble never yanks the camera
+                    // ignore every robot body (standing legs are kinematic): a robot walking across the shot used to snap
+                    // the camera into its armour for a frame - the "flash of something in the middle of the screen"
+                    if (rb != null && rb.GetComponent<MechRagdollPart>() != null) continue;
                     free = Mathf.Min(free, Mathf.Max(1.8f, hit.distance - 0.55f));
                 }
-                float pullRatio = Mathf.Clamp01(free / len);
-                camPos = from + toCam / len * Mathf.Max(2.0f, free);
+                // ease the pull: quick to move in front of a wall, slow to move back out (no popping)
+                if (_free < 0f) _free = free;
+                _free = Mathf.MoveTowards(_free, free, (free < _free ? 30f : 7f) * dt);
+                float pullRatio = Mathf.Clamp01(_free / len);
+                camPos = from + toCam / len * Mathf.Max(2.0f, Mathf.Min(_free, len));
                 lookPt = Vector3.Lerp(from + axis * 0.9f, _look, pullRatio);
             }
             transform.position = camPos + shake;

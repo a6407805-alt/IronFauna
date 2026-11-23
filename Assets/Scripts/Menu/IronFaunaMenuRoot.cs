@@ -125,7 +125,9 @@ namespace IronFauna.Menu
 #else
             back = Input.GetKeyDown(KeyCode.Escape);
 #endif
-            if (back && _settings != null && _settings.IsOpen) { _settings.Close(); return; }
+            if (back && _settings != null && _settings.IsOpen) { UiSfx.Back(); _settings.Close(); return; }
+            if (back && (_inGarage || (_pilotsCanvas != null && _pilotsCanvas.activeSelf) || (_tournamentSetupCanvas != null && _tournamentSetupCanvas.activeSelf)
+                         || (_brawlSetupCanvas != null && _brawlSetupCanvas.activeSelf))) UiSfx.Back();
             if (back && (_inGarage || (_pilotsCanvas != null && _pilotsCanvas.activeSelf) || (_tournamentSetupCanvas != null && _tournamentSetupCanvas.activeSelf)
                          || (_brawlSetupCanvas != null && _brawlSetupCanvas.activeSelf))) ShowTitle();
         }

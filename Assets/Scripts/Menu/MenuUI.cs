@@ -113,6 +113,8 @@ namespace IronFauna.Menu
             colors.fadeDuration = 0.08f;
             btn.colors = colors;
             if (onClick != null) btn.onClick.AddListener(onClick);
+            string upper = label.ToUpperInvariant();
+            rt.gameObject.AddComponent<UiSoundHook>().isBack = upper == "BACK" || upper.StartsWith("BACK ") || upper.StartsWith("< BACK");
 
             var text = Label(rt, label, fontSize, textColor, TextAnchor.MiddleCenter, FontStyle.Bold);
             Fill(text.rectTransform);
